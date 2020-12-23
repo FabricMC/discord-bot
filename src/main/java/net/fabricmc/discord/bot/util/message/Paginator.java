@@ -144,7 +144,7 @@ public final class Paginator {
 		this.sent = true;
 		this.currentPage = 1;
 
-		return channel.sendMessage().thenApply(message -> {
+		return channel.sendMessage(createEmbed(this.pages.get(0), this.currentPage)).thenApply(message -> {
 			this.message = message;
 			message.addReaction(ARROW_BACKWARDS_EMOTE);
 			message.addReaction(X_EMOTE);

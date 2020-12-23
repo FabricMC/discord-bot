@@ -37,6 +37,10 @@ final class BuiltinModule implements Module, MessageCreateListener {
 
 	@Override
 	public void onMessageCreate(MessageCreateEvent event) {
+		if (!event.getMessageContent().startsWith(this.bot.getCommandPrefix())) {
+			return;
+		}
+
 		// We intentionally don't pass the event since we may want to support editing the original message to execute the command again such as if an error was made in syntax
 		final CommandContext context = new CommandContext(
 				this.bot,

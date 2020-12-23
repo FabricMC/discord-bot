@@ -128,10 +128,10 @@ public final class DiscordBot {
 			return;
 		}
 
-		if (context.content().startsWith(this.config.commandPrefix())) {
-
-		}
-
 		// TODO:
+	}
+
+	String getCommandPrefix() {
+		return this.config.commandPrefix();
 	}
 }

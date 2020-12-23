@@ -17,7 +17,6 @@
 
 # Source code
 !/src
-!/Tags
 
 # Ignore Gradle project-specific cache directory and build output directory
 .gradle
