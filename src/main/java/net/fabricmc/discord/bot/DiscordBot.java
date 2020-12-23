@@ -12,7 +12,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.ServiceLoader;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 
 import org.javacord.api.DiscordApi;
@@ -34,17 +35,26 @@ public final class DiscordBot {
 	 * A list of all enabled modules.
 	 */
 	private final List<Module> modules = new ArrayList<>();
-	private final BotThread thread = new BotThread();
+	private final ExecutorService serialExecutor = Executors.newSingleThreadExecutor(r -> {
+		Thread ret = new Thread(r, "serial execution thread");
+		ret.setDaemon(true);
+
+		return ret;
+	});
 
 	private DiscordBot(String[] args) throws IOException {
 		final Path configDir = Paths.get("").toAbsolutePath().resolve("config");
 
 		this.config = this.loadConfig(configDir);
-		this.thread.start();
 
-		new DiscordApiBuilder().setToken(this.config.secrets().token())
-				.login()
-				.thenAccept(api -> this.setup(api, configDir));
+		new DiscordApiBuilder()
+		.setToken(this.config.secrets().token())
+		.login()
+		.thenAccept(api -> this.setup(api, configDir))
+		.exceptionally(exc -> {
+			exc.printStackTrace();
+			return null;
+		});
 	}
 
 	public Collection<Module> getModules() {
@@ -62,23 +72,8 @@ public final class DiscordBot {
 	 * @param <T> the type of value returned by the task
 	 * @return a future which is completed when the task has returned a value.
 	 */
-	public <T> CompletableFuture<T> submit(Supplier<T> task) {
-		// If we are already on bot thread then execute immediately
-		if (Thread.currentThread() == this.thread) {
-			return CompletableFuture.completedFuture(task.get());
-		}
-
-		final CompletableFuture<T> future = new CompletableFuture<>();
-
-		// Add a task to the queue.
-		this.thread.tasks.add(() -> {
-			future.complete(task.get());
-		});
-
-		// Notify the thread that there are tasks ready to execute
-		this.thread.notify();
-
-		return future;
+	public <T> CompletableFuture<T> submit(Supplier<T> task) { // TODO: should be better to expose serialExecutor as Executor
+		return CompletableFuture.supplyAsync(task, serialExecutor);
 	}
 
 	private BotConfig loadConfig(Path configDir) throws IOException {
@@ -138,51 +133,5 @@ public final class DiscordBot {
 		}
 
 		// TODO:
-	}
-
-	// For Player: This is very questionable - please make a proper fix
-	private static final class BotThread extends Thread {
-		private volatile boolean running;
-		private final ConcurrentLinkedQueue<Runnable> tasks = new ConcurrentLinkedQueue<>();
-
-		BotThread() {
-			this.setName("Bot Executor Thread");
-		}
-
-		@Override
-		public void run() {
-			while (true) {
-				synchronized (this) {
-					if (!this.running) {
-						break;
-					}
-
-					this.tasks.removeIf(task -> {
-						task.run();
-						return true;
-					});
-
-					// Wait for tasks if there are no more tasks to execute.
-					// The thread will be woken up when new tasks are added.
-					if (this.tasks.isEmpty()) {
-						try {
-							this.wait();
-						} catch (InterruptedException e) {
-							e.printStackTrace(); // TODO: Better spot?
-							break;
-						}
-					}
-				}
-			}
-		}
-
-		void stopRunning() {
-			synchronized (this) {
-				this.running = false;
-			}
-
-			// Notify the thread to break out of the infinite loop
-			this.notify();
-		}
 	}
 }
