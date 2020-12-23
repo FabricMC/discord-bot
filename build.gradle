@@ -1,0 +1,46 @@
+plugins {
+    id("java")
+    id("application")
+    id("com.github.johnrengelman.shadow") version "6.1.0"
+    // TODO: Setup spotless for jdk style license headers
+}
+
+group "net.fabricmc"
+version "1.0-SNAPSHOT"
+
+repositories {
+    mavenCentral()
+}
+
+application {
+    mainClass = "net.fabricmc.discord.bot.DiscordBot"
+    applicationDefaultJvmArgs = ["--enable-preview"]
+    executableDir = "run"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(15)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += ["--enable-preview"]
+    options.release = 15
+}
+
+tasks.withType(Test).configureEach {
+    jvmArgs += "--enable-preview"
+}
+
+dependencies {
+    compileOnly("org.jetbrains:annotations:20.1.0")
+    implementation("org.javacord:javacord:$javacordVersion")
+    implementation("org.spongepowered:configurate-hocon:$configurateVersion")
+    // TODO: Do we want this so we can :irritater: instead of raw id for custom emotes?
+    //  https://github.com/vdurmont/emoji-java
+}
+
+shadowJar {
+    mainClassName = "net.fabricmc.discord.bot.DiscordBot"
+}

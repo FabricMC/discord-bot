@@ -1,0 +1,24 @@
+# Ignore everything
+/*
+
+# Git
+!/.gitattributes
+!/.gitignore
+!/README.md
+!/LICENSE
+!/.github
+
+# Gradle build files
+!/build.gradle
+!/settings.gradle
+!/gradle
+!/gradlew
+!/gradlew.bat
+
+# Source code
+!/src
+!/Tags
+
+# Ignore Gradle project-specific cache directory and build output directory
+.gradle
+build
