@@ -2,7 +2,7 @@ plugins {
     id("java")
     id("application")
     id("com.github.johnrengelman.shadow") version "6.1.0"
-    // TODO: Setup spotless for jdk style license headers
+    id("com.diffplug.spotless") version "5.8.2"
 }
 
 group "net.fabricmc"
@@ -43,4 +43,22 @@ dependencies {
 
 shadowJar {
     mainClassName = "net.fabricmc.discord.bot.DiscordBot"
+}
+
+spotless {
+    java {
+        ratchetFrom "origin/master"
+        licenseHeaderFile(project.file("HEADER")).yearSeparator(", ")
+    }
+
+    // Spotless tries to be smart by ignoring package-info files, however license headers are allowed there
+    // TODO: Replicate on module-info if needed?
+    format("package-info.java") {
+        target "**/package-info.java"
+
+        // Only update license headers when changes have occurred
+        ratchetFrom("origin/master")
+        // Regex is `/**` or `package`
+        licenseHeaderFile(project.file("HEADER"), "/\\*\\*|package").yearSeparator(", ")
+    }
 }
