@@ -28,6 +28,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.ServiceLoader;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Supplier;
@@ -78,18 +79,21 @@ public final class DiscordBot {
 	}
 
 	/**
-	 * Submits a task to be run on the bot's executor thread.
+	 * Gets the bot's serial executor.
 	 *
-	 * Per discussion on Javacord discord it should be noted that all events are called on their own thread and any amount of threads.
-	 * Nor are events all guaranteed to fire on the same thread, the only guarantee provided by Javacord is that all events are fired in the order in which they occur.
-	 * Therefore if the bot requires any state to track things such as paginators or lookup mappings it should be done on this thread.
+	 * <p>The serial executor should be used for accessing or doing operations on objects which are not thread safe.
 	 *
-	 * @param task the task to run on the bot's executor thread
-	 * @param <T> the type of value returned by the task
-	 * @return a future which is completed when the task has returned a value.
+	 * @return the serial executor
 	 */
-	public <T> CompletableFuture<T> submit(Supplier<T> task) { // TODO: should be better to expose serialExecutor as Executor
-		return CompletableFuture.supplyAsync(task, serialExecutor);
+	public Executor getSerialExecutor() {
+		return this.serialExecutor;
+	}
+
+	public String getCommandPrefix() {
+		return this.config.commandPrefix();
+	}
+
+	public void registerCommand() {
 	}
 
 	private BotConfig loadConfig(Path configDir) throws IOException {
@@ -145,9 +149,5 @@ public final class DiscordBot {
 		}
 
 		// TODO:
-	}
-
-	String getCommandPrefix() {
-		return this.config.commandPrefix();
 	}
 }
