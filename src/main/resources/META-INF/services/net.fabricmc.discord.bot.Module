@@ -1,0 +1,3 @@
+# Service Loader implementations for modules
+# To load a new module, simply add a new entry below:
+net.fabricmc.discord.bot.module.TestModule
