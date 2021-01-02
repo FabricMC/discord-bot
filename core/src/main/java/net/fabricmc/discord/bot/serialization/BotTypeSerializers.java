@@ -20,12 +20,9 @@ import java.awt.Color;
 
 import org.spongepowered.configurate.serialize.TypeSerializerCollection;
 
-import net.fabricmc.tag.TagData;
-
 public final class BotTypeSerializers {
 	public static final TypeSerializerCollection SERIALIZERS = TypeSerializerCollection.builder()
 			.registerAll(TypeSerializerCollection.defaults())
 			.register(Color.class, new ColorSerializer())
-			.register(TagData.class, TagData.SERIALIZER)
 			.build();
 }

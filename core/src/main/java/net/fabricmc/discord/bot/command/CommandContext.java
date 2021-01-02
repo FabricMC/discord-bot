@@ -14,23 +14,26 @@
  * limitations under the License.
  */
 
-package net.fabricmc.discord.bot.module;
+package net.fabricmc.discord.bot.command;
 
-import java.nio.file.Path;
+import java.net.URL;
 
-import org.javacord.api.DiscordApi;
+import org.javacord.api.entity.channel.TextChannel;
+import org.javacord.api.entity.message.MessageAuthor;
+import org.javacord.api.entity.server.Server;
+import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.DiscordBot;
-import net.fabricmc.discord.bot.Module;
 
-public final class TestModule implements Module {
-	@Override
-	public String getName() {
-		return "test";
-	}
-
-	@Override
-	public boolean setup(DiscordBot bot, DiscordApi api, Path configDir, Path dataDir) {
-		return true;
-	}
-}
+/**
+ * An object which represents the context in which a command is being executed.
+ */
+public record CommandContext(
+		DiscordBot bot,
+		@Nullable Server server,
+		URL messageLink,
+		MessageAuthor author,
+		TextChannel channel,
+		String content,
+		long messageId
+) {}

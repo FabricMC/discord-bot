@@ -1,6 +1,5 @@
 # Service Loader implementations for modules
 # To load a new module, simply add a new entry below.
 #
-# Do not all the builtin module to this service file!
-net.fabricmc.discord.bot.module.TestModule
+# Do not add the builtin module to this service file!
 net.fabricmc.discord.bot.module.tag.TagModule

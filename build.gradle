@@ -1,7 +1,7 @@
 plugins {
     id("java")
     id("application")
-    id("com.github.johnrengelman.shadow") version "6.1.0"
+    id("com.github.johnrengelman.shadow") version "6.1.0" // TODO: Wait for shadow to support JDK 15 so we can minimize the built jar
     id("com.diffplug.spotless") version "5.8.2"
 }
 
@@ -47,17 +47,20 @@ allprojects {
 
         // Spotless tries to be smart by ignoring package-info files, however license headers are allowed there
         // TODO: Replicate on module-info if needed?
-        format("package-info.java") {
-            target "**/package-info.java"
-
-            // Only update license headers when changes have occurred
-            ratchetFrom("origin/master")
-            // Regex is `/**` or `package`
-            licenseHeaderFile(rootProject.file("HEADER"), "/\\*\\*|package").yearSeparator(", ")
-        }
+        //  FIXME: Currently broken
+//        format("package-info.java") {
+//            target "**/package-info.java"
+//
+//            // Only update license headers when changes have occurred
+//            ratchetFrom("origin/master")
+//            // Regex is `/**` or `package`
+//            licenseHeaderFile(rootProject.file("HEADER"), "/\\*\\*|package").yearSeparator(", ")
+//        }
     }
 
     java {
+        modularity.inferModulePath = true
+
         toolchain {
             languageVersion = JavaLanguageVersion.of(15)
         }
@@ -80,11 +83,22 @@ application {
     executableDir = "run"
 }
 
+// Setup dependencies for big boi jar
 dependencies {
-    implementation(project(":tag"))
+    subprojects.each {
+        implementation(it)
+    }
 
-    // JGit for tag module
-    implementation("org.eclipse.jgit:org.eclipse.jgit:5.9.0.202009080501-r")
+    implementation(project(":tag-parser"))
+}
+
+// Propagate core dependency to subprojects
+subprojects {
+    if (project != project(":core")) {
+        dependencies {
+            implementation(rootProject.project(":core"))
+        }
+    }
 }
 
 shadowJar {
@@ -92,17 +106,9 @@ shadowJar {
 }
 
 java {
+    modularity.inferModulePath = true
+
     toolchain {
         languageVersion = JavaLanguageVersion.of(15)
-    }
-}
-
-// Tags
-project(":tag") {
-    // I hate this but the show must go on
-    afterEvaluate {
-        dependencies {
-            implementation(rootProject)
-        }
     }
 }

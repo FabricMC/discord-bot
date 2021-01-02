@@ -41,6 +41,7 @@ import org.spongepowered.configurate.objectmapping.ObjectMapper;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandResponder;
 import net.fabricmc.discord.bot.config.BotConfig;
+import net.fabricmc.discord.bot.serialization.BotTypeSerializers;
 
 public final class DiscordBot {
 	public static void main(String[] args) throws IOException {
@@ -91,13 +92,15 @@ public final class DiscordBot {
 	}
 
 	public String getCommandPrefix() {
-		return this.config.commandPrefix();
+		return this.config.guild().commandPrefix();
 	}
 
 	public void registerCommand() {
 	}
 
 	private BotConfig loadConfig(Path configDir) throws IOException {
+		System.out.printf("Loading config in %s%n", configDir);
+
 		// Setup a default config if the config is not present
 		if (Files.notExists(configDir.resolve("core.conf"))) {
 			Files.createDirectories(configDir);
@@ -115,6 +118,7 @@ public final class DiscordBot {
 		}
 
 		final HoconConfigurationLoader configLoader = HoconConfigurationLoader.builder()
+				.defaultOptions(options -> options.serializers(BotTypeSerializers.SERIALIZERS))
 				.path(configDir.resolve("core.conf"))
 				.build();
 

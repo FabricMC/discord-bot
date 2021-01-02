@@ -1,3 +1,11 @@
 rootProject.name = "thimble"
 
-include("tag")
+include("core")
+include("tag-parser")
+
+["tag"].each {
+    include(it)
+
+    def module = project(":$it")
+    module.projectDir = file("module/$it")
+}

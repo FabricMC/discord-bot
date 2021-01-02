@@ -45,6 +45,7 @@ import org.javacord.api.listener.message.MessageCreateListener;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.configurate.ConfigurateException;
 import org.spongepowered.configurate.hocon.HoconConfigurationLoader;
+import org.spongepowered.configurate.serialize.TypeSerializerCollection;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.Module;
@@ -58,6 +59,10 @@ public final class TagModule implements Module, MessageCreateListener {
 
 		return ret;
 	});
+	private final TypeSerializerCollection serializers = TypeSerializerCollection.builder()
+			.registerAll(BotTypeSerializers.SERIALIZERS)
+			.register(TagData.class, TagData.SERIALIZER)
+			.build();
 	private volatile Map<String, Tag> tags = new HashMap<>(); // Concurrent event access
 	private DiscordBot bot;
 	private Path gitDir;
@@ -120,7 +125,7 @@ public final class TagModule implements Module, MessageCreateListener {
 						if (file.getFileName().endsWith(".tag")) {
 							final TagData data = HoconConfigurationLoader.builder()
 									.path(file)
-									.defaultOptions(options -> options.serializers(BotTypeSerializers.SERIALIZERS))
+									.defaultOptions(options -> options.serializers(serializers))
 									.build()
 									.load()
 									.get(TagData.class);

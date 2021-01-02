@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 FabricMC
+ * Copyright (c) 2020, 2021 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,21 @@
 
 package net.fabricmc.discord.bot.config;
 
+import java.util.Objects;
 import java.util.Set;
 
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.configurate.objectmapping.ConfigSerializable;
 
-public record BotConfig(Secrets secrets, GuildInfo guild, Modules modules, String commandPrefix) {
+// Note: Fields get converted from camelCase to kebab-case inside of the config:
+// https://github.com/SpongePowered/Configurate/wiki/Object-Mapper#naming-scheme
+public record BotConfig(Secrets secrets, GuildInfo guild, Modules modules) {
+	public BotConfig {
+		Objects.requireNonNull(secrets, "Secrets are required to start the bot!");
+		Objects.requireNonNull(guild, "Guild info is required to start the bot!");
+		Objects.requireNonNull(modules, "Module settings are required to start the bot!");
+	}
+
 	@ConfigSerializable
 	public record Secrets(String token, @Nullable String databaseUsername, @Nullable String databasePassword) {
 		public Secrets {
@@ -36,11 +45,15 @@ public record BotConfig(Secrets secrets, GuildInfo guild, Modules modules, Strin
 	}
 
 	@ConfigSerializable
-	public record GuildInfo(Long id, Set<Long> ignoredChannels) {
+	public record GuildInfo(Long id, String commandPrefix, Set<Long> ignoredChannels) {
 		public GuildInfo {
 			// FIXME: Make the guild id snowflake a primitive long: awaiting configurate to support primitive types properly for that.
 			if (id == null) {
 				throw new IllegalArgumentException("Guild id cannot be null!");
+			}
+
+			if (commandPrefix == null) {
+				throw new IllegalArgumentException("Command prefix is required!");
 			}
 
 			if (ignoredChannels.contains(null)) {
