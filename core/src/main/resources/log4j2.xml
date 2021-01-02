@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="warn">
+    <Appenders>
+
+        <!--	System out	-->
+        <Console name="SysOut" target="SYSTEM_OUT">
+            <PatternLayout pattern="[%d{HH:mm:ss}] [%t/%level] (%logger{1}) %msg%n"/>
+        </Console>
+
+    </Appenders>
+    <Loggers>
+        <Logger level="${sys:fabric.log.level:-info}" name="net.fabricmc"/>
+        <Root level="all">
+            <AppenderRef ref="SysOut" level="${sys:fabric.log.level:-info}"/>
+        </Root>
+    </Loggers>
+</Configuration>

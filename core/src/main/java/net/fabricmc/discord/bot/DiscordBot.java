@@ -25,14 +25,15 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.ServiceLoader;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.function.Supplier;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
 import org.spongepowered.configurate.hocon.HoconConfigurationLoader;
@@ -48,6 +49,7 @@ public final class DiscordBot {
 		new DiscordBot(args);
 	}
 
+	private final Logger logger = LogManager.getLogger(DiscordBot.class);
 	private final BotConfig config;
 	/**
 	 * A list of all enabled modules.
@@ -71,7 +73,7 @@ public final class DiscordBot {
 		.login()
 		.thenAccept(api -> this.setup(api, configDir, dataDir))
 		.exceptionally(exc -> {
-			exc.printStackTrace();
+			this.logger.error("Error occured while initializing bot", exc);
 			return null;
 		});
 	}
@@ -99,8 +101,6 @@ public final class DiscordBot {
 	}
 
 	private BotConfig loadConfig(Path configDir) throws IOException {
-		System.out.printf("Loading config in %s%n", configDir);
-
 		// Setup a default config if the config is not present
 		if (Files.notExists(configDir.resolve("core.conf"))) {
 			Files.createDirectories(configDir);
@@ -131,20 +131,37 @@ public final class DiscordBot {
 		final BuiltinModule builtin = new BuiltinModule();
 		this.modules.add(builtin);
 
-		builtin.setup(this, api, configDir, dataDir);
+		builtin.setup(this, api, this.logger, configDir, dataDir);
 
 		final ServiceLoader<Module> modules = ServiceLoader.load(Module.class);
 
 		for (final Module module : modules) {
 			// Take the config's word over the module setup
 			if (this.config.modules().disabled().contains(module.getName())) {
+				this.logger.info("Not loading module due to config override {}", module.getName());
 				continue;
 			}
 
-			if (module.setup(this, api, configDir, dataDir)) {
+			if (module.setup(this, api, LogManager.getLogger(module.getName()), configDir, dataDir)) {
+				this.logger.info("Loaded module {}", module.getName());
 				this.modules.add(module);
 			}
 		}
+
+		final StringBuilder moduleList = new StringBuilder();
+
+		final Iterator<Module> iterator = this.modules.iterator();
+
+		while (iterator.hasNext()) {
+			final Module module = iterator.next();
+			moduleList.append(" - ").append(module.getName());
+
+			if (iterator.hasNext()) {
+				moduleList.append(",\n");
+			}
+		}
+
+		this.logger.info("Loaded {} modules:\n{}", this.modules.size(), moduleList.toString());
 	}
 
 	void tryHandleCommand(CommandContext context, CommandResponder responder) {

@@ -18,6 +18,7 @@ package net.fabricmc.discord.bot;
 
 import java.nio.file.Path;
 
+import org.apache.logging.log4j.Logger;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.event.message.MessageCreateEvent;
 import org.javacord.api.listener.message.MessageCreateListener;
@@ -42,7 +43,7 @@ final class BuiltinModule implements Module, MessageCreateListener {
 	}
 
 	@Override
-	public boolean setup(DiscordBot bot, DiscordApi api, Path configDir, Path dataDir) {
+	public boolean setup(DiscordBot bot, DiscordApi api, Logger logger, Path configDir, Path dataDir) {
 		this.bot = bot;
 		this.api = api;
 

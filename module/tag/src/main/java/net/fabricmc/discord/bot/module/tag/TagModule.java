@@ -31,6 +31,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.logging.log4j.Logger;
 import org.eclipse.jgit.api.CloneCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.MergeResult;
@@ -54,7 +55,7 @@ import net.fabricmc.tag.TagData;
 
 public final class TagModule implements Module, MessageCreateListener {
 	private final ScheduledExecutorService asyncGitExecutor = Executors.newScheduledThreadPool(1, task -> {
-		Thread ret = new Thread(task, "Async tag loading thread");
+		Thread ret = new Thread(task, "tag reload thread");
 		ret.setDaemon(true);
 
 		return ret;
@@ -65,6 +66,7 @@ public final class TagModule implements Module, MessageCreateListener {
 			.build();
 	private volatile Map<String, Tag> tags = new HashMap<>(); // Concurrent event access
 	private DiscordBot bot;
+	private Logger logger;
 	private Path gitDir;
 	private Git git;
 
@@ -74,8 +76,9 @@ public final class TagModule implements Module, MessageCreateListener {
 	}
 
 	@Override
-	public boolean setup(DiscordBot bot, DiscordApi api, Path configDir, Path dataDir) {
+	public boolean setup(DiscordBot bot, DiscordApi api, Logger logger, Path configDir, Path dataDir) {
 		this.bot = bot;
+		this.logger = logger;
 		this.gitDir = dataDir.resolve("git");
 
 		// Setup git
@@ -90,8 +93,8 @@ public final class TagModule implements Module, MessageCreateListener {
 		}
 
 		api.addMessageCreateListener(this);
-		// TODO: Configurable delay?
-		this.asyncGitExecutor.scheduleWithFixedDelay(this::reloadTags, 0L, 30L, TimeUnit.SECONDS);
+		// TODO: Configurable delay? - set to 90s for now
+		this.asyncGitExecutor.scheduleWithFixedDelay(this::reloadTags, 0L, 90L, TimeUnit.SECONDS);
 
 		return true;
 	}
@@ -99,20 +102,25 @@ public final class TagModule implements Module, MessageCreateListener {
 	// Always called async
 	private void reloadTags() {
 		try {
+			this.logger.info("Trying to reload tags from git");
+
 			if (Files.notExists(this.gitDir)) {
 				final CloneCommand cloneCommand = Git.cloneRepository()
 						.setURI("https://github.com/FabricMC/community/") // FIXME: Hardcoded - Point to a new repo for testing
 						.setDirectory(this.gitDir.toFile());
 
-				System.out.println("Cloning git repo"); // FIXME: Logger
+				this.logger.info("Cloning git repo");
 				cloneCommand.call();
 			}
 
 			final PullResult result = this.git.pull().call();
 
 			if (result.getMergeResult().getMergeStatus() == MergeResult.MergeStatus.ALREADY_UP_TO_DATE) {
+				this.logger.info("Git repo is up to date.");
 				return; // All up to date - no need to reload tags
 			}
+
+			this.logger.info("Git repo is out of date - reloading tags");
 
 			// Load all tags
 			final Path tagsDir = this.gitDir.resolve("tags");
@@ -123,6 +131,8 @@ public final class TagModule implements Module, MessageCreateListener {
 				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
 					try {
 						if (file.getFileName().endsWith(".tag")) {
+							logger.debug("Loading tag {}", file.getFileName());
+
 							final TagData data = HoconConfigurationLoader.builder()
 									.path(file)
 									.defaultOptions(options -> options.serializers(serializers))
@@ -194,6 +204,8 @@ public final class TagModule implements Module, MessageCreateListener {
 
 			// Apply reload on serial executor thread
 			this.bot.getSerialExecutor().execute(() -> {
+				this.logger.info("Applying {} tag(s)", resolved.size());
+
 				synchronized (this) {
 					this.tags.clear();
 					this.tags.putAll(resolved);
