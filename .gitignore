@@ -19,6 +19,9 @@
 # Source code
 !/src
 
+# Tag submodule
+!/tag
+
 # Ignore Gradle project-specific cache directory and build output directory
 .gradle
 build
