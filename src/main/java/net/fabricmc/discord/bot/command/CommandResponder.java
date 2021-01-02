@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 FabricMC
+ * Copyright (c) 2020, 2021 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import org.javacord.api.entity.emoji.Emoji;
 import org.javacord.api.entity.message.Message;
 import org.javacord.api.event.message.MessageEvent;
 
-import net.fabricmc.discord.bot.util.message.Paginator;
+import net.fabricmc.discord.bot.message.Paginator;
 
 /**
  * An object which provides methods to respond to a command that was sent to the bot.

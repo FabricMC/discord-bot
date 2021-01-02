@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021 FabricMC
+ * Copyright (c) 2021 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,8 @@
  * limitations under the License.
  */
 
-package net.fabricmc.discord.bot;
+package net.fabricmc.discord.bot.message;
 
-import java.nio.file.Path;
-
-import org.javacord.api.DiscordApi;
-
-public interface Module {
-	String getName();
-
-	/**
-	 * When called a module should setup.
-	 *
-	 * @param bot the bot instance
-	 * @param api the api instance to communicate with discord
-	 * @param configDir the directory of the configs
-	 * @param dataDir
-	 * @return if this module has successfully loaded
-	 */
-	boolean setup(DiscordBot bot, DiscordApi api, Path configDir, Path dataDir);
+public final class EmbedTemplate {
+	// TODO: Implement me
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 FabricMC
+ * Copyright (c) 2020, 2021 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package net.fabricmc.discord.bot.util.message;
+package net.fabricmc.discord.bot.message;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +36,7 @@ import org.jetbrains.annotations.Nullable;
  * <p>These messages contain emotes to allow switching pages and destroying the paginated message.
  * Paginated messages will expire after a certain amount of time and will drop all page emotes.
  */
+// TODO: Test me
 public final class Paginator {
 	private static final String ARROW_BACKWARDS_EMOTE = "arrow_forward";
 	private static final String ARROW_FORWARDS_EMOTE = "arrow_backward";
