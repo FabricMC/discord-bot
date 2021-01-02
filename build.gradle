@@ -17,10 +17,78 @@ repositories {
     }
 }
 
+allprojects {
+    apply plugin: "java"
+    apply plugin: "com.diffplug.spotless"
+
+    repositories {
+        mavenCentral()
+
+        maven {
+            name = "Sonatype Snapshots"
+            url = "https://oss.sonatype.org/content/repositories/snapshots"
+        }
+    }
+
+    // Common dependencies
+    dependencies {
+        compileOnly("org.jetbrains:annotations:20.1.0")
+        implementation("org.javacord:javacord:$javacordVersion")
+        implementation("org.spongepowered:configurate-hocon:$configurateVersion")
+        // TODO: Do we want this so we can :irritater: instead of raw id for custom emotes?
+        //  https://github.com/vdurmont/emoji-java
+    }
+
+    spotless {
+        java {
+            ratchetFrom "origin/master"
+            licenseHeaderFile(rootProject.file("HEADER")).yearSeparator(", ")
+        }
+
+        // Spotless tries to be smart by ignoring package-info files, however license headers are allowed there
+        // TODO: Replicate on module-info if needed?
+        format("package-info.java") {
+            target "**/package-info.java"
+
+            // Only update license headers when changes have occurred
+            ratchetFrom("origin/master")
+            // Regex is `/**` or `package`
+            licenseHeaderFile(rootProject.file("HEADER"), "/\\*\\*|package").yearSeparator(", ")
+        }
+    }
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(15)
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.compilerArgs += ["--enable-preview"]
+        options.release = 15
+    }
+
+    tasks.withType(Test).configureEach {
+        jvmArgs += "--enable-preview"
+    }
+}
+
+// Main bot module
 application {
     mainClass = "net.fabricmc.discord.bot.DiscordBot"
     applicationDefaultJvmArgs = ["--enable-preview"]
     executableDir = "run"
+}
+
+dependencies {
+    implementation(project(":tag"))
+
+    // JGit for tag module
+    implementation("org.eclipse.jgit:org.eclipse.jgit:5.9.0.202009080501-r")
+}
+
+shadowJar {
+    mainClassName = "net.fabricmc.discord.bot.DiscordBot"
 }
 
 java {
@@ -29,41 +97,12 @@ java {
     }
 }
 
-tasks.withType(JavaCompile).configureEach {
-    options.compilerArgs += ["--enable-preview"]
-    options.release = 15
-}
-
-tasks.withType(Test).configureEach {
-    jvmArgs += "--enable-preview"
-}
-
-dependencies {
-    compileOnly("org.jetbrains:annotations:20.1.0")
-    implementation("org.javacord:javacord:$javacordVersion")
-    implementation("org.spongepowered:configurate-hocon:$configurateVersion")
-    // TODO: Do we want this so we can :irritater: instead of raw id for custom emotes?
-    //  https://github.com/vdurmont/emoji-java
-}
-
-shadowJar {
-    mainClassName = "net.fabricmc.discord.bot.DiscordBot"
-}
-
-spotless {
-    java {
-        ratchetFrom "origin/master"
-        licenseHeaderFile(project.file("HEADER")).yearSeparator(", ")
-    }
-
-    // Spotless tries to be smart by ignoring package-info files, however license headers are allowed there
-    // TODO: Replicate on module-info if needed?
-    format("package-info.java") {
-        target "**/package-info.java"
-
-        // Only update license headers when changes have occurred
-        ratchetFrom("origin/master")
-        // Regex is `/**` or `package`
-        licenseHeaderFile(project.file("HEADER"), "/\\*\\*|package").yearSeparator(", ")
+// Tags
+project(":tag") {
+    // I hate this but the show must go on
+    afterEvaluate {
+        dependencies {
+            implementation(rootProject)
+        }
     }
 }

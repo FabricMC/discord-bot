@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 FabricMC
+ * Copyright (c) 2020, 2021 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,13 +61,14 @@ public final class DiscordBot {
 
 	private DiscordBot(String[] args) throws IOException {
 		final Path configDir = Paths.get("").toAbsolutePath().resolve("config");
+		final Path dataDir = Paths.get("").toAbsolutePath().resolve("data");
 
 		this.config = this.loadConfig(configDir);
 
 		new DiscordApiBuilder()
 		.setToken(this.config.secrets().token())
 		.login()
-		.thenAccept(api -> this.setup(api, configDir))
+		.thenAccept(api -> this.setup(api, configDir, dataDir))
 		.exceptionally(exc -> {
 			exc.printStackTrace();
 			return null;
@@ -122,11 +123,11 @@ public final class DiscordBot {
 				.load(configLoader.load());
 	}
 
-	private void setup(DiscordApi api, Path configDir) {
+	private void setup(DiscordApi api, Path configDir, Path dataDir) {
 		final BuiltinModule builtin = new BuiltinModule();
 		this.modules.add(builtin);
 
-		builtin.setup(this, api, configDir);
+		builtin.setup(this, api, configDir, dataDir);
 
 		final ServiceLoader<Module> modules = ServiceLoader.load(Module.class);
 
@@ -136,7 +137,7 @@ public final class DiscordBot {
 				continue;
 			}
 
-			if (module.setup(this, api, configDir)) {
+			if (module.setup(this, api, configDir, dataDir)) {
 				this.modules.add(module);
 			}
 		}

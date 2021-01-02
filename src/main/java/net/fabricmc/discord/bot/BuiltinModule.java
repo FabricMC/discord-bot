@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 FabricMC
+ * Copyright (c) 2020, 2021 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,7 +42,7 @@ final class BuiltinModule implements Module, MessageCreateListener {
 	}
 
 	@Override
-	public boolean setup(DiscordBot bot, DiscordApi api, Path configDir) {
+	public boolean setup(DiscordBot bot, DiscordApi api, Path configDir, Path dataDir) {
 		this.bot = bot;
 		this.api = api;
 

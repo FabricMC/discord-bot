@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021 FabricMC
+ * Copyright (c) 2021 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,18 @@
  * limitations under the License.
  */
 
-package net.fabricmc.discord.bot;
+package net.fabricmc.discord.bot.serialization;
 
-import java.nio.file.Path;
+import java.awt.Color;
 
-import org.javacord.api.DiscordApi;
+import org.spongepowered.configurate.serialize.TypeSerializerCollection;
 
-public interface Module {
-	String getName();
+import net.fabricmc.tag.TagData;
 
-	/**
-	 * When called a module should setup.
-	 *
-	 * @param bot the bot instance
-	 * @param api the api instance to communicate with discord
-	 * @param configDir the directory of the configs
-	 * @param dataDir
-	 * @return if this module has successfully loaded
-	 */
-	boolean setup(DiscordBot bot, DiscordApi api, Path configDir, Path dataDir);
+public final class BotTypeSerializers {
+	public static final TypeSerializerCollection SERIALIZERS = TypeSerializerCollection.builder()
+			.registerAll(TypeSerializerCollection.defaults())
+			.register(Color.class, new ColorSerializer())
+			.register(TagData.class, TagData.SERIALIZER)
+			.build();
 }
