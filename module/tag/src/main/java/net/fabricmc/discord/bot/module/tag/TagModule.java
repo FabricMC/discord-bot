@@ -50,12 +50,13 @@ import org.spongepowered.configurate.serialize.TypeSerializerCollection;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.Module;
+import net.fabricmc.discord.bot.message.Mentions;
 import net.fabricmc.discord.bot.serialization.BotTypeSerializers;
 import net.fabricmc.tag.TagData;
 
 public final class TagModule implements Module, MessageCreateListener {
 	private final ScheduledExecutorService asyncGitExecutor = Executors.newScheduledThreadPool(1, task -> {
-		Thread ret = new Thread(task, "tag reload thread");
+		Thread ret = new Thread(task, "Tag reload thread");
 		ret.setDaemon(true);
 
 		return ret;
@@ -69,6 +70,7 @@ public final class TagModule implements Module, MessageCreateListener {
 	private Logger logger;
 	private Path gitDir;
 	private Git git;
+	private volatile boolean firstRun = true;
 
 	@Override
 	public String getName() {
@@ -101,9 +103,9 @@ public final class TagModule implements Module, MessageCreateListener {
 
 	// Always called async
 	private void reloadTags() {
-		try {
-			this.logger.info("Trying to reload tags from git");
+		this.logger.info("Trying to reload tags from git");
 
+		try {
 			if (Files.notExists(this.gitDir)) {
 				final CloneCommand cloneCommand = Git.cloneRepository()
 						.setURI("https://github.com/FabricMC/community/") // FIXME: Hardcoded - Point to a new repo for testing
@@ -117,15 +119,26 @@ public final class TagModule implements Module, MessageCreateListener {
 
 			if (result.getMergeResult().getMergeStatus() == MergeResult.MergeStatus.ALREADY_UP_TO_DATE) {
 				this.logger.info("Git repo is up to date.");
-				return; // All up to date - no need to reload tags
+
+				if (!this.firstRun) {
+					return; // All up to date - no need to reload tags
+				}
+
+				synchronized (this) {
+					this.firstRun = false;
+				}
 			}
+		} catch (GitAPIException e) {
+			e.printStackTrace();
+		}
 
-			this.logger.info("Git repo is out of date - reloading tags");
+		this.logger.info("Reloading tags");
 
-			// Load all tags
-			final Path tagsDir = this.gitDir.resolve("tags");
-			final Map<String, TagData> loadedData = new HashMap<>();
+		// Load all tags
+		final Path tagsDir = this.gitDir.resolve("tags");
+		final Map<String, TagData> loadedData = new HashMap<>();
 
+		try {
 			Files.walkFileTree(tagsDir, new SimpleFileVisitor<>() {
 				@Override
 				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
@@ -153,69 +166,68 @@ public final class TagModule implements Module, MessageCreateListener {
 					return FileVisitResult.CONTINUE;
 				}
 			});
-
-			final Map<FailureReason, Set<TagData>> removedTags = new EnumMap<>(FailureReason.class);
-			final Map<String, Tag> resolved = new HashMap<>();
-
-			// Resolve all normal tags
-			loadedData.values().removeIf(data -> {
-				if (data instanceof TagData.Alias) {
-					return false;
-				}
-
-				Tag tag;
-
-				if (data instanceof TagData.Text text) {
-					tag = new Tag.Text(text.name(), text.text());
-				} else {
-					tag = new Tag.Embed(data.name(), ((TagData.Embed) data).embed());
-				}
-
-				// Do not replace tags
-				if (resolved.putIfAbsent(data.name(), tag) != null) {
-					removedTags.computeIfAbsent(FailureReason.DUPLICATE,  _k -> new HashSet<>()).add(data);
-				}
-
-				return true;
-			});
-
-			// Resolve aliases
-			loadedData.values().removeIf(tag -> {
-				if (tag instanceof TagData.Alias) {
-					if (resolved.containsKey(((TagData.Alias) tag).target())) {
-						@Nullable
-						final Tag delegate = resolved.get(((TagData.Alias) tag).target());
-
-						if (delegate == null) {
-							removedTags.computeIfAbsent(FailureReason.NO_ALIAS_TARGET,  _k -> new HashSet<>()).add(tag);
-							return true;
-						}
-
-						if (resolved.putIfAbsent(tag.name(), new Tag.Alias(tag.name(), delegate)) != null) {
-							removedTags.computeIfAbsent(FailureReason.DUPLICATE, _k -> new HashSet<>()).add(tag);
-						}
-					}
-				} else {
-					removedTags.computeIfAbsent(FailureReason.UNKNOWN,  _k -> new HashSet<>()).add(tag);
-				}
-
-				return true;
-			});
-
-			// Apply reload on serial executor thread
-			this.bot.getSerialExecutor().execute(() -> {
-				this.logger.info("Applying {} tag(s)", resolved.size());
-
-				synchronized (this) {
-					this.tags.clear();
-					this.tags.putAll(resolved);
-				}
-			});
-
-			// TODO: List the fatalities
-		} catch (GitAPIException | IOException e) {
+		} catch (IOException e) {
 			e.printStackTrace();
 		}
+
+		final Map<FailureReason, Set<TagData>> removedTags = new EnumMap<>(FailureReason.class);
+		final Map<String, Tag> resolved = new HashMap<>();
+
+		// Resolve all normal tags
+		loadedData.values().removeIf(data -> {
+			if (data instanceof TagData.Alias) {
+				return false;
+			}
+
+			Tag tag;
+
+			if (data instanceof TagData.Text text) {
+				tag = new Tag.Text(text.name(), text.text());
+			} else {
+				tag = new Tag.Embed(data.name(), ((TagData.Embed) data).embed());
+			}
+
+			// Do not replace tags
+			if (resolved.putIfAbsent(data.name(), tag) != null) {
+				removedTags.computeIfAbsent(FailureReason.DUPLICATE, _k -> new HashSet<>()).add(data);
+			}
+
+			return true;
+		});
+
+		// Resolve aliases
+		loadedData.values().removeIf(tag -> {
+			if (tag instanceof TagData.Alias) {
+				if (resolved.containsKey(((TagData.Alias) tag).target())) {
+					@Nullable final Tag delegate = resolved.get(((TagData.Alias) tag).target());
+
+					if (delegate == null) {
+						removedTags.computeIfAbsent(FailureReason.NO_ALIAS_TARGET, _k -> new HashSet<>()).add(tag);
+						return true;
+					}
+
+					if (resolved.putIfAbsent(tag.name(), new Tag.Alias(tag.name(), delegate)) != null) {
+						removedTags.computeIfAbsent(FailureReason.DUPLICATE, _k -> new HashSet<>()).add(tag);
+					}
+				}
+			} else {
+				removedTags.computeIfAbsent(FailureReason.UNKNOWN, _k -> new HashSet<>()).add(tag);
+			}
+
+			return true;
+		});
+
+		// Apply reload on serial executor thread
+		this.bot.getSerialExecutor().execute(() -> {
+			this.logger.info("Applying {} tag(s)", resolved.size());
+
+			synchronized (this) {
+				this.tags.clear();
+				this.tags.putAll(resolved);
+			}
+		});
+
+		// TODO: List the fatalities
 	}
 
 	@Override
@@ -231,7 +243,7 @@ public final class TagModule implements Module, MessageCreateListener {
 			int nextSpace = content.indexOf(' ');
 
 			if (nextSpace == -1) {
-				nextSpace = content.length() - 1;
+				nextSpace = content.length();
 			}
 
 			final String tagName = content.substring(2, nextSpace);
@@ -247,7 +259,9 @@ public final class TagModule implements Module, MessageCreateListener {
 			return;
 		}
 
-		// TODO: Reply about no tag being found.
+		// TODO: Improve message
+		// TODO: Remove sender's message and this message after time to replicate current logic
+		channel.sendMessage("%s: Could not find tag of name %s".formatted(Mentions.createUserMention(author.getId()), tagName));
 	}
 
 	private enum FailureReason {

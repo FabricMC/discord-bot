@@ -45,7 +45,7 @@ import net.fabricmc.discord.bot.config.BotConfig;
 import net.fabricmc.discord.bot.serialization.BotTypeSerializers;
 
 public final class DiscordBot {
-	public static void main(String[] args) throws IOException {
+	public static void start(String[] args) throws IOException {
 		new DiscordBot(args);
 	}
 
@@ -56,7 +56,7 @@ public final class DiscordBot {
 	 */
 	private final List<Module> modules = new ArrayList<>();
 	private final ExecutorService serialExecutor = Executors.newSingleThreadExecutor(r -> {
-		Thread ret = new Thread(r, "serial execution thread");
+		Thread ret = new Thread(r, "Serial execution thread");
 		ret.setDaemon(true);
 
 		return ret;
