@@ -41,6 +41,7 @@ import org.javacord.api.DiscordApiBuilder;
 
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandResponder;
+import net.fabricmc.discord.bot.database.Database;
 
 public final class DiscordBot {
 	public static void start(String[] args) throws IOException {
@@ -49,6 +50,7 @@ public final class DiscordBot {
 
 	private final Logger logger = LogManager.getLogger(DiscordBot.class);
 	private final BotConfig config;
+	private final Database database;
 	/**
 	 * A list of all enabled modules.
 	 */
@@ -65,6 +67,7 @@ public final class DiscordBot {
 		final Path dataDir = Paths.get("").toAbsolutePath().resolve("data");
 
 		this.config = this.loadConfig(configDir);
+		this.database = new Database(config.getDatabaseUrl());
 
 		new DiscordApiBuilder()
 		.setToken(this.config.getToken())
@@ -74,6 +77,10 @@ public final class DiscordBot {
 			this.logger.error("Error occured while initializing bot", exc);
 			return null;
 		});
+	}
+
+	public Database getDatabase() {
+		return database;
 	}
 
 	public Collection<Module> getModules() {
