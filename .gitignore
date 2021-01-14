@@ -1,6 +1,9 @@
 # Ignore everything
 /*
 
+# Intellij Garbage
+**/out/
+
 # Git
 !/.gitattributes
 !/.gitignore

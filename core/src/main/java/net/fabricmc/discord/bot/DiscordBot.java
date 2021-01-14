@@ -22,11 +22,13 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Properties;
 import java.util.ServiceLoader;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -36,13 +38,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
-import org.spongepowered.configurate.hocon.HoconConfigurationLoader;
-import org.spongepowered.configurate.objectmapping.ObjectMapper;
 
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandResponder;
-import net.fabricmc.discord.bot.config.BotConfig;
-import net.fabricmc.discord.bot.serialization.BotTypeSerializers;
 
 public final class DiscordBot {
 	public static void start(String[] args) throws IOException {
@@ -63,15 +61,15 @@ public final class DiscordBot {
 	});
 
 	private DiscordBot(String[] args) throws IOException {
-		final Path configDir = Paths.get("").toAbsolutePath().resolve("config");
+		final Path configDir = Paths.get("").toAbsolutePath().resolve("bot.properties");
 		final Path dataDir = Paths.get("").toAbsolutePath().resolve("data");
 
 		this.config = this.loadConfig(configDir);
 
 		new DiscordApiBuilder()
-		.setToken(this.config.secrets().token())
+		.setToken(this.config.getToken())
 		.login()
-		.thenAccept(api -> this.setup(api, configDir, dataDir))
+		.thenAccept(api -> this.setup(api, dataDir))
 		.exceptionally(exc -> {
 			this.logger.error("Error occured while initializing bot", exc);
 			return null;
@@ -94,55 +92,52 @@ public final class DiscordBot {
 	}
 
 	public String getCommandPrefix() {
-		return this.config.guild().commandPrefix();
+		return this.config.getCommandPrefix();
 	}
 
 	public void registerCommand() {
 	}
 
-	private BotConfig loadConfig(Path configDir) throws IOException {
-		// Setup a default config if the config is not present
-		if (Files.notExists(configDir.resolve("core.conf"))) {
-			Files.createDirectories(configDir);
-			Files.createFile(configDir.resolve("core.conf"));
+	private BotConfig loadConfig(Path configPath) throws IOException {
+		if (Files.notExists(configPath)) {
+			this.logger.info("Creating bot config");
 
-			try (InputStream input = this.getClass().getClassLoader().getResourceAsStream("core.conf")) {
-				if (input == null) {
-					throw new RuntimeException(); // TODO: Msg
-				}
+			try (final OutputStream output = Files.newOutputStream(configPath, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+				try (final InputStream input = BotConfig.class.getClassLoader().getResourceAsStream("bot.properties")) {
+					if (input == null) {
+						throw new RuntimeException("Failed to find config in bot's jar!");
+					}
 
-				try (OutputStream output = Files.newOutputStream(configDir.resolve("core.conf"))) {
 					output.write(input.readAllBytes());
 				}
 			}
 		}
 
-		final HoconConfigurationLoader configLoader = HoconConfigurationLoader.builder()
-				.defaultOptions(options -> options.serializers(BotTypeSerializers.SERIALIZERS))
-				.path(configDir.resolve("core.conf"))
-				.build();
+		final Properties properties = new Properties();
 
-		return ObjectMapper.factory()
-				.get(BotConfig.class)
-				.load(configLoader.load());
+		try (InputStream input = Files.newInputStream(configPath)) {
+			properties.load(input);
+		}
+
+		return BotConfig.load(properties);
 	}
 
-	private void setup(DiscordApi api, Path configDir, Path dataDir) {
+	private void setup(DiscordApi api, Path dataDir) {
 		final BuiltinModule builtin = new BuiltinModule();
 		this.modules.add(builtin);
 
-		builtin.setup(this, api, this.logger, configDir, dataDir);
+		builtin.setup(this, api, this.logger, dataDir);
 
 		final ServiceLoader<Module> modules = ServiceLoader.load(Module.class);
 
 		for (final Module module : modules) {
 			// Take the config's word over the module setup
-			if (this.config.modules().disabled().contains(module.getName())) {
+			if (this.config.getDisabledModules().contains(module.getName())) {
 				this.logger.info("Not loading module due to config override {}", module.getName());
 				continue;
 			}
 
-			if (module.setup(this, api, LogManager.getLogger(module.getName()), configDir, dataDir)) {
+			if (module.setup(this, api, LogManager.getLogger(module.getName()), dataDir)) {
 				this.logger.info("Loaded module {}", module.getName());
 				this.modules.add(module);
 			}

@@ -43,7 +43,7 @@ final class BuiltinModule implements Module, MessageCreateListener {
 	}
 
 	@Override
-	public boolean setup(DiscordBot bot, DiscordApi api, Logger logger, Path configDir, Path dataDir) {
+	public boolean setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
 		this.bot = bot;
 		this.api = api;
 

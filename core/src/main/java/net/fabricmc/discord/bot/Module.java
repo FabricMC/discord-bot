@@ -30,9 +30,8 @@ public interface Module {
 	 * @param bot the bot instance
 	 * @param api the api instance to communicate with discord
 	 * @param logger the logger for this module
-	 * @param configDir the directory of the configs
-	 * @param dataDir
+	 * @param dataDir the data directory the bot is using
 	 * @return if this module has successfully loaded
 	 */
-	boolean setup(DiscordBot bot, DiscordApi api, Logger logger, Path configDir, Path dataDir);
+	boolean setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir);
 }
