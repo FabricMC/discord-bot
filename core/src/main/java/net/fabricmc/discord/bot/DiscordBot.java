@@ -166,7 +166,7 @@ public final class DiscordBot {
 		this.logger.info("Loaded {} modules:\n{}", this.modules.size(), moduleList.toString());
 	}
 
-	void tryHandleCommand(CommandContext context, CommandResponder responder) {
+	void tryHandleCommand(CommandContext context) {
 		// Don't dispatch commands if the bot is the sender
 		if (context.author().isYourself()) {
 			return;

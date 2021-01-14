@@ -22,12 +22,10 @@ import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.message.MessageAuthor;
 
-import net.fabricmc.discord.bot.message.EmbedTemplate;
-
-public sealed abstract class Tag {
+public sealed abstract class TagInstance {
 	private final String name;
 
-	public Tag(String name) {
+	public TagInstance(String name) {
 		this.name = name;
 	}
 
@@ -37,7 +35,7 @@ public sealed abstract class Tag {
 
 	public abstract CompletableFuture<Message> send(MessageAuthor author, TextChannel channel, String arguments);
 
-	public static final class Text extends Tag {
+	public static final class Text extends TagInstance {
 		private final String text;
 
 		public Text(String name, String text) {
@@ -53,11 +51,11 @@ public sealed abstract class Tag {
 
 		@Override
 		public String toString() {
-			return "TextTag{name=\"%s\", text=\"%s\"}".formatted(this.getName(), this.text);
+			return "Text{name=\"%s\", text=\"%s\"}".formatted(this.getName(), this.text);
 		}
 	}
 
-	public static final class Embed extends Tag {
+	public static final class Embed extends TagInstance {
 		private final EmbedTemplate embed;
 
 		public Embed(String name, EmbedTemplate embed) {
@@ -73,14 +71,14 @@ public sealed abstract class Tag {
 
 		@Override
 		public String toString() {
-			return "EmbedTag{name=\"%s\", embed=\"%s\"}".formatted(this.getName(), this.embed);
+			return "Embed{name=\"%s\", embed=\"%s\"}".formatted(this.getName(), this.embed);
 		}
 	}
 
-	public static final class Alias extends Tag {
-		private final Tag delegate;
+	public static final class Alias extends TagInstance {
+		private final TagInstance delegate;
 
-		public Alias(String name, Tag delegate) {
+		public Alias(String name, TagInstance delegate) {
 			super(name);
 
 			if (delegate instanceof Alias) {
@@ -92,7 +90,7 @@ public sealed abstract class Tag {
 
 		@Override
 		public String toString() {
-			return "AliasTag{\"%s\" -> \"%s\"}".formatted(this.getName(), this.delegate.getName());
+			return "Alias{\"%s\" -> \"%s\"}".formatted(this.getName(), this.delegate.getName());
 		}
 
 		@Override

@@ -31,6 +31,7 @@ import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.MessageAuthor;
+import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.javacord.api.event.message.MessageCreateEvent;
 import org.javacord.api.listener.message.MessageCreateListener;
 import org.spongepowered.configurate.serialize.TypeSerializerCollection;
@@ -40,6 +41,7 @@ import net.fabricmc.discord.bot.Module;
 import net.fabricmc.discord.bot.message.Mentions;
 import net.fabricmc.tag.TagData;
 import net.fabricmc.tag.serialize.ColorSerializer;
+import net.fabricmc.tag.serialize.EmbedBuilderSerializer;
 import net.fabricmc.tag.serialize.TagDataSerializer;
 
 public final class TagModule implements Module, MessageCreateListener {
@@ -50,10 +52,12 @@ public final class TagModule implements Module, MessageCreateListener {
 		return ret;
 	});
 	private final TypeSerializerCollection serializers = TypeSerializerCollection.builder()
+			.registerAll(TypeSerializerCollection.defaults())
 			.register(Color.class, new ColorSerializer())
+			.register(EmbedBuilder.class, new EmbedBuilderSerializer())
 			.register(TagData.class, new TagDataSerializer())
 			.build();
-	private volatile Map<String, Tag> tags = new HashMap<>(); // Concurrent event access
+	private volatile Map<String, TagInstance> tags = new HashMap<>(); // Concurrent event access
 	private DiscordBot bot;
 	private Logger logger;
 	private Path gitDir;
@@ -241,7 +245,7 @@ public final class TagModule implements Module, MessageCreateListener {
 	}
 
 	private void handleTag(MessageAuthor author, TextChannel channel, String tagName, String arguments) {
-		final Tag tag = this.tags.get(tagName);
+		final TagInstance tag = this.tags.get(tagName);
 
 		if (tag != null) {
 			tag.send(author, channel, arguments);

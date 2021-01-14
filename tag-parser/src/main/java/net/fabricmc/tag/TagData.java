@@ -16,9 +16,8 @@
 
 package net.fabricmc.tag;
 
+import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.spongepowered.configurate.objectmapping.ConfigSerializable;
-
-import net.fabricmc.discord.bot.message.EmbedTemplate;
 
 public interface TagData {
 	String name();
@@ -32,6 +31,6 @@ public interface TagData {
 	}
 
 	@ConfigSerializable
-	record Embed(String name, EmbedTemplate embed) implements TagData {
+	record Embed(String name, EmbedBuilder embed) implements TagData {
 	}
 }

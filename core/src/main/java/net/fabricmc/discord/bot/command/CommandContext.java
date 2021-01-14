@@ -29,6 +29,7 @@ import net.fabricmc.discord.bot.DiscordBot;
  * An object which represents the context in which a command is being executed.
  */
 public record CommandContext(
+		CommandResponder responder,
 		DiscordBot bot,
 		@Nullable Server server,
 		URL messageLink,

@@ -60,6 +60,7 @@ final class BuiltinModule implements Module, MessageCreateListener {
 
 		// We intentionally don't pass the event since we may want to support editing the original message to execute the command again such as if an error was made in syntax
 		final CommandContext context = new CommandContext(
+				new CommandResponder(event),
 				this.bot,
 				event.getServer().orElse(null),
 				event.getMessageLink(),
@@ -69,6 +70,6 @@ final class BuiltinModule implements Module, MessageCreateListener {
 				event.getMessageId()
 		);
 
-		this.bot.tryHandleCommand(context, new CommandResponder(event));
+		this.bot.tryHandleCommand(context);
 	}
 }
