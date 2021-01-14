@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-package net.fabricmc.discord.bot.serialization;
+package net.fabricmc.tag.serialize;
 
 import java.awt.Color;
 import java.lang.reflect.Type;
 
-import org.checkerframework.checker.nullness.qual.Nullable;
+import org.jetbrains.annotations.Nullable;
 import org.spongepowered.configurate.ConfigurationNode;
 import org.spongepowered.configurate.serialize.SerializationException;
 import org.spongepowered.configurate.serialize.TypeSerializer;
 
-final class ColorSerializer implements TypeSerializer<Color> {
+public final class ColorSerializer implements TypeSerializer<Color> {
 	@Override
 	public Color deserialize(Type type, ConfigurationNode node) throws SerializationException {
 		if (node.isMap()) {

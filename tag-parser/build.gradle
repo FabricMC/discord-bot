@@ -1,0 +1,7 @@
+def configurateVersion = "4.1.0-SNAPSHOT"
+
+dependencies {
+	api("org.spongepowered:configurate-yaml:$configurateVersion") {
+		exclude(module: "checker-qual") // BEGONE
+	}
+}

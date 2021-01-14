@@ -37,10 +37,10 @@ allprojects {
 	dependencies {
 		compileOnly("org.jetbrains:annotations:20.1.0")
 		implementation("org.javacord:javacord:$javacordVersion")
-		implementation("org.spongepowered:configurate-hocon:$configurateVersion")
 
 		// Database
 		implementation("com.zaxxer:HikariCP:3.4.5")
+		implementation("org.xerial:sqlite-jdbc:3.34.0")
 
 		// Logging
 		implementation("org.apache.logging.log4j:log4j-core:2.14.0")
