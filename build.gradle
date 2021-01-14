@@ -1,59 +1,62 @@
 plugins {
-    id("java")
-    id("java-library")
-    id("application")
-    id("com.github.johnrengelman.shadow") version "6.1.0"
-    // TODO: Wait for shadow to support JDK 15 so we can minimize the built jar
-    id("com.diffplug.spotless") version "5.8.2"
+	id("java")
+	id("java-library")
+	id("application")
+	id("com.github.johnrengelman.shadow") version "6.1.0"
+	// TODO: Wait for shadow to support JDK 15 so we can minimize the built jar
+	id("com.diffplug.spotless") version "5.8.2"
 }
 
 group "net.fabricmc"
 version "1.0-SNAPSHOT"
 
 repositories {
-    mavenCentral()
+	mavenCentral()
 
-    maven {
-        name = "Sonatype Snapshots"
-        url = "https://oss.sonatype.org/content/repositories/snapshots"
-    }
+	maven {
+		name = "Sonatype Snapshots"
+		url = "https://oss.sonatype.org/content/repositories/snapshots"
+	}
 }
 
 allprojects {
-    apply plugin: "java"
-    apply plugin: "java-library"
-    apply plugin: "com.diffplug.spotless"
+	apply plugin: "java"
+	apply plugin: "java-library"
+	apply plugin: "com.diffplug.spotless"
 
-    repositories {
-        mavenCentral()
+	repositories {
+		mavenCentral()
 
-        maven {
-            name = "Sonatype Snapshots"
-            url = "https://oss.sonatype.org/content/repositories/snapshots"
-        }
-    }
+		maven {
+			name = "Sonatype Snapshots"
+			url = "https://oss.sonatype.org/content/repositories/snapshots"
+		}
+	}
 
-    // Common dependencies
-    dependencies {
-        compileOnly("org.jetbrains:annotations:20.1.0")
-        implementation("org.javacord:javacord:$javacordVersion")
-        implementation("org.spongepowered:configurate-hocon:$configurateVersion")
+	// Common dependencies
+	dependencies {
+		compileOnly("org.jetbrains:annotations:20.1.0")
+		implementation("org.javacord:javacord:$javacordVersion")
+		implementation("org.spongepowered:configurate-hocon:$configurateVersion")
 
-        // Logging
-        implementation("org.apache.logging.log4j:log4j-core:2.14.0")
-        // TODO: Do we want this so we can :irritater: instead of raw id for custom emotes?
-        //  https://github.com/vdurmont/emoji-java
-    }
+		// Database
+		implementation("com.zaxxer:HikariCP:3.4.5")
 
-    spotless {
-        java {
-            ratchetFrom "origin/master"
-            licenseHeaderFile(rootProject.file("HEADER")).yearSeparator(", ")
-        }
+		// Logging
+		implementation("org.apache.logging.log4j:log4j-core:2.14.0")
+		// TODO: Do we want this so we can :irritater: instead of raw id for custom emotes?
+		//  https://github.com/vdurmont/emoji-java
+	}
 
-        // Spotless tries to be smart by ignoring package-info files, however license headers are allowed there
-        // TODO: Replicate on module-info if needed?
-        //  FIXME: Currently broken
+	spotless {
+		java {
+			ratchetFrom "origin/master"
+			licenseHeaderFile(rootProject.file("HEADER")).yearSeparator(", ")
+		}
+
+		// Spotless tries to be smart by ignoring package-info files, however license headers are allowed there
+		// TODO: Replicate on module-info if needed?
+		//  FIXME: Currently broken
 //        format("package-info.java") {
 //            target "**/package-info.java"
 //
@@ -62,59 +65,59 @@ allprojects {
 //            // Regex is `/**` or `package`
 //            licenseHeaderFile(rootProject.file("HEADER"), "/\\*\\*|package").yearSeparator(", ")
 //        }
-    }
+	}
 
-    java {
-        modularity.inferModulePath = true
+	java {
+		modularity.inferModulePath = true
 
-        toolchain {
-            languageVersion = JavaLanguageVersion.of(15)
-        }
-    }
+		toolchain {
+			languageVersion = JavaLanguageVersion.of(15)
+		}
+	}
 
-    tasks.withType(JavaCompile).configureEach {
-        options.compilerArgs += ["--enable-preview"]
-        options.release = 15
-    }
+	tasks.withType(JavaCompile).configureEach {
+		options.compilerArgs += ["--enable-preview"]
+		options.release = 15
+	}
 
-    tasks.withType(Test).configureEach {
-        jvmArgs += "--enable-preview"
-    }
+	tasks.withType(Test).configureEach {
+		jvmArgs += "--enable-preview"
+	}
 }
 
 // Main bot module
 application {
-    mainClass = "net.fabricmc.discord.bot.Main"
-    applicationDefaultJvmArgs = ["--enable-preview"]
-    executableDir = "run"
+	mainClass = "net.fabricmc.discord.bot.Main"
+	applicationDefaultJvmArgs = ["--enable-preview"]
+	executableDir = "run"
 }
 
 // Setup dependencies for big boi jar
 dependencies {
-    afterEvaluate {
-        subprojects.each {
-            implementation(it)
-        }
-    }
+	afterEvaluate {
+		subprojects.each {
+			implementation(it)
+		}
+	}
 }
 
 // Propagate core dependency to subprojects
 subprojects {
-    if (project != project(":core")) {
-        dependencies {
-            implementation(rootProject.project(":core"))
-        }
-    }
+	if (project != project(":core")) {
+		dependencies {
+			implementation(rootProject.project(":core"))
+		}
+	}
 }
 
 shadowJar {
-    mainClassName = "net.fabricmc.discord.bot.Main"
+	mainClassName = "net.fabricmc.discord.bot.Main"
 }
 
 java {
-    modularity.inferModulePath = true
+	modularity.inferModulePath = true
 
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(15)
-    }
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(15)
+	}
 }
