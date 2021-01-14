@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2021 FabricMC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package net.fabricmc.discord.bot.command;
 
 import java.io.IOException;
@@ -19,7 +35,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
-import net.fabricmc.discord.bot.util.Util;
+import net.fabricmc.discord.bot.util.Collections2;
 
 final class UsageParser {
 	public static void main(String[] args) throws IOException {
@@ -35,7 +51,7 @@ final class UsageParser {
 		GraphNode graph = toGraph(node, false, null);
 		//System.out.println(graph);
 
-		Set<GraphNode> queued = Util.newIdentityHashSet();
+		Set<GraphNode> queued = Collections2.newIdentityHashSet();
 		Map<GraphNode, Integer> idMap = new IdentityHashMap<>();
 		AtomicInteger nextId = new AtomicInteger();
 		Function<GraphNode, Integer> idAllocator = ignore -> nextId.getAndIncrement();
@@ -679,7 +695,7 @@ final class UsageParser {
 	public static GraphNode toGraph(Node rootNode, boolean expandFlags, Collection<Node> flagNodesOut) {
 		Map<GraphNode, List<Node>> floatingNodeMap = new IdentityHashMap<>();
 		Queue<GraphNode> queue = new ArrayDeque<>();
-		Set<GraphNode> queued = Util.newIdentityHashSet();
+		Set<GraphNode> queued = Collections2.newIdentityHashSet();
 		GraphNode result = toGraph0(rootNode, false, queue, queued, floatingNodeMap);
 
 		// process floating nodes (--x[=y] style arguments, potentially embedded in OrNode/ListNode)
@@ -691,7 +707,7 @@ final class UsageParser {
 				result = newRoot;
 			}
 
-			Set<Node> floatingNodes = Util.newIdentityHashSet();
+			Set<Node> floatingNodes = Collections2.newIdentityHashSet();
 
 			for (List<Node> nodes : floatingNodeMap.values()) {
 				floatingNodes.addAll(nodes);
@@ -812,8 +828,8 @@ final class UsageParser {
 			for (GraphNode next : node.next) {
 				if (!next.hasNode() && next != END_NODE) { // phi node, treat as transparent
 					Queue<GraphNode> subQueue = new ArrayDeque<>();
-					Set<GraphNode> subQueued = Util.newIdentityHashSet();
-					Set<GraphNode> subConnections = Util.newIdentityHashSet();
+					Set<GraphNode> subQueued = Collections2.newIdentityHashSet();
+					Set<GraphNode> subConnections = Collections2.newIdentityHashSet();
 					subQueue.addAll(next.next);
 					subQueued.addAll(next.next);
 					GraphNode subNode;
