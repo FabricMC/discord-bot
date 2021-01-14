@@ -27,7 +27,13 @@ import net.fabricmc.discord.bot.message.Paginator;
 /**
  * An object which provides methods to respond to a command that was sent to the bot.
  */
-public record CommandResponder(MessageEvent event) {
+public final class CommandResponder {
+	private final MessageEvent event;
+
+	public CommandResponder(MessageEvent event) {
+		this.event = event;
+	}
+
 	/**
 	 * Deletes a message.
 	 *
