@@ -81,7 +81,7 @@ public final class TagModule implements Module, MessageCreateListener {
 		}
 
 		api.addMessageCreateListener(this);
-		// TODO: Configurable delay? - set to 90s for now
+		// TODO: Read config for scheduling - read config when rescheduling in reloadTags
 		this.asyncGitExecutor.scheduleWithFixedDelay(this::reloadTags, 0L, 90L, TimeUnit.SECONDS);
 
 		return true;
@@ -121,9 +121,7 @@ public final class TagModule implements Module, MessageCreateListener {
 
 		try {
 			final TagLoadResult result = TagParser.loadTags(this.logger, tagsDir);
-
-			this.logger.info("Loaded: {}, Malformed: {}", result.loadedTags(), result.malformedTags());
-
+			this.logger.info("Loaded: {}, Malformed: {}", result.loadedTags().size(), result.malformedTags().size());
 			// TODO: Create tag instances
 		} catch (IOException e) {
 			e.printStackTrace();
@@ -162,11 +160,5 @@ public final class TagModule implements Module, MessageCreateListener {
 		// TODO: Improve message
 		// TODO: Remove sender's message and this message after time to replicate current logic
 		channel.sendMessage("%s: Could not find tag of name %s".formatted(Mentions.createUserMention(author.getId()), tagName));
-	}
-
-	private enum FailureReason {
-		DUPLICATE,
-		NO_ALIAS_TARGET,
-		UNKNOWN
 	}
 }

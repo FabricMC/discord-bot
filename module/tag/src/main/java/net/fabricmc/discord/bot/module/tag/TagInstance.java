@@ -59,7 +59,7 @@ public sealed abstract class TagInstance {
 	public static final class Embed extends TagInstance {
 		private final EmbedBuilder embed;
 
-		public Embed(String name, EmbedBuilder embed) {
+		public Embed(String name, String content, EmbedBuilder embed) {
 			super(name);
 			this.embed = embed;
 		}

@@ -125,6 +125,6 @@ public final class TagParser {
 		return new TagLoadResult(loadedTags, malformedTags);
 	}
 
-	record TagEntry(String name, TagFrontMatter frontMatter, @Nullable String messageContent) {
+	public record TagEntry(String name, TagFrontMatter frontMatter, @Nullable String messageContent) {
 	}
 }
