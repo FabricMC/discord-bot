@@ -49,6 +49,28 @@ public final class CommandParser {
 		return parse(input, 0, input.length(), node, out);
 	}
 
+	/**
+	 * Parse and validate a command parameter string into a map.
+	 *
+	 * <p>The input will split into tokens through whitespace unless escaped or enclosed in single or double quotes.
+	 * Supported escape sequences are \r, \n, \t and \b with their usual Java meaning. Flag keys (--x) may not use
+	 * quotes and don't tolerate whitespace between the first - and the end of their value.
+	 *
+	 * <p>Output map keying rules based on usage string element:
+	 * <ul>
+	 * <li> variable ({@literal <x>}): variable name (x)
+	 * <li> floating arg (--x): flag key (x)
+	 * <li> plain arg (x): unnamed_y where y = yth position dependent token, zero based
+	 * </ul>
+	 *
+	 * @param input command parameter string
+	 * @param inputStart start index in the command parameter string
+	 * @param inputEnd end index in command parameter string (exclusive)
+	 * @param node command usage tree's root Node as obtained from UsageParser.parse
+	 * @param out map capturing parsed parameters as described above
+	 * @return true whether the input was meeting the usage requirements and parsed successfully (wip)
+	 * @throws IllegalArgumentException if the input has incorrect syntax (wip)
+	 */
 	public boolean parse(CharSequence input, int inputStart, int inputEnd, Node node, Map<String, String> out) {
 		this.input = input;
 		this.tokenCount = 0;
@@ -153,6 +175,7 @@ public final class CommandParser {
 	}
 
 	private int processNode(Node node, int token, boolean last, List<String> capturedArgs, List<String> allowedFloatingArgs) {
+		// TOOD: repeat
 		boolean matched;
 
 		if (node instanceof FloatingArgNode) {

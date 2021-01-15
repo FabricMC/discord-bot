@@ -82,6 +82,35 @@ final class UsageParser {
 		}
 	}
 
+	/**
+	 * Parse an usage string into a Node tree.
+	 *
+	 * <p>The usage string describes the acceptable parameters with their ordering and presence requirements for a
+	 * command. Those parameters will be represented by a Node, then grouped appropriately with ListNode and OrNode to
+	 * mirror the structure of the usage string. Optional and/or repeating Nodes will be flagged as such.
+	 *
+	 * <p>The resulting Node tree can then be used to parse and validate a command parameter string or further transformed
+	 * into a graph structure.
+	 *
+	 * <p>Usage string format, a and b are any expression, x is a literal or name:
+	 * <pre>
+	 *   a b: a and b have to be supplied in this order
+	 *   a|b: either a or b can be supplied, lowest precedence (a b|c is the same as (a b)|c)
+	 *   [a]: a is optional
+	 *  a...: a may be repeated, at least one instance, highest precedence
+	 * (a b): a and b act as a common element in the surrounding context
+	 *     x: literal input "x" required
+	 * {@literal   <x>}: x is a variable capturing any input token
+	 *   --x: position independent flag x
+	 * --x=a: position independent flag x with mandatory value a (value may still be empty if a is e.g. (|b) or [b])
+	 * --x[=a]: position independent flag x, optinally with value a
+	 * </pre>
+	 *
+	 * @param usage usage string encoding the acceptable command parameters
+	 * @param fixPositionDependence whether to ensure that there can be only one optional position dependent parameter
+	 *        at a time by introducing the missing dependency between those parameters that removes ambiguity
+	 * @return root node representing the usage string's tree form
+	 */
 	public Node parse(String usage, boolean fixPositionDependence) {
 		this.input = usage;
 		this.tokenCount = 0;
@@ -384,7 +413,6 @@ final class UsageParser {
 
 		protected void setRepeat() {
 			this.repeat = true;
-			this.optional = true;
 		}
 
 		protected abstract Node copy();
@@ -692,6 +720,27 @@ final class UsageParser {
 		static final EmptyNode INSTANCE = new EmptyNode();
 	}
 
+	/**
+	 * Convert an usage tree with optional or repeating nodes into a directed graph with only mandatory nodes.
+	 *
+	 * <p>The graph uses extra edges to handle optional or repeating nodes, implemented as bypassing or back edges
+	 * respectively. Position independent nodes (FloatingArgNode and nodes only exclusively containing those) will be
+	 * represented by either a special repeating "flags" node that is supposed to absorb any number of remaining
+	 * floating args or expanded such that the graph captures every possible permutation directly. Expanding grows the
+	 * graph by the factorial of total floating args present, making it unsustainable for more than a few.
+	 *
+	 * <p>Any graph node that consumes input (a command parameter string token) will be backed by the respective original
+	 * leaf tree Nodes (Plain/Var/FloatingArg). Valid end points for stopping consuming further tokens have edges
+	 * towards the END_NODE. Additionally "PHI" graph nodes may get introduced for graph building purposes.
+	 *
+	 * <p>None of rootNode or its children will be modified, optional and repeating properties remain as-is but should be
+	 * ignored when working with graph nodes. As mentioned above the graph structures itself captures them.
+	 *
+	 * @param rootNode root Node object for the command usage tree
+	 * @param expandFlags whether to expand floating arguments as described above
+	 * @param flagNodesOut collection accepting all encountered position independent nodes or null to ignore
+	 * @return root graph node
+	 */
 	public static GraphNode toGraph(Node rootNode, boolean expandFlags, Collection<Node> flagNodesOut) {
 		Map<GraphNode, List<Node>> floatingNodeMap = new IdentityHashMap<>();
 		Queue<GraphNode> queue = new ArrayDeque<>();
