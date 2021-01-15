@@ -21,6 +21,7 @@ import java.util.concurrent.CompletableFuture;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.message.MessageAuthor;
+import org.javacord.api.entity.message.embed.EmbedBuilder;
 
 public sealed abstract class TagInstance {
 	private final String name;
@@ -56,9 +57,9 @@ public sealed abstract class TagInstance {
 	}
 
 	public static final class Embed extends TagInstance {
-		private final EmbedTemplate embed;
+		private final EmbedBuilder embed;
 
-		public Embed(String name, EmbedTemplate embed) {
+		public Embed(String name, EmbedBuilder embed) {
 			super(name);
 			this.embed = embed;
 		}

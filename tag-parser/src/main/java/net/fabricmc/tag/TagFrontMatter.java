@@ -17,20 +17,14 @@
 package net.fabricmc.tag;
 
 import org.javacord.api.entity.message.embed.EmbedBuilder;
-import org.spongepowered.configurate.objectmapping.ConfigSerializable;
 
-public interface TagData {
-	String name();
+public interface TagFrontMatter {
+	TagFrontMatter TEXT = new TagFrontMatter() {
+	};
 
-	@ConfigSerializable
-	record Text(String name, String text) implements TagData {
+	record Alias(String target) implements TagFrontMatter {
 	}
 
-	@ConfigSerializable
-	record Alias(String name, String target) implements TagData {
-	}
-
-	@ConfigSerializable
-	record Embed(String name, EmbedBuilder embed) implements TagData {
+	record Embed(EmbedBuilder embed) implements TagFrontMatter {
 	}
 }

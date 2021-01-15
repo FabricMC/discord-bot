@@ -1,7 +1,20 @@
+plugins {
+	id("application")
+	id("com.github.johnrengelman.shadow")
+}
+
 def configurateVersion = "4.1.0-SNAPSHOT"
 
 dependencies {
 	api("org.spongepowered:configurate-yaml:$configurateVersion") {
 		exclude(module: "checker-qual") // BEGONE
 	}
+}
+
+application {
+	mainClassName = "net.fabricmc.tag.TagParser"
+}
+
+shadowJar {
+	mainClassName = "net.fabricmc.tag.TagParser"
 }

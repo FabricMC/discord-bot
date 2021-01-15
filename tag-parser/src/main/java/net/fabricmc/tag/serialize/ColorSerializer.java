@@ -18,6 +18,7 @@ package net.fabricmc.tag.serialize;
 
 import java.awt.Color;
 import java.lang.reflect.Type;
+import java.util.Locale;
 
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.configurate.ConfigurationNode;
@@ -25,29 +26,32 @@ import org.spongepowered.configurate.serialize.SerializationException;
 import org.spongepowered.configurate.serialize.TypeSerializer;
 
 public final class ColorSerializer implements TypeSerializer<Color> {
+	public static final Color BLURPLE = Color.decode("#7289DA");
+	public static final Color FABRIC = Color.decode("#DBD0B4");
+	public static final Color NEGATIVE = Color.decode("#e74c3c");
+	public static final Color POSITIVE = Color.decode("#2ecc71");
+
 	@Override
 	public Color deserialize(Type type, ConfigurationNode node) throws SerializationException {
-		if (node.isMap()) {
-			if (node.node("r").virtual()) {
-				throw new SerializationException("Color requires \"r\" field for red color value!");
+		final int value = node.getInt(Integer.MIN_VALUE);
+
+		if (value != Integer.MIN_VALUE) {
+			final String colorName = node.getString();
+
+			if (colorName == null) {
+				throw new SerializationException(node.path(), Color.class, "Failed to coerce color value to string!");
 			}
 
-			if (node.node("g").virtual()) {
-				throw new SerializationException("Color requires \"g\" field for green color value!");
-			}
-
-			if (node.node("b").virtual()) {
-				throw new SerializationException("Color requires \"b\" field for blue color value!");
-			}
-
-			final int red = node.node("r").getInt();
-			final int green = node.node("g").getInt();
-			final int blue = node.node("b").getInt();
-
-			return new Color(red, green, blue);
+			return switch (colorName.toLowerCase(Locale.ROOT)) {
+			case "blurple" -> BLURPLE;
+			case "fabric" -> FABRIC;
+			case "negative" -> NEGATIVE;
+			case "positive" -> POSITIVE;
+			default -> throw new SerializationException(node.path(), Color.class, "Unsupported string color %s".formatted(colorName));
+			};
 		}
 
-		throw new SerializationException(node, type, "Color must be an object specifying \"r\", \"g\", \"b\" fields");
+		return new Color(value);
 	}
 
 	@Override
