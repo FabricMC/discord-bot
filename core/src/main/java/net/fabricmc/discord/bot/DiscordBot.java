@@ -161,6 +161,11 @@ public final class DiscordBot {
 			throwables.printStackTrace();
 		}
 
+		// Notify modules of the change
+		for (Module module : this.getModules()) {
+			module.onConfigValueChanged(key, value);
+		}
+
 		return true;
 	}
 
