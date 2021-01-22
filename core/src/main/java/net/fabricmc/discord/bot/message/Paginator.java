@@ -146,7 +146,7 @@ public final class Paginator {
 			this.currentPage++;
 
 			// TODO: Test?
-			return this.message.edit(this.createEmbed(this.pages.get(this.getCurrentPage()), this.getCurrentPage()))
+			return this.message.edit(this.getEmbed())
 					.thenApply(ignored -> true);
 		}
 
@@ -168,7 +168,7 @@ public final class Paginator {
 				this.currentPage--;
 
 				// TODO: Test?
-				return this.message.edit(this.createEmbed(this.pages.get(this.getCurrentPage()), this.getCurrentPage()))
+				return this.message.edit(this.getEmbed())
 						.thenApply(ignored -> true);
 			}
 		}
@@ -207,7 +207,7 @@ public final class Paginator {
 		this.currentPage = 0;
 
 		// Send the message to create the paginator on first page
-		return channel.sendMessage(this.createEmbed(this.pages.get(0), 0)).thenCompose(message -> {
+		return channel.sendMessage(this.getEmbed()).thenCompose(message -> {
 			this.message = message;
 
 			// Add the control emotes and then setup the listeners for said emotes
@@ -258,9 +258,11 @@ public final class Paginator {
 		});
 	}
 
-	private EmbedBuilder createEmbed(String content, int page) {
+	private EmbedBuilder getEmbed() {
+		final String content = this.pages.get(this.getCurrentPage());
+
 		return new EmbedBuilder()
 				.setDescription(content)
-				.setFooter("Page %s/%s".formatted(page + 1, this.getPageCount()));
+				.setFooter("Page %s/%s".formatted(this.getCurrentPage() + 1, this.getPageCount()));
 	}
 }
