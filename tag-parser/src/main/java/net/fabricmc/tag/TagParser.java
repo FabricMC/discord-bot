@@ -96,7 +96,6 @@ public final class TagParser {
 					final String[] split = fileAsString.split("\\n---\\n");
 
 					if (split.length == 2) {
-						logger.error(split[0]);
 						yamlContent = split[0];
 						messageContent = split[split.length - 1];
 					} else {

@@ -40,11 +40,15 @@ import org.javacord.api.listener.message.MessageCreateListener;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.Module;
+import net.fabricmc.discord.bot.config.ConfigKey;
+import net.fabricmc.discord.bot.config.ValueSerializers;
 import net.fabricmc.discord.bot.message.Mentions;
 import net.fabricmc.tag.TagLoadResult;
 import net.fabricmc.tag.TagParser;
 
 public final class TagModule implements Module, MessageCreateListener {
+	public static final ConfigKey<String> GIT_REPO = new ConfigKey<>("tags.gitRepo", ValueSerializers.STRING);
+	public static final ConfigKey<Integer> GIT_PULL_DELAY = new ConfigKey<>("tags.gitPullDelay", ValueSerializers.rangedInt(-1, Integer.MAX_VALUE));
 	private final ScheduledExecutorService asyncGitExecutor = Executors.newScheduledThreadPool(1, task -> {
 		Thread ret = new Thread(task, "Tag reload thread");
 		ret.setDaemon(true);
@@ -64,7 +68,19 @@ public final class TagModule implements Module, MessageCreateListener {
 	}
 
 	@Override
-	public boolean setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
+	public boolean shouldLoad() {
+		return true;
+	}
+
+	@Override
+	public void registerConfigEntries(DiscordBot bot) {
+		// 30 seconds default
+		bot.registerConfigEntry(GIT_PULL_DELAY, () -> 30);
+		bot.registerConfigEntry(GIT_REPO, () -> "https://github.com/FabricMC/community/");
+	}
+
+	@Override
+	public void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
 		this.bot = bot;
 		this.logger = logger;
 		this.gitDir = dataDir.resolve("git");
@@ -76,23 +92,24 @@ public final class TagModule implements Module, MessageCreateListener {
 					.readEnvironment()
 					.build());
 		} catch (IOException e) {
-			e.printStackTrace();
-			return false;
+			logger.error("Failed to setup tags module", e);
+			return;
 		}
 
 		api.addMessageCreateListener(this);
-		// TODO: Read config for scheduling - read config when rescheduling in reloadTags
-		this.asyncGitExecutor.scheduleWithFixedDelay(this::reloadTags, 0L, 90L, TimeUnit.SECONDS);
 
-		return true;
+		// Load tags
+		this.reloadTags();
 	}
 
-	// Always called async
 	private void reloadTags() {
+		// Schedule the next task
+		this.asyncGitExecutor.schedule(this::reloadTags, bot.getConfigEntry(GIT_PULL_DELAY), TimeUnit.SECONDS);
+
 		try {
 			if (Files.notExists(this.gitDir)) {
 				final CloneCommand cloneCommand = Git.cloneRepository()
-						.setURI("https://github.com/FabricMC/community/") // FIXME: Hardcoded - Put in config
+						.setURI(this.bot.getConfigEntry(GIT_REPO))
 						.setDirectory(this.gitDir.toFile());
 
 				this.logger.info("Cloning git repo");
@@ -152,13 +169,13 @@ public final class TagModule implements Module, MessageCreateListener {
 	private void handleTag(MessageAuthor author, TextChannel channel, String tagName, String arguments) {
 		final TagInstance tag = this.tags.get(tagName);
 
-		if (tag != null) {
-			tag.send(author, channel, arguments);
+		if (tag == null) {
+			// TODO: Improve message
+			// TODO: Remove sender's message and this message after time to replicate current logic
+			channel.sendMessage("%s: Could not find tag of name %s".formatted(Mentions.createUserMention(author.getId()), tagName));
 			return;
 		}
 
-		// TODO: Improve message
-		// TODO: Remove sender's message and this message after time to replicate current logic
-		channel.sendMessage("%s: Could not find tag of name %s".formatted(Mentions.createUserMention(author.getId()), tagName));
+		tag.send(author, channel, arguments);
 	}
 }

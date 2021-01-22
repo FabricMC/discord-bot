@@ -21,8 +21,14 @@ import java.nio.file.Path;
 import org.apache.logging.log4j.Logger;
 import org.javacord.api.DiscordApi;
 
+import net.fabricmc.discord.bot.config.ConfigKey;
+
 public interface Module {
 	String getName();
+
+	boolean shouldLoad();
+
+	void registerConfigEntries(DiscordBot bot);
 
 	/**
 	 * When called a module should setup.
@@ -31,7 +37,15 @@ public interface Module {
 	 * @param api the api instance to communicate with discord
 	 * @param logger the logger for this module
 	 * @param dataDir the data directory the bot is using
-	 * @return if this module has successfully loaded
 	 */
-	boolean setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir);
+	void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir);
+
+	/**
+	 * Called when a config entry has changed.
+	 *
+	 * @param key the key of the config entry
+	 * @param value the value the config entry was set to
+	 */
+	default void onConfigValueChanged(ConfigKey<?> key, Object value) {
+	}
 }

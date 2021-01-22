@@ -14,8 +14,27 @@
  * limitations under the License.
  */
 
-package net.fabricmc.discord.bot.message;
+package net.fabricmc.discord.bot.config;
 
-public final class EmbedTemplate {
-	// TODO: Implement me
+import java.util.Objects;
+
+public final class ConfigKey<V> {
+	private final String name;
+	private final ValueSerializer<V> valueSerializer;
+
+	public ConfigKey(String name, ValueSerializer<V> valueSerializer) {
+		Objects.requireNonNull(name, "Config key name cannot be null");
+		Objects.requireNonNull(valueSerializer, "Value serializer cannot be null");
+
+		this.name = name;
+		this.valueSerializer = valueSerializer;
+	}
+
+	public String name() {
+		return this.name;
+	}
+
+	public ValueSerializer<V> valueSerializer() {
+		return this.valueSerializer;
+	}
 }

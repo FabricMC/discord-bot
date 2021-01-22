@@ -23,16 +23,21 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.ServiceLoader;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -40,8 +45,10 @@ import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
 
 import net.fabricmc.discord.bot.command.CommandContext;
-import net.fabricmc.discord.bot.command.CommandResponder;
+import net.fabricmc.discord.bot.config.ConfigKey;
+import net.fabricmc.discord.bot.config.ValueSerializer;
 import net.fabricmc.discord.bot.database.Database;
+import net.fabricmc.discord.bot.database.query.ConfigQueries;
 
 public final class DiscordBot {
 	public static void start(String[] args) throws IOException {
@@ -49,6 +56,9 @@ public final class DiscordBot {
 	}
 
 	private final Logger logger = LogManager.getLogger(DiscordBot.class);
+	private final Map<ConfigKey<?>, Supplier<?>> configEntryRegistry = new ConcurrentHashMap<>();
+	// COW for concurrent access
+	private volatile Map<ConfigKey<?>, Object> configValues;
 	private final BotConfig config;
 	private final Database database;
 	/**
@@ -105,6 +115,55 @@ public final class DiscordBot {
 	public void registerCommand() {
 	}
 
+	public <V> void registerConfigEntry(ConfigKey<V> key, Supplier<V> defaultValue) {
+		if (this.configEntryRegistry.putIfAbsent(key, defaultValue) != null) {
+			throw new IllegalArgumentException("Already registered config value for key %s".formatted(key));
+		}
+	}
+
+	public <V> V getConfigEntry(ConfigKey<V> key) {
+		if (!this.configEntryRegistry.containsKey(key)) {
+			throw new IllegalArgumentException("Tried to get the config value of an unregistered config key %s".formatted(key.name()));
+		}
+
+		// Thread Safety: the map is COW when a config value is changed
+		// noinspection unchecked
+		return (V) this.configValues.get(key);
+	}
+
+	public <V> boolean setConfigEntry(ConfigKey<V> key, V value) {
+		if (!this.configEntryRegistry.containsKey(key)) {
+			throw new IllegalArgumentException("Tried to set the config value of an unregistered config key %s".formatted(key.name()));
+		}
+
+		// Verify we can parse the value
+		String serialized;
+
+		try {
+			serialized = key.valueSerializer().serialize(value);
+		} catch (IllegalArgumentException e) {
+			return false;
+		}
+
+		// COW
+		final Map<ConfigKey<?>, Object> configValues = new HashMap<>(this.configValues);
+
+		// Replace the value
+		configValues.remove(key);
+		configValues.put(key, value);
+		// Set
+		this.configValues = configValues;
+
+		// Propagate value change to db
+		try {
+			ConfigQueries.set(this.database, key.name(), serialized);
+		} catch (SQLException throwables) {
+			throwables.printStackTrace();
+		}
+
+		return true;
+	}
+
 	private BotConfig loadConfig(Path configPath) throws IOException {
 		if (Files.notExists(configPath)) {
 			this.logger.info("Creating bot config");
@@ -133,8 +192,6 @@ public final class DiscordBot {
 		final BuiltinModule builtin = new BuiltinModule();
 		this.modules.add(builtin);
 
-		builtin.setup(this, api, this.logger, dataDir);
-
 		final ServiceLoader<Module> modules = ServiceLoader.load(Module.class);
 
 		for (final Module module : modules) {
@@ -144,10 +201,17 @@ public final class DiscordBot {
 				continue;
 			}
 
-			if (module.setup(this, api, LogManager.getLogger(module.getName()), dataDir)) {
-				this.logger.info("Loaded module {}", module.getName());
+			if (module.shouldLoad()) {
+				this.logger.info("Loading module {}", module.getName());
 				this.modules.add(module);
+				module.registerConfigEntries(this);
 			}
+		}
+
+		this.loadRuntimeConfig();
+
+		for (Module module : modules) {
+			module.setup(this, api, LogManager.getLogger(module.getName()), dataDir);
 		}
 
 		final StringBuilder moduleList = new StringBuilder();
@@ -164,6 +228,44 @@ public final class DiscordBot {
 		}
 
 		this.logger.info("Loaded {} modules:\n{}", this.modules.size(), moduleList.toString());
+	}
+
+	/**
+	 * Loads all config values, setting any unset values to their default values.
+	 */
+	private void loadRuntimeConfig() {
+		final Map<ConfigKey<?>, Object> configValues = new HashMap<>();
+
+		// Verify all the config values exist - setting non-existent values to their default values
+		for (Map.Entry<ConfigKey<?>, Supplier<?>> entry : this.configEntryRegistry.entrySet()) {
+			final String name = entry.getKey().name();
+
+			try {
+				final String serializedValue = ConfigQueries.get(this.database, name);
+				@SuppressWarnings("unchecked")
+				final ValueSerializer<Object> valueSerializer = (ValueSerializer<Object>) entry.getKey().valueSerializer();
+
+				Object value;
+
+				if (serializedValue == null) {
+					// Set the default value as the current value
+					final Object defaultValue = entry.getValue().get();
+					final String serialized = valueSerializer.serialize(defaultValue);
+
+					ConfigQueries.set(this.database, name, serialized);
+					value = defaultValue;
+				} else {
+					value = valueSerializer.deserialize(serializedValue);
+				}
+
+				configValues.put(entry.getKey(), value);
+			} catch (SQLException throwables) {
+				throwables.printStackTrace();
+			}
+		}
+
+		// Set the values
+		this.configValues = configValues;
 	}
 
 	void tryHandleCommand(CommandContext context) {
