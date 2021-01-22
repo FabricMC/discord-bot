@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.ServiceLoader;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -167,6 +168,10 @@ public final class DiscordBot {
 		}
 
 		return true;
+	}
+
+	public Set<ConfigKey<?>> getConfigEntries() {
+		return this.configEntryRegistry.keySet();
 	}
 
 	private BotConfig loadConfig(Path configPath) throws IOException {

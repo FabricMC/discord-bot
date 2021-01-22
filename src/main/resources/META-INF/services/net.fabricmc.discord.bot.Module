@@ -3,3 +3,4 @@
 #
 # Do not add the builtin module to this service file!
 net.fabricmc.discord.bot.module.tag.TagModule
+net.fabricmc.discord.bot.module.test.TestModule

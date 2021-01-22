@@ -22,6 +22,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.logging.log4j.Logger;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.emoji.Emoji;
 import org.javacord.api.entity.message.Message;
@@ -33,48 +34,59 @@ import org.jetbrains.annotations.Nullable;
 /**
  * A utility to create paginated messages.
  *
- * <p>These messages contain emotes to allow switching pages and destroying the paginated message.
- * Paginated messages will expire after a certain amount of time and will drop all page emotes.
+ * <p>These messages contain emotes for controlling the paginator to allow switching pages and destroying the paginated message.
+ * Paginated messages will expire after a certain amount of time and will destroy all page controls.
  */
-// TODO: Test me
 public final class Paginator {
-	private static final String ARROW_BACKWARDS_EMOTE = "arrow_forward";
-	private static final String ARROW_FORWARDS_EMOTE = "arrow_backward";
-	private static final String X_EMOTE = "x";
+	private static final String ARROW_FORWARDS_EMOTE = "▶";
+	private static final String ARROW_BACKWARDS_EMOTE = "◀";
+	private static final String X_EMOTE = "❌";
+	private final Logger logger;
 	private final List<String> pages;
 	private final int pageCount;
 	private final int timeout;
 	private final long owner;
 	/**
 	 * The current page.
-	 * The first page is `1` and this value will never be 0.
+	 * Like all things in java, this is zero indexed
 	 */
 	private int currentPage = -1;
 	private boolean sent;
+	/**
+	 * The message the paginator is bound to.
+	 */
 	@Nullable
 	private Message message;
 
 	/**
 	 * Creates a new paginator.
 	 *
+	 * @param logger the logger to log error messages to
 	 * @param pages the content of each page. This list cannot be empty
 	 * @param timeout the timeout in which the paginator will automatically be destroyed
 	 * @param owner the user who is allowed to interface with the paginator
 	 */
-	public Paginator(List<String> pages, int timeout, User owner) {
-		this(pages, timeout, owner.getId());
+	public Paginator(Logger logger, List<String> pages, int timeout, User owner) {
+		this(logger, pages, timeout, owner.getId());
 	}
 
 	/**
 	 * Creates a new paginator.
 	 *
+	 * @param logger the logger to log error messages to
 	 * @param pages the content of each page. This list cannot be empty
 	 * @param timeout the timeout in which the paginator will automatically be destroyed
 	 * @param ownerSnowflake the snowflake of the user who is allowed to interface with the paginator
 	 */
-	public Paginator(List<String> pages, int timeout, long ownerSnowflake) {
+	public Paginator(Logger logger, List<String> pages, int timeout, long ownerSnowflake) {
+		this.logger = logger;
+
 		if (pages.isEmpty()) {
 			throw new IllegalArgumentException("Cannot have a 0 page paginator");
+		}
+
+		if (0 > timeout) {
+			throw new IllegalArgumentException("Timeout cannot be negative value");
 		}
 
 		this.pages = new ArrayList<>(pages);
@@ -83,10 +95,16 @@ public final class Paginator {
 		this.pageCount = pages.size();
 	}
 
+	/**
+	 * @return the paginator's current page
+	 */
 	public int getCurrentPage() {
 		return this.currentPage;
 	}
 
+	/**
+	 * @return the amount of pages the paginator has
+	 */
 	public int getPageCount() {
 		return this.pageCount;
 	}
@@ -102,7 +120,7 @@ public final class Paginator {
 	 * Sends the paginator to be displayed in a channel.
 	 *
 	 * @param channel the text channel to display the paginator in
-	 * @return a future which contains the message that was created
+	 * @return a future letting us know when the message is displayed
 	 */
 	public CompletableFuture<Message> send(TextChannel channel) {
 		Objects.requireNonNull(channel, "Channel cannot be null");
@@ -110,28 +128,48 @@ public final class Paginator {
 		return send0(channel);
 	}
 
+	/**
+	 * Moves the paginator to the next page.
+	 *
+	 * @return a future letting us know whether the page was successfully changed. If false the page was not changed.
+	 */
 	public CompletableFuture<Boolean> nextPage() {
+		if (!this.sent) {
+			return CompletableFuture.failedFuture(new UnsupportedOperationException("Cannot move unsent paginator to the next page"));
+		}
+
 		if (this.message != null) {
-			if (this.currentPage == this.pageCount) {
+			if (this.getCurrentPage() + 1 >= this.pageCount) {
 				return CompletableFuture.completedFuture(false);
 			}
 
+			this.currentPage++;
+
 			// TODO: Test?
-			return this.message.edit(createEmbed(this.pages.get(this.currentPage), this.currentPage + 1))
+			return this.message.edit(this.createEmbed(this.pages.get(this.getCurrentPage()), this.getCurrentPage()))
 					.thenApply(ignored -> true);
 		}
 
 		return CompletableFuture.completedFuture(false);
 	}
 
+	/**
+	 * Moves the paginator to the previous page.
+	 *
+	 * @return a future letting us know whether the page was successfully changed. If false the page was not changed.
+	 */
 	public CompletableFuture<Boolean> previousPage() {
+		if (!this.sent) {
+			return CompletableFuture.failedFuture(new UnsupportedOperationException("Cannot move unsent paginator to the previous page"));
+		}
+
 		if (this.message != null) {
-			if (this.currentPage > 1) {
-				if (this.pageCount < this.currentPage + 1) {
-					// TODO: Test?
-					return this.message.edit(createEmbed(this.pages.get(this.currentPage - 1), this.currentPage))
-							.thenApply(ignored -> true);
-				}
+			if (this.getCurrentPage() > 0) {
+				this.currentPage--;
+
+				// TODO: Test?
+				return this.message.edit(this.createEmbed(this.pages.get(this.getCurrentPage()), this.getCurrentPage()))
+						.thenApply(ignored -> true);
 			}
 		}
 
@@ -141,13 +179,20 @@ public final class Paginator {
 	/**
 	 * Destroys the paginator.
 	 *
-	 * <p>When the paginator is destroyed, the current page won't be able to be changed and the emotes to move page or destroy the message will be removed.
+	 * <p>When the paginator is destroyed, the page will no longer be changeable and the emotes to move page or destroy the message will be removed.
 	 *
-	 * @return a future signifying when the paginator has been destroyed
+	 * @return a future letting us know when the paginator has been destroyed
 	 */
 	public CompletableFuture<Void> destroy() {
+		if (!this.sent) {
+			return CompletableFuture.failedFuture(new UnsupportedOperationException("Cannot destroy unsent paginator"));
+		}
+
 		if (this.message != null) {
-			return this.message.removeAllReactions();
+			return this.message.removeAllReactions().thenApply(_v -> {
+				this.message = null;
+				return null;
+			});
 		}
 
 		return CompletableFuture.completedFuture(null);
@@ -155,44 +200,67 @@ public final class Paginator {
 
 	private CompletableFuture<Message> send0(TextChannel channel) {
 		if (this.sent) {
-			return CompletableFuture.failedFuture(new UnsupportedOperationException("Cannot display paginated message again!"));
+			return CompletableFuture.failedFuture(new UnsupportedOperationException("Cannot display paginator again!"));
 		}
 
 		this.sent = true;
-		this.currentPage = 1;
+		this.currentPage = 0;
 
-		return channel.sendMessage(createEmbed(this.pages.get(0), this.currentPage)).thenApply(message -> {
+		// Send the message to create the paginator on first page
+		return channel.sendMessage(this.createEmbed(this.pages.get(0), 0)).thenCompose(message -> {
 			this.message = message;
-			message.addReaction(ARROW_BACKWARDS_EMOTE);
-			message.addReaction(X_EMOTE);
-			message.addReaction(ARROW_FORWARDS_EMOTE);
 
-			message.addReactionAddListener(this::handleEmojiAdded).removeAfter(this.timeout, TimeUnit.SECONDS).addRemoveHandler(this::destroy);
-
-			return message;
+			// Add the control emotes and then setup the listeners for said emotes
+			return CompletableFuture.allOf(
+					message.addReaction(ARROW_BACKWARDS_EMOTE),
+					message.addReaction(X_EMOTE),
+					message.addReaction(ARROW_FORWARDS_EMOTE)
+			).thenApply(_v -> {
+				message.addReactionAddListener(this::reactionAdded).removeAfter(this.timeout, TimeUnit.SECONDS).addRemoveHandler(this::destroy);
+				return message;
+			});
+		}).exceptionally(e -> {
+			this.logger.error("Failed to setup paginator", e);
+			return null;
 		});
 	}
 
-	private void handleEmojiAdded(ReactionAddEvent event) {
+	private void reactionAdded(ReactionAddEvent event) {
+		// Let ourselves add the emojis for controls without removal
+		if (event.getApi().getYourself().getId() == event.getUserId()) {
+			return;
+		}
+
 		if (event.getUserId() == this.getOwnerSnowflake()) {
 			final Emoji emoji = event.getEmoji();
 
-			if (emoji.isUnicodeEmoji()) {
-				if (emoji.equalsEmoji(ARROW_BACKWARDS_EMOTE)) {
-					this.nextPage();
-				} else if (emoji.equalsEmoji(ARROW_FORWARDS_EMOTE)) {
-					this.previousPage();
-				} else if (emoji.equalsEmoji(X_EMOTE)) {
-					this.destroy();
-				}
+			if (emoji.equalsEmoji(ARROW_BACKWARDS_EMOTE)) {
+				this.previousPage().exceptionally(e -> {
+					this.logger.error("Failed to move paginator to previous page", e);
+					return null;
+				});
+			} else if (emoji.equalsEmoji(ARROW_FORWARDS_EMOTE)) {
+				this.nextPage().exceptionally(e -> {
+					this.logger.error("Failed to move paginator to next page", e);
+					return null;
+				});
+			} else if (emoji.equalsEmoji(X_EMOTE)) {
+				this.destroy().exceptionally(e -> {
+					this.logger.error("Failed to destroy paginator", e);
+					return null;
+				});
 			}
 		}
 
-		// Remove the reaction
-		event.removeReaction();
+		event.removeReaction().exceptionally(e -> {
+			this.logger.error("Failed to remove reaction from paginator event", e);
+			return null;
+		});
 	}
 
-	private static EmbedBuilder createEmbed(String content, int page) {
-		return new EmbedBuilder(); // TODO:
+	private EmbedBuilder createEmbed(String content, int page) {
+		return new EmbedBuilder()
+				.setDescription(content)
+				.setFooter("Page %s/%s".formatted(page + 1, this.getPageCount()));
 	}
 }
