@@ -29,6 +29,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -48,11 +49,13 @@ import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
+import net.fabricmc.discord.bot.command.CommandParser;
 import net.fabricmc.discord.bot.command.UsageParser;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializer;
 import net.fabricmc.discord.bot.database.Database;
 import net.fabricmc.discord.bot.database.query.ConfigQueries;
+import net.fabricmc.discord.bot.message.Mentions;
 
 public final class DiscordBot {
 	public static void start(String[] args) throws IOException {
@@ -90,7 +93,7 @@ public final class DiscordBot {
 		.login()
 		.thenAccept(api -> this.setup(api, dataDir))
 		.exceptionally(exc -> {
-			this.logger.error("Error occured while initializing bot", exc);
+			this.logger.error("Error occurred while initializing bot", exc);
 			return null;
 		});
 	}
@@ -142,9 +145,10 @@ public final class DiscordBot {
 
 	public <V> void registerConfigEntry(ConfigKey<V> key, Supplier<V> defaultValue) {
 		if (this.configEntryRegistry.putIfAbsent(key, defaultValue) != null) {
-			this.configEntryByKey.put(key.name(), key);
 			throw new IllegalArgumentException("Already registered config value for key %s".formatted(key));
 		}
+
+		this.configEntryByKey.put(key.name(), key);
 	}
 
 	public <V> V getConfigEntry(ConfigKey<V> key) {
@@ -157,7 +161,8 @@ public final class DiscordBot {
 		return (V) this.configValues.get(key);
 	}
 
-	public <V> boolean setConfigEntry(ConfigKey<V> key, V value) {
+	// Synchronized to prevent intersecting edits causing loss
+	public synchronized <V> boolean setConfigEntry(ConfigKey<V> key, V value) {
 		if (!this.configEntryRegistry.containsKey(key)) {
 			throw new IllegalArgumentException("Tried to set the config value of an unregistered config key %s".formatted(key.name()));
 		}
@@ -245,7 +250,8 @@ public final class DiscordBot {
 
 		this.loadRuntimeConfig();
 
-		for (Module module : modules) {
+		// Must only iterate accepted modules
+		for (Module module : this.getModules()) {
 			module.setup(this, api, LogManager.getLogger(module.getName()), dataDir);
 		}
 
@@ -314,20 +320,33 @@ public final class DiscordBot {
 		if (content.startsWith(this.getCommandPrefix())) {
 			final int i = content.indexOf(" ");
 			String name;
-			String arguments;
+			String rawArguments;
 
 			if (i == -1) {
 				name = content.substring(1);
-				arguments = "";
+				rawArguments = "";
 			} else {
 				name = content.substring(1, i);
-				arguments = content.substring(i);
+				rawArguments = content.substring(i + 1);
 			}
 
-			System.out.println(name);
-			System.out.println(arguments);
+			final CommandRecord commandRecord = this.commands.get(name);
+
+			if (commandRecord == null) {
+				context.channel().sendMessage("%s: Unknown command".formatted(Mentions.createUserMention(context.author().getId())));
+				return;
+			}
+
+			final CommandParser parser = new CommandParser();
+			final Map<String, String> arguments = new LinkedHashMap<>();
+
+			if (!parser.parse(rawArguments, commandRecord.node(), arguments)) {
+				context.channel().sendMessage("%s: Invalid command syntax".formatted(Mentions.createUserMention(context.author().getId())));
+				return;
+			}
+
+			commandRecord.command().run(context, arguments);
 		}
-		// TODO:
 	}
 
 	record CommandRecord(UsageParser.Node node, Command command) {
