@@ -151,13 +151,13 @@ public final class DiscordBot {
 		this.configEntryByKey.put(key.name(), key);
 	}
 
+	@SuppressWarnings("unchecked")
 	public <V> V getConfigEntry(ConfigKey<V> key) {
 		if (!this.configEntryRegistry.containsKey(key)) {
 			throw new IllegalArgumentException("Tried to get the config value of an unregistered config key %s".formatted(key.name()));
 		}
 
 		// Thread Safety: the map is COW when a config value is changed
-		// noinspection unchecked
 		return (V) this.configValues.get(key);
 	}
 
