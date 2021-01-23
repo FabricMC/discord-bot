@@ -172,7 +172,7 @@ public final class TagModule implements Module, MessageCreateListener {
 		if (tag == null) {
 			// TODO: Improve message
 			// TODO: Remove sender's message and this message after time to replicate current logic
-			channel.sendMessage("%s: Could not find tag of name %s".formatted(Mentions.createUserMention(author.getId()), tagName));
+			channel.sendMessage("%s: Could not find tag of name %s".formatted(Mentions.createUserMention(author), tagName));
 			return;
 		}
 

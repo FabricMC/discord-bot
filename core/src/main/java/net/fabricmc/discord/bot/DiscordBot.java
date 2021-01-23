@@ -333,7 +333,7 @@ public final class DiscordBot {
 			final CommandRecord commandRecord = this.commands.get(name);
 
 			if (commandRecord == null) {
-				context.channel().sendMessage("%s: Unknown command".formatted(Mentions.createUserMention(context.author().getId())));
+				context.channel().sendMessage("%s: Unknown command".formatted(Mentions.createUserMention(context.author())));
 				return;
 			}
 
@@ -341,7 +341,7 @@ public final class DiscordBot {
 			final Map<String, String> arguments = new LinkedHashMap<>();
 
 			if (!parser.parse(rawArguments, commandRecord.node(), arguments)) {
-				context.channel().sendMessage("%s: Invalid command syntax".formatted(Mentions.createUserMention(context.author().getId())));
+				context.channel().sendMessage("%s: Invalid command syntax".formatted(Mentions.createUserMention(context.author())));
 				return;
 			}
 

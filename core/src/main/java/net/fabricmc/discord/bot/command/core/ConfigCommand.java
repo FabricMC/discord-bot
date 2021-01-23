@@ -54,11 +54,13 @@ public final class ConfigCommand extends Command {
 		int pos = 0;
 		List<String> pages = new ArrayList<>();
 		StringBuilder currentPage = new StringBuilder();
+		currentPage.append("__**Config Entries:**__\n");
 
 		for (ConfigKey<?> configEntry : context.bot().getConfigEntries()) {
 			if (pos % 10 == 0 && pos != 0) {
 				pages.add(currentPage.toString());
 				currentPage = new StringBuilder();
+				currentPage.append("__**Config Entries:**__\n");
 			}
 
 			pos++;
@@ -80,7 +82,7 @@ public final class ConfigCommand extends Command {
 		@Nullable final ConfigKey<Object> configKey = (ConfigKey<Object>) context.bot().getConfigKey(key);
 
 		if (configKey == null) {
-			context.channel().sendMessage("%s\nInvalid config entry key %s".formatted(Mentions.createUserMention(context.author().getId()), key));
+			context.channel().sendMessage("%s\nInvalid config entry key `%s`".formatted(Mentions.createUserMention(context.author()), key));
 			return false;
 		}
 
@@ -96,11 +98,11 @@ public final class ConfigCommand extends Command {
 		}
 
 		if (!context.bot().setConfigEntry(configKey, deserializedValue)) {
-			context.channel().sendMessage("%s\nInvalid value: cannot set config entry %s to %s".formatted(Mentions.createUserMention(context.author().getId()), key, value));
+			context.channel().sendMessage("%s\nInvalid value: cannot set config entry %s to %s".formatted(Mentions.createUserMention(context.author()), key, value));
 			return false;
 		}
 
-		context.channel().sendMessage("Set config entry %s to %s".formatted(key, value));
+		context.channel().sendMessage("Set config entry `%s` to `%s`".formatted(key, value));
 
 		return true;
 	}
@@ -111,7 +113,7 @@ public final class ConfigCommand extends Command {
 		@Nullable final ConfigKey<Object> configKey = (ConfigKey<Object>) context.bot().getConfigKey(key);
 
 		if (configKey == null) {
-			context.channel().sendMessage("%s: Invalid config entry key %s".formatted(Mentions.createUserMention(context.author().getId()), key));
+			context.channel().sendMessage("%s: Invalid config entry key %s".formatted(Mentions.createUserMention(context.author()), key));
 			return false;
 		}
 

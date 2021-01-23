@@ -16,6 +16,8 @@
 
 package net.fabricmc.discord.bot.message;
 
+import org.javacord.api.entity.message.MessageAuthor;
+
 /**
  * Utilities for creating discord mentions.
  */
@@ -30,6 +32,13 @@ public final class Mentions {
 	public static String createUserMention(long snowflake) {
 		// <@!SNOWFLAKE>
 		return "<@!%s>".formatted(snowflake);
+	}
+
+	/**
+	 * @see Mentions#createUserMention(long)
+	 */
+	public static String createUserMention(MessageAuthor author) {
+		return createUserMention(author.getId());
 	}
 
 	private Mentions() {
