@@ -26,7 +26,6 @@ import org.javacord.api.listener.message.MessageCreateListener;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.Module;
-import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.message.Paginator;
 
 public final class TestModule implements Module, MessageCreateListener {
@@ -66,18 +65,6 @@ public final class TestModule implements Module, MessageCreateListener {
 			final Paginator paginator = new Paginator(this.logger, PAGINATOR_TEXT, 30, event.getMessageAuthor().getId());
 
 			paginator.send(event.getChannel());
-		} else if (event.getMessageContent().equals(this.bot.getCommandPrefix() + "dumpConfig")) {
-			final StringBuilder builder = new StringBuilder();
-
-			for (ConfigKey<?> entry : this.bot.getConfigEntries()) {
-				final Object value = this.bot.getConfigEntry(entry);
-				builder.append(entry.name())
-						.append(" -> ")
-						.append(value)
-						.append("\n");
-			}
-
-			event.getChannel().sendMessage(builder.toString());
 		}
 	}
 }
