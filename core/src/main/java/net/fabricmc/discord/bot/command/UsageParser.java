@@ -37,7 +37,7 @@ import java.util.function.Function;
 
 import net.fabricmc.discord.bot.util.Collections2;
 
-final class UsageParser {
+public final class UsageParser {
 	public static void main(String[] args) throws IOException {
 		UsageParser parser = new UsageParser();
 		//Node node = parser.parse("(any|block|be|blockentity|entity) (class <class> | id <id>) [<dimId>] [--ticking] [--unloaded] [--countOnly | --chunkCounts] [--filter[=<x>]] [--clear]", false);

@@ -114,7 +114,7 @@ public final class CommandParser {
 					value = null;
 				}
 
-				System.out.printf("new flarg: %s = %s%n", key, value);
+				// System.out.printf("new flarg: %s = %s%n", key, value);
 				floatingArgs.put(key, value);
 				i = end;
 			} else if (!Character.isWhitespace(c)) {
