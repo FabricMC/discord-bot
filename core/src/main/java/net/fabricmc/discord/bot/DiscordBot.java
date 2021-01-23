@@ -44,8 +44,11 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
+import org.jetbrains.annotations.Nullable;
 
+import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
+import net.fabricmc.discord.bot.command.UsageParser;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializer;
 import net.fabricmc.discord.bot.database.Database;
@@ -57,7 +60,9 @@ public final class DiscordBot {
 	}
 
 	private final Logger logger = LogManager.getLogger(DiscordBot.class);
+	private final Map<String, ConfigKey<?>> configEntryByKey = new ConcurrentHashMap<>();
 	private final Map<ConfigKey<?>, Supplier<?>> configEntryRegistry = new ConcurrentHashMap<>();
+	private final Map<String, CommandRecord> commands = new ConcurrentHashMap<>();
 	// COW for concurrent access
 	private volatile Map<ConfigKey<?>, Object> configValues;
 	private final BotConfig config;
@@ -113,11 +118,31 @@ public final class DiscordBot {
 		return this.config.getCommandPrefix();
 	}
 
-	public void registerCommand() {
+	public void registerCommand(Command command) {
+		final UsageParser usageParser = new UsageParser();
+		UsageParser.Node node;
+
+		try {
+			node = usageParser.parse(command.usage(), false);
+		} catch (IllegalStateException e) {
+			logger.error("Failed to register command {} due to invalid usage", command.name());
+			e.printStackTrace();
+			return;
+		}
+
+		if (this.commands.putIfAbsent(command.name(), new CommandRecord(node, command)) != null) {
+			throw new IllegalArgumentException("Cannot register command with name %s more than once".formatted(command.name()));
+		}
+	}
+
+	@Nullable
+	public ConfigKey<?> getConfigKey(String key) {
+		return this.configEntryByKey.get(key);
 	}
 
 	public <V> void registerConfigEntry(ConfigKey<V> key, Supplier<V> defaultValue) {
 		if (this.configEntryRegistry.putIfAbsent(key, defaultValue) != null) {
+			this.configEntryByKey.put(key.name(), key);
 			throw new IllegalArgumentException("Already registered config value for key %s".formatted(key));
 		}
 	}
@@ -284,6 +309,27 @@ public final class DiscordBot {
 			return;
 		}
 
+		final String content = context.content();
+
+		if (content.startsWith(this.getCommandPrefix())) {
+			final int i = content.indexOf(" ");
+			String name;
+			String arguments;
+
+			if (i == -1) {
+				name = content.substring(1);
+				arguments = "";
+			} else {
+				name = content.substring(1, i);
+				arguments = content.substring(i);
+			}
+
+			System.out.println(name);
+			System.out.println(arguments);
+		}
 		// TODO:
+	}
+
+	record CommandRecord(UsageParser.Node node, Command command) {
 	}
 }

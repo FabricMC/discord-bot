@@ -25,6 +25,7 @@ import org.javacord.api.listener.message.MessageCreateListener;
 
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandResponder;
+import net.fabricmc.discord.bot.command.core.ConfigCommand;
 
 /**
  * The builtin module of the discord bot.
@@ -55,6 +56,8 @@ final class BuiltinModule implements Module, MessageCreateListener {
 	public void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
 		this.bot = bot;
 		this.api = api;
+
+		this.bot.registerCommand(new ConfigCommand());
 
 		api.addMessageCreateListener(this);
 	}

@@ -38,9 +38,10 @@ import org.jetbrains.annotations.Nullable;
  * Paginated messages will expire after a certain amount of time and will destroy all page controls.
  */
 public final class Paginator {
-	private static final String ARROW_FORWARDS_EMOTE = "▶";
-	private static final String ARROW_BACKWARDS_EMOTE = "◀";
-	private static final String X_EMOTE = "❌";
+
+	private static final String ARROW_FORWARDS_EMOTE = "\u25b6";
+	private static final String ARROW_BACKWARDS_EMOTE = "\u25c0";
+	private static final String X_EMOTE = "\u274c";
 	private final Logger logger;
 	private final List<String> pages;
 	private final int pageCount;
