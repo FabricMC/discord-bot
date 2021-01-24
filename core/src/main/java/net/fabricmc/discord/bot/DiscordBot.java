@@ -45,6 +45,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
+import org.javacord.api.entity.intent.Intent;
+import org.javacord.api.entity.message.MessageAuthor;
+import org.javacord.api.entity.server.Server;
+import org.javacord.api.entity.user.User;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.command.Command;
@@ -70,6 +74,7 @@ public final class DiscordBot {
 	private volatile Map<ConfigKey<?>, Object> configValues;
 	private final BotConfig config;
 	private final Database database;
+	private final UserHandler userHandler;
 	/**
 	 * A list of all enabled modules.
 	 */
@@ -82,13 +87,21 @@ public final class DiscordBot {
 	});
 
 	private DiscordBot(String[] args) throws IOException {
-		final Path configDir = Paths.get("").toAbsolutePath().resolve("bot.properties");
-		final Path dataDir = Paths.get("").toAbsolutePath().resolve("data");
+		final Path configDir = Paths.get("bot.properties").toAbsolutePath();
+		final Path dataDir = Paths.get("data").toAbsolutePath();
 
 		this.config = this.loadConfig(configDir);
 		this.database = new Database(config.getDatabaseUrl());
+		this.userHandler = new UserHandler(this, Long.parseUnsignedLong(config.getGuildId()));
 
-		new DiscordApiBuilder()
+		DiscordApiBuilder builder = new DiscordApiBuilder();
+
+		// early event registrations to ensure nothing will be missed
+		userHandler.registerEarlyHandlers(builder);
+
+		builder
+		.setWaitForUsersOnStartup(true)
+		.setIntents(Intent.GUILDS, Intent.GUILD_MEMBERS, Intent.GUILD_PRESENCES, Intent.GUILD_MESSAGES, Intent.GUILD_MESSAGE_REACTIONS)
 		.setToken(this.config.getToken())
 		.login()
 		.thenAccept(api -> this.setup(api, dataDir))
@@ -100,6 +113,10 @@ public final class DiscordBot {
 
 	public Database getDatabase() {
 		return database;
+	}
+
+	public UserHandler getUserHandler() {
+		return userHandler;
 	}
 
 	public Collection<Module> getModules() {
@@ -250,6 +267,14 @@ public final class DiscordBot {
 
 		this.loadRuntimeConfig();
 
+		Server server = api.getServerById(config.getGuildId()).orElse(null);
+
+		if (server != null) {
+			userHandler.init(server);
+		} else {
+			logger.warn("server with configured id unavailable?");
+		}
+
 		// Must only iterate accepted modules
 		for (Module module : this.getModules()) {
 			module.setup(this, api, LogManager.getLogger(module.getName()), dataDir);
@@ -332,7 +357,8 @@ public final class DiscordBot {
 
 			final CommandRecord commandRecord = this.commands.get(name);
 
-			if (commandRecord == null) {
+			if (commandRecord == null
+					|| !checkAccess(context.author(), commandRecord.command())) {
 				context.channel().sendMessage("%s: Unknown command".formatted(Mentions.createUserMention(context.author())));
 				return;
 			}
@@ -347,6 +373,16 @@ public final class DiscordBot {
 
 			commandRecord.command().run(context, arguments);
 		}
+	}
+
+	private boolean checkAccess(MessageAuthor author, Command command) {
+		String permission = command.getPermission();
+		if (permission == null) return true;
+
+		User user = author.asUser().orElse(null);
+		Server server = author.getMessage().getServer().orElse(null);
+
+		return user != null && server != null && userHandler.hasPermission(user, server, permission);
 	}
 
 	record CommandRecord(UsageParser.Node node, Command command) {

@@ -25,6 +25,7 @@ final class DbMigration {
 	public static void run(Database db) {
 		try (Connection conn = db.getConnection();
 				Statement st = conn.createStatement()) {
+			conn.setAutoCommit(false);
 			int count;
 
 			try (ResultSet res = st.executeQuery("SELECT COUNT(*) FROM `sqlite_schema` WHERE `type` = 'table' AND `name` = 'config'")) {
@@ -35,9 +36,10 @@ final class DbMigration {
 			int version;
 
 			if (count == 0) {
-				st.executeUpdate("CREATE TABLE `config` (`key` TEXT, `value` TEXT, PRIMARY KEY (`key`))");
+				st.executeUpdate("CREATE TABLE `config` (`key` TEXT PRIMARY KEY, `value` TEXT)");
 				st.executeUpdate("INSERT INTO `config` VALUES ('dbVersion', '1')");
 				version = 1;
+				conn.commit();
 			} else {
 				try (ResultSet res = st.executeQuery("SELECT `value` FROM `config` WHERE `key` = 'dbVersion'")) {
 					if (!res.next()) throw new IllegalStateException();
@@ -51,11 +53,37 @@ final class DbMigration {
 				throw new RuntimeException("DB version "+version+" is newer than current version "+Database.currentVersion);
 			}
 
-			switch (version) {
-
+			switch (version) { // fall-through for continuous migration
+			case 1: migrate_1_2(st);
 			}
+
+			st.executeUpdate(String.format("REPLACE INTO `config` VALUES ('dbVersion', '%d')", Database.currentVersion));
+			conn.commit();
 		} catch (SQLException | NumberFormatException e) {
 			throw new RuntimeException("Error initializing/migrating DB", e);
 		}
+	}
+
+	private static void migrate_1_2(Statement st) throws SQLException {
+		st.executeUpdate("CREATE TABLE `discorduser` (`id` INTEGER PRIMARY KEY, `user_id` INTEGER, `username` TEXT, `discriminator` TEXT, `nickname` TEXT, `firstseen` INTEGER, `lastseen` INTEGER, `lastnickchange` INTEGER)");
+		st.executeUpdate("CREATE INDEX `discorduser_user_id` ON `discorduser` (`user_id`)");
+		st.executeUpdate("CREATE INDEX `discorduser_username` ON `discorduser` (`username`)");
+		st.executeUpdate("CREATE INDEX `discorduser_nickname` ON `discorduser` (`nickname`)");
+		st.executeUpdate("CREATE TABLE `discorduser_namelog` (`discorduser_id` INTEGER, `username` TEXT, `discriminator` TEXT, `firstused` INTEGER, `lastused` INTEGER, `duration` INTEGER, `count` INTEGER DEFAULT 1, UNIQUE(`discorduser_id`, `username`, `discriminator`))");
+		st.executeUpdate("CREATE INDEX `discorduser_namelog_id` ON `discorduser_namelog` (`discorduser_id`)");
+		st.executeUpdate("CREATE INDEX `discorduser_namelog_username` ON `discorduser_namelog` (`username`)");
+		st.executeUpdate("CREATE TABLE `discorduser_nicklog` (`discorduser_id` INTEGER, `nickname` TEXT, `firstused` INTEGER, `lastused` INTEGER, `duration` INTEGER, `count` INTEGER DEFAULT 1, UNIQUE(`discorduser_id`, `nickname`))");
+		st.executeUpdate("CREATE INDEX `discorduser_nicklog_id` ON `discorduser_nicklog` (`discorduser_id`)");
+		st.executeUpdate("CREATE INDEX `discorduser_nicklog_nickname` ON `discorduser_nicklog` (`nickname`)");
+
+		st.executeUpdate("CREATE TABLE `user` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `stickyname` TEXT)");
+		st.executeUpdate("CREATE TABLE `user_group` (`user_id` INTEGER, `group_id` INTEGER, UNIQUE(`user_id`, `group_id`))");
+		st.executeUpdate("CREATE INDEX `user_group_user_id` ON `user_group` (`user_id`)");
+
+		st.executeUpdate("CREATE TABLE `group` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `name` TEXT UNIQUE)");
+		st.executeUpdate("CREATE TABLE `group_inheritance` (`parent_id` INTEGER, `child_id` INTEGER, UNIQUE(`parent_id`, `child_id`))");
+		st.executeUpdate("CREATE INDEX `group_inheritance_parent_id` ON `group_inheritance` (`parent_id`)");
+		st.executeUpdate("CREATE TABLE `group_permission` (`group_id` INTEGER, `permission` TEXT, UNIQUE(`group_id`, `permission`))");
+		st.executeUpdate("CREATE INDEX `group_permission_group_id` ON `group_permission` (`group_id`)");
 	}
 }

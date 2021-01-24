@@ -33,10 +33,12 @@ import net.fabricmc.discord.bot.command.UsageParser.VarNode;
 public final class CommandParser {
 	public static void main(String[] args) {
 		UsageParser usageParser = new UsageParser();
-		Node node = usageParser.parse("(any|block|be|blockentity|entity) (class <class> | id <id>) [<dimId>] [--ticking] [--unloaded] [--countOnly | --chunkCounts] [--filter[=<x>]] [--clear]", false);
+		//Node node = usageParser.parse("(any|block|be|blockentity|entity) (class <class> | id <id>) [<dimId>] [--ticking] [--unloaded] [--countOnly | --chunkCounts] [--filter[=<x>]] [--clear]", false);
+		Node node = usageParser.parse("list [<user>] | (add|remove) [<user>] <name>", false);
 		System.out.printf("root node: %s%n", node);
 
-		String input = "be id minecraft:chest nether --unloaded --countOnly --filter=test --clear";
+		//String input = "be id minecraft:chest nether --unloaded --countOnly --filter=test --clear";
+		String input = "add somegroup";
 		//String input = "be id minecraft:chest nether --unloaded --chunkCounts --filter=test --clear";
 		Map<String, String> result = new LinkedHashMap<>();
 		CommandParser cmdParser = new CommandParser();
@@ -124,16 +126,17 @@ public final class CommandParser {
 			}
 		}
 
-		capturedArgsTmp.clear();
-		allowedFloatingArgsTmp.clear();
+		capturedArgs.clear();
+		allowedFloatingArgs.clear();
+		queueSize = 0;
 
-		boolean ret = processNode(node, 0, true, capturedArgsTmp, allowedFloatingArgsTmp) >= 0;
+		boolean ret = processNode(node, 0, true) >= 0;
 
 		if (ret) {
-			for (int i = 0; i < capturedArgsTmp.size(); i += 2) {
-				String key = capturedArgsTmp.get(i);
+			for (int i = 0; i < capturedArgs.size(); i += 2) {
+				String key = capturedArgs.get(i);
 				if (key == null) key = String.format("unnamed_%d", i >>> 1);
-				String value = capturedArgsTmp.get(i + 1);
+				String value = capturedArgs.get(i + 1);
 
 				out.put(key, value);
 			}
@@ -174,7 +177,7 @@ public final class CommandParser {
 		tokens[tokenCount++] = end;
 	}
 
-	private int processNode(Node node, int token, boolean last, List<String> capturedArgs, List<String> allowedFloatingArgs) {
+	private int processNode(Node node, int token, boolean last) {
 		// TOOD: repeat
 		boolean matched;
 
@@ -203,20 +206,55 @@ public final class CommandParser {
 			ListNode list = (ListNode) node;
 			int initialCapturedArgsSize = capturedArgs.size();
 			int initialAllowedFloatingArgsSize = allowedFloatingArgs.size();
+			long ignore = 0; // FIXME: this works only up to size 64
+			int queueStart = queueSize;
 			matched = true;
 
 			for (int i = 0, max = list.size(); i < max; i++) {
-				int newToken = processNode(list.get(i), token, last && i + 1 == max, capturedArgs, allowedFloatingArgs);
+				if ((ignore & 1L << i) != 0) continue;
+
+				Node subNode = list.get(i);
+
+				if (subNode.isOptional() && subNode.isPositionDependent()) { // we're trying with the node present, but this may fail -> queue without for later
+					long newIgnore = ignore | 1L << i;
+					ensureQueueSpace(6);
+					queue[queueSize++] = i;
+					queue[queueSize++] = token;
+					queue[queueSize++] = capturedArgs.size();
+					queue[queueSize++] = allowedFloatingArgs.size();
+					queue[queueSize++] = (int) (newIgnore >>> 32);
+					queue[queueSize++] = (int) newIgnore;
+				}
+
+				int newToken = processNode(subNode, token, last && i + 1 == max);
 
 				if (newToken < 0) {
-					// undo the whole list node, for when it gets skipped entirely as optional
-					trimList(capturedArgs, initialCapturedArgsSize);
-					trimList(allowedFloatingArgs, initialAllowedFloatingArgsSize);
-					matched = false;
-					break;
+					if (queueSize > queueStart) {
+						int idx = queueSize - 6;
+						i = queue[idx] - 1;
+						token = queue[idx + 1];
+						trimList(capturedArgs, queue[idx + 2]);
+						trimList(allowedFloatingArgs, queue[idx + 3]);
+						ignore = (long) queue[idx + 4] << 32 | queue[idx + 5] & 0xffffffffL;
+						queueSize = idx;
+					} else {
+						// undo the whole list node, for when it gets skipped entirely as optional
+						trimList(capturedArgs, initialCapturedArgsSize);
+						trimList(allowedFloatingArgs, initialAllowedFloatingArgsSize);
+						matched = false;
+						break;
+					}
 				} else {
 					token = newToken;
 				}
+			}
+
+			if (queueSize > queueStart) {
+				if (matched) {
+					// TODO: queue globally to restart from outside this list
+				}
+
+				queueSize = queueStart;
 			}
 		} else if (node instanceof OrNode) {
 			OrNode orNode = (OrNode) node;
@@ -224,7 +262,7 @@ public final class CommandParser {
 			int initialAllowedFloatingArgsSize = allowedFloatingArgs.size();
 
 			for (Node option : orNode) {
-				int newToken = processNode(option, token, last, capturedArgs, allowedFloatingArgs);
+				int newToken = processNode(option, token, last);
 
 				if (newToken >= 0) {
 					return newToken; // FIXME: later options need to be preserved for backtracking to them in case the current one fails later (for niche cases..)
@@ -267,7 +305,7 @@ public final class CommandParser {
 
 		if (last && !floatingArgs.isEmpty()) { // check if all floating args have been provided on the path taken
 			for (String arg : floatingArgs.keySet()) {
-				if (!allowedFloatingArgsTmp.contains(arg)) {
+				if (!allowedFloatingArgs.contains(arg)) {
 					return -1;
 				}
 			}
@@ -324,6 +362,14 @@ public final class CommandParser {
 		return buffer.toString();
 	}
 
+	private void ensureQueueSpace(int space) {
+		if (queue == null) {
+			queue = new int[Math.max(space, 30)];
+		} else if (queue.length - queueSize < space) {
+			queue = Arrays.copyOf(queue, Math.max(queue.length * 2, queue.length - queueSize + space));
+		}
+	}
+
 	private static final int TOKEN_STRIDE = 2;
 
 	private CharSequence input;
@@ -331,6 +377,8 @@ public final class CommandParser {
 	private int tokenCount = 0; // total token array entries (2 per actual token)
 	private final Map<String, String> floatingArgs = new HashMap<>();
 	private final StringBuilder buffer = new StringBuilder();
-	private final List<String> capturedArgsTmp = new ArrayList<>();
-	private final List<String> allowedFloatingArgsTmp = new ArrayList<>();
+	private final List<String> capturedArgs = new ArrayList<>();
+	private final List<String> allowedFloatingArgs = new ArrayList<>();
+	private int[] queue;
+	int queueSize = 0;
 }

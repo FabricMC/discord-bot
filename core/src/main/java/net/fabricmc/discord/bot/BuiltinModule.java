@@ -26,6 +26,9 @@ import org.javacord.api.listener.message.MessageCreateListener;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandResponder;
 import net.fabricmc.discord.bot.command.core.ConfigCommand;
+import net.fabricmc.discord.bot.command.core.DbCommand;
+import net.fabricmc.discord.bot.command.core.GroupCommand;
+import net.fabricmc.discord.bot.command.core.PermissionCommand;
 
 /**
  * The builtin module of the discord bot.
@@ -57,7 +60,10 @@ final class BuiltinModule implements Module, MessageCreateListener {
 		this.bot = bot;
 		this.api = api;
 
-		this.bot.registerCommand(new ConfigCommand());
+		bot.registerCommand(new ConfigCommand());
+		bot.registerCommand(new GroupCommand());
+		bot.registerCommand(new PermissionCommand());
+		bot.registerCommand(new DbCommand());
 
 		api.addMessageCreateListener(this);
 	}
@@ -78,7 +84,7 @@ final class BuiltinModule implements Module, MessageCreateListener {
 				event.getChannel(),
 				event.getMessageContent(),
 				event.getMessageId()
-		);
+				);
 
 		this.bot.tryHandleCommand(context);
 	}

@@ -34,6 +34,15 @@ public abstract class Command {
 	public abstract String usage();
 
 	/**
+	 * Get the permission required to be able to run the command.
+	 *
+	 * @return permission name or null if none required
+	 */
+	public String getPermission() {
+		return null;
+	}
+
+	/**
 	 * Called when a command should run.
 	 *
 	 * @param context the command context
