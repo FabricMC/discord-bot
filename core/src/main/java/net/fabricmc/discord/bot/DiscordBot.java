@@ -39,6 +39,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Supplier;
 
 import org.apache.logging.log4j.LogManager;
@@ -60,6 +61,7 @@ import net.fabricmc.discord.bot.config.ValueSerializer;
 import net.fabricmc.discord.bot.database.Database;
 import net.fabricmc.discord.bot.database.query.ConfigQueries;
 import net.fabricmc.discord.bot.message.Mentions;
+import net.fabricmc.discord.bot.util.DaemonThreadFactory;
 
 public final class DiscordBot {
 	public static void start(String[] args) throws IOException {
@@ -73,30 +75,35 @@ public final class DiscordBot {
 	// COW for concurrent access
 	private volatile Map<ConfigKey<?>, Object> configValues;
 	private final BotConfig config;
+	private final long serverId;
 	private final Database database;
+	private final ActiveHandler activeHandler;
 	private final UserHandler userHandler;
 	/**
 	 * A list of all enabled modules.
 	 */
 	private final List<Module> modules = new ArrayList<>();
-	private final ExecutorService serialExecutor = Executors.newSingleThreadExecutor(r -> {
-		Thread ret = new Thread(r, "Serial execution thread");
-		ret.setDaemon(true);
-
-		return ret;
-	});
+	private final ExecutorService serialExecutor = Executors.newSingleThreadExecutor(new DaemonThreadFactory("Serial execution thread"));
+	private final ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("Scheduled execution thread"));
 
 	private DiscordBot(String[] args) throws IOException {
 		final Path configDir = Paths.get("bot.properties").toAbsolutePath();
 		final Path dataDir = Paths.get("data").toAbsolutePath();
 
 		this.config = this.loadConfig(configDir);
+		this.serverId = Long.parseUnsignedLong(config.getGuildId());
 		this.database = new Database(config.getDatabaseUrl());
-		this.userHandler = new UserHandler(this, Long.parseUnsignedLong(config.getGuildId()));
+		this.activeHandler = new ActiveHandler(this);
+		this.userHandler = new UserHandler(this);
+
+		setupModules();
+		loadRuntimeConfig();
+		activeHandler.init();
 
 		DiscordApiBuilder builder = new DiscordApiBuilder();
 
 		// early event registrations to ensure nothing will be missed
+		activeHandler.registerEarlyHandlers(builder);
 		userHandler.registerEarlyHandlers(builder);
 
 		builder
@@ -111,8 +118,16 @@ public final class DiscordBot {
 		});
 	}
 
+	public long getServerId() {
+		return serverId;
+	}
+
 	public Database getDatabase() {
 		return database;
+	}
+
+	public ActiveHandler getActiveHandler() {
+		return activeHandler;
 	}
 
 	public UserHandler getUserHandler() {
@@ -132,6 +147,10 @@ public final class DiscordBot {
 	 */
 	public Executor getSerialExecutor() {
 		return this.serialExecutor;
+	}
+
+	public ScheduledExecutorService getScheduledExecutor() {
+		return scheduledExecutor;
 	}
 
 	public String getCommandPrefix() {
@@ -245,7 +264,7 @@ public final class DiscordBot {
 		return BotConfig.load(properties);
 	}
 
-	private void setup(DiscordApi api, Path dataDir) {
+	private void setupModules() {
 		final BuiltinModule builtin = new BuiltinModule();
 		this.modules.add(builtin);
 
@@ -264,13 +283,13 @@ public final class DiscordBot {
 				module.registerConfigEntries(this);
 			}
 		}
+	}
 
-		this.loadRuntimeConfig();
-
+	private void setup(DiscordApi api, Path dataDir) {
 		Server server = api.getServerById(config.getGuildId()).orElse(null);
 
 		if (server != null) {
-			userHandler.init(server);
+			activeHandler.onServerReady(server);
 		} else {
 			logger.warn("server with configured id unavailable?");
 		}

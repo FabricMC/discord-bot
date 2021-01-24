@@ -24,13 +24,11 @@ import java.util.List;
 
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
-import org.javacord.api.event.server.ServerBecomesAvailableEvent;
 import org.javacord.api.event.server.member.ServerMemberJoinEvent;
 import org.javacord.api.event.server.member.ServerMemberLeaveEvent;
 import org.javacord.api.event.user.UserChangeNameEvent;
 import org.javacord.api.event.user.UserChangeNicknameEvent;
 import org.javacord.api.listener.ChainableGloballyAttachableListenerManager;
-import org.javacord.api.listener.server.ServerBecomesAvailableListener;
 import org.javacord.api.listener.server.member.ServerMemberJoinListener;
 import org.javacord.api.listener.server.member.ServerMemberLeaveListener;
 import org.javacord.api.listener.user.UserChangeNameListener;
@@ -39,15 +37,15 @@ import org.javacord.api.listener.user.UserChangeNicknameListener;
 import net.fabricmc.discord.bot.database.query.UserQueries;
 import net.fabricmc.discord.bot.database.query.UserQueries.SessionDiscordUserData;
 
-public final class UserHandler implements ServerBecomesAvailableListener, ServerMemberJoinListener, ServerMemberLeaveListener, UserChangeNameListener, UserChangeNicknameListener {
+public final class UserHandler implements ServerMemberJoinListener, ServerMemberLeaveListener, UserChangeNameListener, UserChangeNicknameListener {
 	public static final String ADMIN_PERMISSION = "admin";
 
 	private final DiscordBot bot;
-	private final long serverId;
 
-	public UserHandler(DiscordBot bot, long serverId) {
+	public UserHandler(DiscordBot bot) {
 		this.bot = bot;
-		this.serverId = serverId;
+
+		bot.getActiveHandler().register(this::init);
 
 		try {
 			if (!UserQueries.hasAnyPermittedUser(bot.getDatabase(), ADMIN_PERMISSION)) {
@@ -112,7 +110,7 @@ public final class UserHandler implements ServerBecomesAvailableListener, Server
 
 		if (pos >= 0) {
 			String username = user.substring(0, pos);
-			String discriminator = user.substring(pos);
+			String discriminator = user.substring(pos + 1);
 			User res = server.getMemberByNameAndDiscriminator(username, discriminator).orElse(null);
 			if (res != null) return res.getId();
 
@@ -145,52 +143,42 @@ public final class UserHandler implements ServerBecomesAvailableListener, Server
 		return val < 0 || val > Integer.MAX_VALUE; // a snowflake in 0..2^31-1 would required creation within the first 511 ms of its defined time span
 	}
 
-	public void registerEarlyHandlers(ChainableGloballyAttachableListenerManager src) {
-		src.addServerBecomesAvailableListener(this);
+	void registerEarlyHandlers(ChainableGloballyAttachableListenerManager src) {
 		src.addServerMemberJoinListener(this);
 		src.addServerMemberLeaveListener(this);
 		src.addUserChangeNameListener(this);
 		src.addUserChangeNicknameListener(this);
 	}
 
-	public void init(Server server) {
-		assert server.getId() == serverId;
+	private void init(Server server, long lastActiveTime) {
+		assert server.getId() == bot.getServerId();
 		assert server.hasAllMembersInCache();
 
 		Collection<User> users = server.getMembers();
 		Collection<SessionDiscordUserData> dbUsers = new ArrayList<>(users.size());
 
 		for (User user : users) {
-			dbUsers.add(toDbUser(user, server));
+			dbUsers.add(toDbUser(user, server, true));
 		}
 
 		try {
-			UserQueries.updateNewUsers(bot.getDatabase(), dbUsers);
+			UserQueries.updateNewUsers(bot.getDatabase(), dbUsers, true, lastActiveTime);
 		} catch (SQLException e) {
 			throw new RuntimeException(e);
 		}
 	}
 
 	@Override
-	public void onServerBecomesAvailable(ServerBecomesAvailableEvent event) {
-		Server server = event.getServer();
-
-		if (server.getId() == serverId) {
-			init(server);
-		}
-	}
-
-	@Override
 	public void onServerMemberJoin(ServerMemberJoinEvent event) {
-		if (event.getServer().getId() == serverId) {
-			refreshUser(event.getUser(), event.getServer());
+		if (event.getServer().getId() == bot.getServerId()) {
+			refreshUser(event.getUser(), event.getServer(), true, false);
 		}
 	}
 
 	@Override
 	public void onServerMemberLeave(ServerMemberLeaveEvent event) {
-		if (event.getServer().getId() == serverId) {
-			refreshUser(event.getUser(), event.getServer());
+		if (event.getServer().getId() == bot.getServerId()) {
+			refreshUser(event.getUser(), event.getServer(), false, true);
 		}
 	}
 
@@ -199,35 +187,35 @@ public final class UserHandler implements ServerBecomesAvailableListener, Server
 		Server server = null;
 
 		for (Server s : event.getUser().getMutualServers()) {
-			if (s.getId() == serverId) {
+			if (s.getId() == bot.getServerId()) {
 				server = s;
 				break;
 			}
 		}
 
 		if (server != null) {
-			refreshUser(event.getUser(), server);
+			refreshUser(event.getUser(), server, true, true);
 		}
 	}
 
 	@Override
 	public void onUserChangeNickname(UserChangeNicknameEvent event) {
-		if (event.getServer().getId() == serverId) {
-			refreshUser(event.getUser(), event.getServer());
+		if (event.getServer().getId() == bot.getServerId()) {
+			refreshUser(event.getUser(), event.getServer(), true, true);
 		}
 	}
 
-	private void refreshUser(User user, Server server) {
-		SessionDiscordUserData dbUser = toDbUser(user, server);
+	private void refreshUser(User user, Server server, boolean present, boolean wasPresent) {
+		SessionDiscordUserData dbUser = toDbUser(user, server, present);
 
 		try {
-			UserQueries.updateNewUsers(bot.getDatabase(), Collections.singletonList(dbUser));
+			UserQueries.updateNewUsers(bot.getDatabase(), Collections.singletonList(dbUser), false, wasPresent ? System.currentTimeMillis() : 0);
 		} catch (SQLException e) {
 			throw new RuntimeException(e);
 		}
 	}
 
-	private static SessionDiscordUserData toDbUser(User user, Server server) {
-		return new SessionDiscordUserData(user.getId(), user.getName(), user.getDiscriminator(), user.getNickname(server).orElse(null));
+	private static SessionDiscordUserData toDbUser(User user, Server server, boolean present) {
+		return new SessionDiscordUserData(user.getId(), user.getName(), user.getDiscriminator(), user.getNickname(server).orElse(null), present);
 	}
 }

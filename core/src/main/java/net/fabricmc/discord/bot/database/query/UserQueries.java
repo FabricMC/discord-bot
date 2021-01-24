@@ -34,24 +34,33 @@ public final class UserQueries {
 	/**
 	 * Create/update db entries for every supplied discord user.
 	 *
-	 * This will record metadata and nick history, update last seen timestamps and create internal user entries.
+	 * This will record metadata and name/nick history, update last seen timestamps and presence states and create internal user entries.
+	 *
+	 * @param lastActiveTime last time when a previously present user is assumed to having been around with its recorded properties OR 0 to use the recorded lastseen time
 	 */
-	public static void updateNewUsers(Database db, Collection<SessionDiscordUserData> users) throws SQLException {
+	public static void updateNewUsers(Database db, Collection<SessionDiscordUserData> users, boolean isCompleteList, long lastActiveTime) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 		if (users == null) throw new NullPointerException("null users");
 
 		long time = System.currentTimeMillis();
 
 		try (Connection conn = db.getConnection();
-				PreparedStatement psGetDU = conn.prepareStatement("SELECT user_id, username, discriminator, nickname, firstseen, lastseen, lastnickchange FROM discorduser WHERE id = ?");
-				PreparedStatement psAddDU = conn.prepareStatement("INSERT INTO discorduser (id, user_id, username, discriminator, nickname, firstseen, lastseen, lastnickchange) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-				PreparedStatement psUpdateDuTime = conn.prepareStatement("UPDATE discorduser SET lastseen = ? WHERE id = ?");
-				PreparedStatement psUpdateDuNameTime = conn.prepareStatement("UPDATE discorduser SET username = ?, discriminator = ?, nickname = ?, lastseen = ?, lastNickChange = ? WHERE id = ?");
+				PreparedStatement updatePresence = conn.prepareStatement("UPDATE discorduser SET lastseen = ?, present = '0' WHERE present = '1'");
+				PreparedStatement psGetDU = conn.prepareStatement("SELECT user_id, username, discriminator, nickname, firstseen, lastseen, lastnickchange, present FROM discorduser WHERE id = ?");
+				PreparedStatement psAddDU = conn.prepareStatement("INSERT INTO discorduser (id, user_id, username, discriminator, nickname, firstseen, lastseen, lastnickchange, present) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+				PreparedStatement psUpdateDuTimePresent = conn.prepareStatement("UPDATE discorduser SET lastseen = ?, present = ? WHERE id = ?");
+				PreparedStatement psUpdateDuNameTimePresent = conn.prepareStatement("UPDATE discorduser SET username = ?, discriminator = ?, nickname = ?, lastseen = ?, lastNickChange = ?, present = ? WHERE id = ?");
 				PreparedStatement psAddUser = conn.prepareStatement("INSERT INTO user (stickyname) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
 				PreparedStatement psGetLastNameChange = conn.prepareStatement("SELECT MAX(lastused) FROM discorduser_namelog WHERE discorduser_id = ?");
 				PreparedStatement psRecordNameChange = conn.prepareStatement("INSERT INTO discorduser_namelog (discorduser_id, username, discriminator, firstused, lastused, duration) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (discorduser_id, username, discriminator) DO UPDATE SET lastused = excluded.lastused, duration = duration + excluded.duration, count = count + 1");
 				PreparedStatement psRecordNickChange = conn.prepareStatement("INSERT INTO discorduser_nicklog (discorduser_id, nickname, firstused, lastused, duration) VALUES (?, ?, ?, ?, ?) ON CONFLICT (discorduser_id, nickname) DO UPDATE SET lastused = excluded.lastused, duration = duration + excluded.duration, count = count + 1")) {
 			conn.setAutoCommit(false);
+
+			if (isCompleteList) {
+				assert lastActiveTime != 0;
+				updatePresence.setLong(1, lastActiveTime);
+				updatePresence.executeUpdate();
+			}
 
 			for (SessionDiscordUserData user : users) {
 				psGetDU.setLong(1, user.id);
@@ -73,9 +82,10 @@ public final class UserQueries {
 						psAddDU.setString(3, user.username);
 						psAddDU.setString(4, user.discriminator);
 						psAddDU.setString(5, user.nickname);
-						psAddDU.setLong(6, time);
-						psAddDU.setLong(7, time);
-						psAddDU.setLong(8, time);
+						psAddDU.setLong(6, time); // firstseen
+						psAddDU.setLong(7, time); // lastseen
+						psAddDU.setLong(8, time); // lastNickChange
+						psAddDU.setBoolean(9, user.present);
 						psAddDU.addBatch();
 					} else {
 						String oldUsername = res.getString(2);
@@ -88,15 +98,18 @@ public final class UserQueries {
 							long firstSeen = res.getLong(5);
 							long lastSeen = res.getLong(6);
 							long lastNickChange = res.getLong(7);
+							boolean oldPresent = res.getBoolean(8);
+							long lastUsed = oldPresent && lastActiveTime != 0 ? lastActiveTime : lastSeen;
 
 							// update name, discriminator, last seen
-							psUpdateDuNameTime.setString(1, user.username);
-							psUpdateDuNameTime.setString(2, user.discriminator);
-							psUpdateDuNameTime.setString(3, user.nickname);
-							psUpdateDuNameTime.setLong(4, time);
-							psUpdateDuNameTime.setLong(5, nickChanged ? lastSeen : lastNickChange);
-							psUpdateDuNameTime.setLong(6, user.id);
-							psUpdateDuNameTime.addBatch();
+							psUpdateDuNameTimePresent.setString(1, user.username);
+							psUpdateDuNameTimePresent.setString(2, user.discriminator);
+							psUpdateDuNameTimePresent.setString(3, user.nickname);
+							psUpdateDuNameTimePresent.setLong(4, time); // lastseen
+							psUpdateDuNameTimePresent.setLong(5, nickChanged ? lastUsed : lastNickChange); // lastNickChange
+							psUpdateDuNameTimePresent.setBoolean(6, user.present);
+							psUpdateDuNameTimePresent.setLong(7, user.id);
+							psUpdateDuNameTimePresent.addBatch();
 
 							if (usernameChanged) {
 								// store old username
@@ -110,9 +123,9 @@ public final class UserQueries {
 								psRecordNameChange.setLong(1, user.id);
 								psRecordNameChange.setString(2, oldUsername);
 								psRecordNameChange.setString(3, oldDiscriminator);
-								psRecordNameChange.setLong(4, firstUsed);
-								psRecordNameChange.setLong(5, lastSeen);
-								psRecordNameChange.setLong(6, lastSeen - firstUsed);
+								psRecordNameChange.setLong(4, firstUsed); // firstused
+								psRecordNameChange.setLong(5, lastUsed); // lastused
+								psRecordNameChange.setLong(6, lastUsed - firstUsed); // duration
 								psRecordNameChange.addBatch();
 							}
 
@@ -120,31 +133,32 @@ public final class UserQueries {
 								// store old nickname
 								psRecordNickChange.setLong(1, user.id);
 								psRecordNickChange.setString(2, oldNickname);
-								psRecordNickChange.setLong(3, lastNickChange);
-								psRecordNickChange.setLong(4, lastSeen);
-								psRecordNickChange.setLong(5, lastSeen - lastNickChange);
+								psRecordNickChange.setLong(3, lastNickChange); // firstused
+								psRecordNickChange.setLong(4, lastUsed); // lastused
+								psRecordNickChange.setLong(5, lastUsed - lastNickChange); // duration
 								psRecordNickChange.addBatch();
 							}
 						} else { // existing user, same names
 							// update last seen
-							psUpdateDuTime.setLong(1, time);
-							psUpdateDuTime.setLong(2, user.id);
-							psUpdateDuTime.addBatch();
+							psUpdateDuTimePresent.setLong(1, time); // lastseen
+							psUpdateDuTimePresent.setBoolean(2, user.present);
+							psUpdateDuTimePresent.setLong(3, user.id);
+							psUpdateDuTimePresent.addBatch();
 						}
 					}
 				}
 			}
 
 			psAddDU.executeBatch();
-			psUpdateDuNameTime.executeBatch();
-			psUpdateDuTime.executeBatch();
+			psUpdateDuNameTimePresent.executeBatch();
+			psUpdateDuTimePresent.executeBatch();
 			psRecordNameChange.executeBatch();
 			psRecordNickChange.executeBatch();
 			conn.commit();
 		}
 	}
 
-	public record SessionDiscordUserData(long id, String username, String discriminator, @Nullable String nickname) { }
+	public record SessionDiscordUserData(long id, String username, String discriminator, @Nullable String nickname, boolean present) { }
 
 	public static int getUserId(Database db, long discordUserId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");

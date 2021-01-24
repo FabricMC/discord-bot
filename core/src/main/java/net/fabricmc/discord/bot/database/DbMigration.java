@@ -55,6 +55,7 @@ final class DbMigration {
 
 			switch (version) { // fall-through for continuous migration
 			case 1: migrate_1_2(st);
+			case 2: migrate_2_3(st);
 			}
 
 			st.executeUpdate(String.format("REPLACE INTO `config` VALUES ('dbVersion', '%d')", Database.currentVersion));
@@ -85,5 +86,9 @@ final class DbMigration {
 		st.executeUpdate("CREATE INDEX `group_inheritance_parent_id` ON `group_inheritance` (`parent_id`)");
 		st.executeUpdate("CREATE TABLE `group_permission` (`group_id` INTEGER, `permission` TEXT, UNIQUE(`group_id`, `permission`))");
 		st.executeUpdate("CREATE INDEX `group_permission_group_id` ON `group_permission` (`group_id`)");
+	}
+
+	private static void migrate_2_3(Statement st) throws SQLException {
+		st.executeUpdate("ALTER TABLE `discorduser` ADD COLUMN `present` INTEGER DEFAULT 1");
 	}
 }
