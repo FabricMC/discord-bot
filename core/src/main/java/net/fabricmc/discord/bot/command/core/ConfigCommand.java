@@ -23,6 +23,7 @@ import java.util.Map;
 import org.apache.logging.log4j.LogManager;
 import org.jetbrains.annotations.Nullable;
 
+import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.config.ConfigKey;
@@ -38,6 +39,11 @@ public final class ConfigCommand extends Command {
 	@Override
 	public String usage() {
 		return "list | get <configKey> | set <configKey> <value>";
+	}
+
+	@Override
+	public String getPermission() {
+		return UserHandler.ADMIN_PERMISSION;
 	}
 
 	@Override
