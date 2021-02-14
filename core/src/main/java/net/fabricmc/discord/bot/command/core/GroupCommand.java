@@ -44,10 +44,10 @@ public final class GroupCommand extends Command {
 	public boolean run(CommandContext context, Map<String, String> arguments) {
 		try {
 			if (arguments.containsKey("user")) { // user-group assignment interaction
-				int userId = context.bot().getUserHandler().getUserId(arguments.get("user"), context.server());
+				int userId = context.bot().getUserHandler().getUserId(arguments.get("user"), context.server(), true);
 
 				if (userId < 0) {
-					context.channel().sendMessage("Unknown user");
+					context.channel().sendMessage("Unknown or ambiguous user");
 					return false;
 				}
 

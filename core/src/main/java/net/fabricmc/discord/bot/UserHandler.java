@@ -65,8 +65,8 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		}
 	}
 
-	public int getUserId(String user, Server server) {
-		long ret = parseUserId(user, server);
+	public int getUserId(String user, Server server, boolean unique) {
+		long ret = parseUserId(user, server, unique);
 
 		if (ret == -1 || !isDiscordUserId(ret)) {
 			return (int) ret;
@@ -79,24 +79,24 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		}
 	}
 
-	public long getDiscordUserId(String user, Server server) {
-		long ret = parseUserId(user, server);
+	public long getDiscordUserId(String user, Server server, boolean unique) {
+		long ret = parseUserId(user, server, unique);
 
 		if (ret == -1 || isDiscordUserId(ret)) {
 			return ret;
 		} else {
 			try {
 				List<Long> matches = UserQueries.getDiscordUserIds(bot.getDatabase(), (int) ret);
-				return matches.isEmpty() ? -1 : matches.get(matches.size() - 1);
+				return matches.isEmpty() || unique && matches.size() > 1 ? -1 : matches.get(matches.size() - 1);
 			} catch (SQLException e) {
 				throw new RuntimeException(e);
 			}
 		}
 	}
 
-	private long parseUserId(String user, Server server) {
+	private long parseUserId(String user, Server server, boolean unique) {
 		try {
-			if (user.startsWith("<@") && user.endsWith(">")) {
+			if (user.startsWith("<@") && user.endsWith(">")) { // <@userid> (name derived) or <@!userid> (nick derived)
 				char next = user.charAt(2);
 				int start = next >= '0' && next <= '9' ? 2 : 3;
 
@@ -108,7 +108,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 
 		int pos = user.indexOf('#');
 
-		if (pos >= 0) {
+		if (pos >= 0) { // name#discriminator
 			String username = user.substring(0, pos);
 			String discriminator = user.substring(pos + 1);
 			User res = server.getMemberByNameAndDiscriminator(username, discriminator).orElse(null);
@@ -116,7 +116,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 
 			try {
 				List<Integer> matches = UserQueries.getUserIds(bot.getDatabase(), username, discriminator);
-				return matches.isEmpty() ? -1 : matches.get(matches.size() - 1);
+				return matches.isEmpty() || unique && matches.size() > 1 ? -1 : matches.get(matches.size() - 1);
 			} catch (SQLException e) {
 				throw new RuntimeException(e);
 			}
@@ -126,14 +126,14 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		if (users.isEmpty()) users = server.getMembersByName(user);
 
 		if (!users.isEmpty()) {
-			return users.iterator().next().getId();
+			return unique && users.size() > 1 ? -1 : users.iterator().next().getId();
 		}
 
 		try {
 			List<Integer> matches = UserQueries.getUserIdsByNickname(bot.getDatabase(), user);
 			if (matches.isEmpty()) matches = UserQueries.getUserIdsByUsername(bot.getDatabase(), user);
 
-			return matches.isEmpty() ? -1 : matches.get(matches.size() - 1);
+			return matches.isEmpty() || unique && matches.size() > 1 ? -1 : matches.get(matches.size() - 1);
 		} catch (SQLException e) {
 			throw new RuntimeException(e);
 		}
