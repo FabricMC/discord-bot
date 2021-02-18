@@ -34,7 +34,8 @@ public record CommandContext(
 		@Nullable Server server,
 		URL messageLink,
 		MessageAuthor author,
+		int userId,
 		TextChannel channel,
 		String content,
 		long messageId
-) {}
+		) {}

@@ -20,6 +20,8 @@ import java.nio.file.Path;
 
 import org.apache.logging.log4j.Logger;
 import org.javacord.api.DiscordApi;
+import org.javacord.api.entity.message.MessageAuthor;
+import org.javacord.api.entity.user.User;
 import org.javacord.api.event.message.MessageCreateEvent;
 import org.javacord.api.listener.message.MessageCreateListener;
 
@@ -29,6 +31,9 @@ import net.fabricmc.discord.bot.command.core.ConfigCommand;
 import net.fabricmc.discord.bot.command.core.DbCommand;
 import net.fabricmc.discord.bot.command.core.GroupCommand;
 import net.fabricmc.discord.bot.command.core.PermissionCommand;
+import net.fabricmc.discord.bot.command.mod.ActionCommand;
+import net.fabricmc.discord.bot.command.mod.ActionType;
+import net.fabricmc.discord.bot.command.mod.GenericActionCommand;
 
 /**
  * The builtin module of the discord bot.
@@ -64,6 +69,15 @@ final class BuiltinModule implements Module, MessageCreateListener {
 		bot.registerCommand(new GroupCommand());
 		bot.registerCommand(new PermissionCommand());
 		bot.registerCommand(new DbCommand());
+		bot.registerCommand(new ActionCommand());
+
+		for (ActionType type : ActionType.values()) {
+			bot.registerCommand(new GenericActionCommand(type, true));
+
+			if (type.hasDeactivation) {
+				bot.registerCommand(new GenericActionCommand(type, false));
+			}
+		}
 
 		api.addMessageCreateListener(this);
 	}
@@ -74,6 +88,10 @@ final class BuiltinModule implements Module, MessageCreateListener {
 			return;
 		}
 
+		MessageAuthor author = event.getMessageAuthor();
+		User user = author.asUser().orElse(null);
+		if (user == null) return; // should only happen for webhook messages
+
 		// We intentionally don't pass the event since we may want to support editing the original message to execute the command again such as if an error was made in syntax
 		final CommandContext context = new CommandContext(
 				new CommandResponder(event),
@@ -81,6 +99,7 @@ final class BuiltinModule implements Module, MessageCreateListener {
 				event.getServer().orElse(null),
 				event.getMessageLink(),
 				event.getMessageAuthor(),
+				bot.getUserHandler().getUserId(user),
 				event.getChannel(),
 				event.getMessageContent(),
 				event.getMessageId()

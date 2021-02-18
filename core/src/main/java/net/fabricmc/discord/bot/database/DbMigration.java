@@ -56,6 +56,7 @@ final class DbMigration {
 			switch (version) { // fall-through for continuous migration
 			case 1: migrate_1_2(st);
 			case 2: migrate_2_3(st);
+			case 3: migrate_3_4(st);
 			}
 
 			st.executeUpdate(String.format("REPLACE INTO `config` VALUES ('dbVersion', '%d')", Database.currentVersion));
@@ -90,5 +91,15 @@ final class DbMigration {
 
 	private static void migrate_2_3(Statement st) throws SQLException {
 		st.executeUpdate("ALTER TABLE `discorduser` ADD COLUMN `present` INTEGER DEFAULT 1");
+	}
+
+	private static void migrate_3_4(Statement st) throws SQLException {
+		st.executeUpdate("CREATE TABLE `action` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `type` TEXT, `target_user_id` INTEGER, `actor_user_id` INTEGER, `creation` INTEGER, `expiration` INTEGER, `reason` TEXT, `prev_id` INTEGER)");
+		st.executeUpdate("CREATE INDEX `action_target_user_id` ON `action` (`target_user_id`)");
+		st.executeUpdate("CREATE TABLE `actionsuspension` (`action_id` INTEGER PRIMARY KEY, `suspender_user_id` INTEGER, `time` INTEGER, `reason` TEXT)");
+		st.executeUpdate("CREATE TABLE `actionexpiration` (`action_id` INTEGER PRIMARY KEY, `time` INTEGER)");
+		st.executeUpdate("CREATE INDEX `actionexpiration_time` ON `actionexpiration` (`time`)");
+		st.executeUpdate("CREATE TABLE `activeaction` (`action_id` INTEGER PRIMARY KEY, `target_user_id` INTEGER)");
+		st.executeUpdate("CREATE INDEX `activeaction_target_user_id` ON `activeaction` (`target_user_id`)");
 	}
 }

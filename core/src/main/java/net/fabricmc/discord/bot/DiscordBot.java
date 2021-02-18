@@ -56,6 +56,7 @@ import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandParser;
 import net.fabricmc.discord.bot.command.UsageParser;
+import net.fabricmc.discord.bot.command.mod.ActionUtil;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializer;
 import net.fabricmc.discord.bot.database.Database;
@@ -68,7 +69,8 @@ public final class DiscordBot {
 		new DiscordBot(args);
 	}
 
-	private final Logger logger = LogManager.getLogger(DiscordBot.class);
+	private static final Logger LOGGER = LogManager.getLogger(DiscordBot.class);
+
 	private final Map<String, ConfigKey<?>> configEntryByKey = new ConcurrentHashMap<>();
 	private final Map<ConfigKey<?>, Supplier<?>> configEntryRegistry = new ConcurrentHashMap<>();
 	private final Map<String, CommandRecord> commands = new ConcurrentHashMap<>();
@@ -79,6 +81,8 @@ public final class DiscordBot {
 	private final Database database;
 	private final ActiveHandler activeHandler;
 	private final UserHandler userHandler;
+	private final LogHandler logHandler;
+	private final ActionSyncHandler actionSyncHandler;
 	/**
 	 * A list of all enabled modules.
 	 */
@@ -95,7 +99,10 @@ public final class DiscordBot {
 		this.database = new Database(config.getDatabaseUrl());
 		this.activeHandler = new ActiveHandler(this);
 		this.userHandler = new UserHandler(this);
+		this.logHandler = new LogHandler(this);
+		this.actionSyncHandler = new ActionSyncHandler(this);
 
+		ActionUtil.registerConfig(this);
 		setupModules();
 		loadRuntimeConfig();
 		activeHandler.init();
@@ -105,6 +112,7 @@ public final class DiscordBot {
 		// early event registrations to ensure nothing will be missed
 		activeHandler.registerEarlyHandlers(builder);
 		userHandler.registerEarlyHandlers(builder);
+		actionSyncHandler.registerEarlyHandlers(builder);
 
 		builder
 		.setWaitForUsersOnStartup(true)
@@ -113,7 +121,7 @@ public final class DiscordBot {
 		.login()
 		.thenAccept(api -> this.setup(api, dataDir))
 		.exceptionally(exc -> {
-			this.logger.error("Error occurred while initializing bot", exc);
+			DiscordBot.LOGGER.error("Error occurred while initializing bot", exc);
 			return null;
 		});
 	}
@@ -132,6 +140,14 @@ public final class DiscordBot {
 
 	public UserHandler getUserHandler() {
 		return userHandler;
+	}
+
+	public LogHandler getLogHandler() {
+		return logHandler;
+	}
+
+	public ActionSyncHandler getActionSyncHandler() {
+		return actionSyncHandler;
 	}
 
 	public Collection<Module> getModules() {
@@ -164,7 +180,7 @@ public final class DiscordBot {
 		try {
 			node = usageParser.parse(command.usage(), false);
 		} catch (IllegalStateException e) {
-			logger.error("Failed to register command {} due to invalid usage", command.name());
+			LOGGER.error("Failed to register command {} due to invalid usage", command.name());
 			e.printStackTrace();
 			return;
 		}
@@ -242,7 +258,7 @@ public final class DiscordBot {
 
 	private BotConfig loadConfig(Path configPath) throws IOException {
 		if (Files.notExists(configPath)) {
-			this.logger.info("Creating bot config");
+			DiscordBot.LOGGER.info("Creating bot config");
 
 			try (final OutputStream output = Files.newOutputStream(configPath, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
 				try (final InputStream input = BotConfig.class.getClassLoader().getResourceAsStream("bot.properties")) {
@@ -273,12 +289,12 @@ public final class DiscordBot {
 		for (final Module module : modules) {
 			// Take the config's word over the module setup
 			if (this.config.getDisabledModules().contains(module.getName())) {
-				this.logger.info("Not loading module due to config override {}", module.getName());
+				DiscordBot.LOGGER.info("Not loading module due to config override {}", module.getName());
 				continue;
 			}
 
 			if (module.shouldLoad()) {
-				this.logger.info("Loading module {}", module.getName());
+				DiscordBot.LOGGER.info("Loading module {}", module.getName());
 				this.modules.add(module);
 				module.registerConfigEntries(this);
 			}
@@ -291,7 +307,7 @@ public final class DiscordBot {
 		if (server != null) {
 			activeHandler.onServerReady(server);
 		} else {
-			logger.warn("server with configured id unavailable?");
+			LOGGER.warn("server with configured id unavailable?");
 		}
 
 		// Must only iterate accepted modules
@@ -312,7 +328,7 @@ public final class DiscordBot {
 			}
 		}
 
-		this.logger.info("Loaded {} modules:\n{}", this.modules.size(), moduleList.toString());
+		DiscordBot.LOGGER.info("Loaded {} modules:\n{}", this.modules.size(), moduleList.toString());
 	}
 
 	/**

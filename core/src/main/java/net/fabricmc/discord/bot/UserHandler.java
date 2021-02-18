@@ -45,7 +45,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 	public UserHandler(DiscordBot bot) {
 		this.bot = bot;
 
-		bot.getActiveHandler().register(this::init);
+		bot.getActiveHandler().registerReadyHandler(this::init);
 
 		try {
 			if (!UserQueries.hasAnyPermittedUser(bot.getDatabase(), ADMIN_PERMISSION)) {
@@ -66,35 +66,54 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 	}
 
 	public int getUserId(String user, Server server, boolean unique) {
-		long ret = parseUserId(user, server, unique);
+		long ret = parseUserId(user, server, unique, true);
 
 		if (ret == -1 || !isDiscordUserId(ret)) {
 			return (int) ret;
 		} else {
-			try {
-				return UserQueries.getUserId(bot.getDatabase(), ret);
-			} catch (SQLException e) {
-				throw new RuntimeException(e);
-			}
+			return getUserId(ret);
 		}
 	}
 
-	public long getDiscordUserId(String user, Server server, boolean unique) {
-		long ret = parseUserId(user, server, unique);
+	/*public long getDiscordUserId(String user, Server server, boolean unique) {
+		long ret = parseUserId(user, server, unique, true);
 
 		if (ret == -1 || isDiscordUserId(ret)) {
 			return ret;
 		} else {
-			try {
-				List<Long> matches = UserQueries.getDiscordUserIds(bot.getDatabase(), (int) ret);
-				return matches.isEmpty() || unique && matches.size() > 1 ? -1 : matches.get(matches.size() - 1);
-			} catch (SQLException e) {
-				throw new RuntimeException(e);
-			}
+			return getDiscordUserId((int) ret, unique);
 		}
 	}
 
-	private long parseUserId(String user, Server server, boolean unique) {
+	public @Nullable User getDiscordUser(String user, Server server, boolean unique) {
+		long id = parseUserId(user, server, unique, false);
+
+		if (id >= 0 && !isDiscordUserId(id)) {
+			id = getDiscordUserId((int) id, unique);
+		}
+
+		return id >= 0 ? server.getMemberById(id).orElse(null) : null;
+	}
+
+	public @Nullable UserEntry getUserEntry(String user, Server server, boolean unique) {
+		long id = parseUserId(user, server, unique, true);
+
+		if (id == -1) {
+			return null;
+		} else if (isDiscordUserId(id)) {
+			return new UserEntry(getUserId(id), server.getMemberById(id).orElse(null));
+		} else {
+			long discordId = getDiscordUserId((int) id, unique);
+
+			return new UserEntry((int) id, discordId >= 0 ? server.getMemberById(discordId).orElse(null) : null);
+		}
+	}*/
+
+	public record UserEntry(int id, List<User> discordUsers) { }
+
+	private long parseUserId(String user, Server server, boolean unique, boolean searchOffline) {
+		// find by id if applicable
+
 		try {
 			if (user.startsWith("<@") && user.endsWith(">")) { // <@userid> (name derived) or <@!userid> (nick derived)
 				char next = user.charAt(2);
@@ -106,13 +125,16 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 			return Long.parseLong(user);
 		} catch (NumberFormatException e) { }
 
+		// find by name#discriminator if applicable
+
 		int pos = user.indexOf('#');
 
-		if (pos >= 0) { // name#discriminator
+		if (pos >= 0) {
 			String username = user.substring(0, pos);
 			String discriminator = user.substring(pos + 1);
 			User res = server.getMemberByNameAndDiscriminator(username, discriminator).orElse(null);
 			if (res != null) return res.getId();
+			if (!searchOffline) return -1;
 
 			try {
 				List<Integer> matches = UserQueries.getUserIds(bot.getDatabase(), username, discriminator);
@@ -122,12 +144,18 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 			}
 		}
 
+		// find by name or nick
+
 		Collection<User> users = server.getMembersByNickname(user);
 		if (users.isEmpty()) users = server.getMembersByName(user);
+		if (users.isEmpty()) users = server.getMembersByDisplayNameIgnoreCase(user);
+		if (users.isEmpty()) users = server.getMembersByNameIgnoreCase(user);
 
 		if (!users.isEmpty()) {
 			return unique && users.size() > 1 ? -1 : users.iterator().next().getId();
 		}
+
+		if (!searchOffline) return -1;
 
 		try {
 			List<Integer> matches = UserQueries.getUserIdsByNickname(bot.getDatabase(), user);
@@ -139,8 +167,76 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		}
 	}
 
+	public int getUserId(User user) {
+		return getUserId(user.getId());
+	}
+
+	public int getUserId(long discordId) {
+		try {
+			return UserQueries.getUserId(bot.getDatabase(), discordId);
+		} catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	public List<Long> getDiscordUserIds(int userId) {
+		try {
+			return UserQueries.getDiscordUserIds(bot.getDatabase(), userId);
+		} catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	public List<User> getDiscordUsers(int userId, Server server) {
+		List<Long> ids = getDiscordUserIds(userId);
+		if (ids.isEmpty()) return Collections.emptyList();
+
+		List<User> ret = new ArrayList<>(ids.size());
+
+		for (long id : ids) {
+			User user = server.getMemberById(id).orElse(null);
+			if (user != null) ret.add(user);
+		}
+
+		return ret;
+	}
+
 	private static boolean isDiscordUserId(long val) {
 		return val < 0 || val > Integer.MAX_VALUE; // a snowflake in 0..2^31-1 would required creation within the first 511 ms of its defined time span
+	}
+
+	public String formatUser(int userId, Server server) {
+		List<Long> ids = getDiscordUserIds(userId);
+		if (ids.isEmpty()) return Integer.toString(userId);
+
+		for (long id : ids) {
+			User user = server.getMemberById(id).orElse(null);
+			if (user != null) return formatDiscordUser(user);
+		}
+
+		return formatDiscordUser(ids.get(0), server);
+	}
+
+	public String formatDiscordUser(long discordUserId, Server server) {
+		User user = server.getMemberById(discordUserId).orElse(null);
+
+		if (user != null) {
+			return formatDiscordUser(user);
+		} else {
+			return formatDiscordUser(discordUserId, null, null); // TODO: fetch extra data from db
+		}
+	}
+
+	public static String formatDiscordUser(User user) {
+		return formatDiscordUser(user.getId(), user.getName(), user.getDiscriminator());
+	}
+
+	private static String formatDiscordUser(long discordUserId, String name, String discriminator) {
+		if (name != null && discriminator != null) {
+			return "<@!%d> (%s#%s / `%d`)".formatted(discordUserId, name, discriminator, discordUserId);
+		} else {
+			return "<@!%d> (`%d`)".formatted(discordUserId, discordUserId);
+		}
 	}
 
 	void registerEarlyHandlers(ChainableGloballyAttachableListenerManager src) {
