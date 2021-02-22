@@ -29,6 +29,7 @@ import java.util.Objects;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.database.Database;
+import net.fabricmc.discord.bot.database.IdArmor;
 
 public final class UserQueries {
 	/**
@@ -70,15 +71,15 @@ public final class UserQueries {
 						// create internal user first to obtain its autoincrement id
 						psAddUser.setString(1, user.username);
 						psAddUser.executeUpdate();
-						int userId;
+						int rawUserId;
 
 						try (ResultSet res2 = psAddUser.getGeneratedKeys()) {
 							if (!res2.next()) throw new IllegalStateException();
-							userId = res2.getInt(1);
+							rawUserId = res2.getInt(1);
 						}
 
 						psAddDU.setLong(1, user.id);
-						psAddDU.setInt(2, userId);
+						psAddDU.setInt(2, rawUserId);
 						psAddDU.setString(3, user.username);
 						psAddDU.setString(4, user.discriminator);
 						psAddDU.setString(5, user.nickname);
@@ -170,7 +171,7 @@ public final class UserQueries {
 			try (ResultSet res = ps.executeQuery()) {
 				if (!res.next()) return -1;
 
-				return res.getInt(1);
+				return IdArmor.encode(res.getInt(1));
 			}
 		}
 	}
@@ -178,9 +179,11 @@ public final class UserQueries {
 	public static List<Long> getDiscordUserIds(Database db, int userId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
+		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
+
 		try (Connection conn = db.getConnection();
 				PreparedStatement ps = conn.prepareStatement("SELECT id FROM discorduser WHERE user_id = ?")) {
-			ps.setInt(1, userId);
+			ps.setInt(1, rawUserId);
 
 			try (ResultSet res = ps.executeQuery()) {
 				List<Long> ret = new ArrayList<>();
@@ -212,7 +215,7 @@ public final class UserQueries {
 
 			try (ResultSet res = ps.executeQuery()) {
 				while (res.next()) {
-					ret.add(res.getInt(1));
+					ret.add(IdArmor.encode(res.getInt(1)));
 				}
 			}
 
@@ -236,7 +239,7 @@ public final class UserQueries {
 
 			try (ResultSet res = ps.executeQuery()) {
 				while (res.next()) {
-					ret.add(res.getInt(1));
+					ret.add(IdArmor.encode(res.getInt(1)));
 				}
 			}
 
@@ -260,7 +263,7 @@ public final class UserQueries {
 
 			try (ResultSet res = ps.executeQuery()) {
 				while (res.next()) {
-					ret.add(res.getInt(1));
+					ret.add(IdArmor.encode(res.getInt(1)));
 				}
 			}
 
@@ -271,13 +274,15 @@ public final class UserQueries {
 	public static UserData getUserData(Database db, int userId, boolean fetchNameHistory, boolean fetchNickHistory) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
+		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
+
 		try (Connection conn = db.getConnection();
 				PreparedStatement psUser = conn.prepareStatement("SELECT stickyName FROM user WHERE id = ?");
 				PreparedStatement psDU = conn.prepareStatement("SELECT id, username, discriminator, nickname, firstseen, lastseen FROM discorduser WHERE user_id = ?");
 				PreparedStatement psNameLog = conn.prepareStatement("SELECT username, discriminator, firstused, lastused, duration, count FROM discorduser_namelog WHERE discorduser_id = ?");
 				PreparedStatement psNickLog = conn.prepareStatement("SELECT nickname, firstused, lastused, duration, count FROM discorduser_nicklog WHERE discorduser_id = ?")) {
 			UserData ret;
-			psUser.setInt(1, userId);
+			psUser.setInt(1, rawUserId);
 
 			try (ResultSet res = psUser.executeQuery()) {
 				if (!res.next()) return null;
@@ -285,7 +290,7 @@ public final class UserQueries {
 				ret = new UserData(userId, res.getString(1), new ArrayList<>());
 			}
 
-			psDU.setInt(1, userId);
+			psDU.setInt(1, rawUserId);
 
 			try (ResultSet res = psDU.executeQuery()) {
 				while (res.next()) {
@@ -330,9 +335,11 @@ public final class UserQueries {
 	public static Collection<String> getDirectGroups(Database db, int userId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
+		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
+
 		try (Connection conn = db.getConnection();
 				PreparedStatement ps = conn.prepareStatement("SELECT `group`.id, group.name FROM user_group, `group` WHERE user_group.user_id = ? AND `group`.id = user_group.group_id")) {
-			ps.setInt(1, userId);
+			ps.setInt(1, rawUserId);
 
 			try (ResultSet res = ps.executeQuery()) {
 				List<String> ret = new ArrayList<>();
@@ -350,6 +357,8 @@ public final class UserQueries {
 		if (db == null) throw new NullPointerException("null db");
 		if (group == null) throw new NullPointerException("null group");
 
+		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
+
 		try (Connection conn = db.getConnection();
 				PreparedStatement psGetGroup = conn.prepareStatement("SELECT id FROM `group` WHERE name = ?");
 				PreparedStatement psAddGroup = conn.prepareStatement("INSERT OR IGNORE INTO `group` (name) VALUES (?)");
@@ -357,24 +366,24 @@ public final class UserQueries {
 			conn.setAutoCommit(false);
 
 			psGetGroup.setString(1, group);
-			int groupId;
+			int rawGroupId;
 
 			try (ResultSet res = psGetGroup.executeQuery()) {
 				if (res.next()) {
-					groupId = res.getInt(1);
+					rawGroupId = res.getInt(1);
 				} else {
 					psAddGroup.setString(1, group);
 					psAddGroup.executeUpdate();
 
 					try (ResultSet res2 = psGetGroup.executeQuery()) {
 						if (!res2.next()) throw new IllegalStateException();
-						groupId = res2.getInt(1);
+						rawGroupId = res2.getInt(1);
 					}
 				}
 			}
 
-			psAdd.setInt(1, userId);
-			psAdd.setInt(2, groupId);
+			psAdd.setInt(1, rawUserId);
+			psAdd.setInt(2, rawGroupId);
 			boolean ret = psAdd.executeUpdate() > 0;
 
 			conn.commit();
@@ -387,9 +396,11 @@ public final class UserQueries {
 		if (db == null) throw new NullPointerException("null db");
 		if (group == null) throw new NullPointerException("null group");
 
+		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
+
 		try (Connection conn = db.getConnection();
 				PreparedStatement ps = conn.prepareStatement("DELETE FROM user_group WHERE user_id = ? AND group_id = (SELECT id FROM `group` WHERE name = ?)")) {
-			ps.setInt(1, userId);
+			ps.setInt(1, rawUserId);
 			ps.setString(2, group);
 
 			return ps.executeUpdate() > 0;
@@ -436,22 +447,22 @@ public final class UserQueries {
 			conn.setAutoCommit(false);
 
 			psGroup.setString(1, name);
-			int id;
+			int rawGroupId;
 
 			try (ResultSet res = psGroup.executeQuery()) {
 				if (!res.next()) return false;
-				id = res.getInt(1);
+				rawGroupId = res.getInt(1);
 				res.deleteRow();
 			}
 
-			psUserGroup.setInt(1, id);
+			psUserGroup.setInt(1, rawGroupId);
 			psUserGroup.executeUpdate();
 
-			psGroupInherit.setInt(1, id);
-			psGroupInherit.setInt(2, id);
+			psGroupInherit.setInt(1, rawGroupId);
+			psGroupInherit.setInt(2, rawGroupId);
 			psGroupInherit.executeUpdate();
 
-			psGroupPerm.setInt(1, id);
+			psGroupPerm.setInt(1, rawGroupId);
 			psGroupPerm.executeUpdate();
 
 			conn.commit();

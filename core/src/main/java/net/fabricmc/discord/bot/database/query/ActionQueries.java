@@ -28,36 +28,39 @@ import java.util.List;
 
 import net.fabricmc.discord.bot.command.mod.ActionType;
 import net.fabricmc.discord.bot.database.Database;
+import net.fabricmc.discord.bot.database.IdArmor;
 
 public final class ActionQueries {
 	public static ActionEntry getAction(Database db, int actionId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
+
+		int rawActionId = IdArmor.decodeOrThrow(actionId, "action id");
 
 		try (Connection conn = db.getConnection();
 				PreparedStatement ps = conn.prepareStatement("SELECT a.type, a.target_user_id, a.actor_user_id, a.creation, a.expiration, a.reason, a.prev_id, s.suspender_user_id, s.time, s.reason "
 						+ "FROM `action` a "
 						+ "LEFT JOIN `actionsuspension` s ON s.action_id = a.id "
 						+ "WHERE a.id = ?")) {
-			ps.setInt(1, actionId);
+			ps.setInt(1, rawActionId);
 
 			try (ResultSet res = ps.executeQuery()) {
 				if (!res.next()) return null;
 
-				int suspenderUserId = res.getInt(8);
-				if (res.wasNull()) suspenderUserId = -1;
+				int rawSuspenderUserId = res.getInt(8);
+				if (res.wasNull()) rawSuspenderUserId = -1;
 
 				long suspendTime = res.getLong(9);
 				if (res.wasNull()) suspendTime = -1;
 
 				return new ActionEntry(actionId, // id
 						ActionType.get(res.getString(1)), // type
-						res.getInt(2), // targetUserId
-						res.getInt(3), // actorUserId
+						IdArmor.encode(res.getInt(2)), // targetUserId
+						IdArmor.encode(res.getInt(3)), // actorUserId
 						res.getLong(4), // creationTime
 						res.getLong(5), // expirationTime
 						res.getString(6), // reason
-						res.getInt(7), // prevId
-						suspenderUserId, // suspenderUserId
+						IdArmor.encodeOptional(res.getInt(7)), // prevId
+						IdArmor.encodeOptional(rawSuspenderUserId), // suspenderUserId
 						suspendTime, // suspensionTime
 						res.getString(10)); // suspendReason
 			}
@@ -67,32 +70,34 @@ public final class ActionQueries {
 	public static Collection<ActionEntry> getActions(Database db, int userId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
+		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
+
 		try (Connection conn = db.getConnection();
 				PreparedStatement ps = conn.prepareStatement("SELECT a.id, a.type, a.actor_user_id, a.creation, a.expiration, a.reason, a.prev_id, s.suspender_user_id, s.time, s.reason "
 						+ "FROM `action` a "
 						+ "LEFT JOIN `actionsuspension` s ON s.action_id = a.id "
 						+ "WHERE a.target_user_id = ?")) {
-			ps.setInt(1, userId);
+			ps.setInt(1, rawUserId);
 
 			try (ResultSet res = ps.executeQuery()) {
 				List<ActionEntry> ret = new ArrayList<>();
 
 				while (res.next()) {
-					int suspenderUserId = res.getInt(8);
-					if (res.wasNull()) suspenderUserId = -1;
+					int rawSuspenderUserId = res.getInt(8);
+					if (res.wasNull()) rawSuspenderUserId = -1;
 
 					long suspendTime = res.getLong(9);
 					if (res.wasNull()) suspendTime = -1;
 
-					ret.add(new ActionEntry(res.getInt(1), // id
+					ret.add(new ActionEntry(IdArmor.encode(res.getInt(1)), // id
 							ActionType.get(res.getString(2)), // type
 							userId, // targetUserId
-							res.getInt(3), // actorUserId
+							IdArmor.encode(res.getInt(3)), // actorUserId
 							res.getLong(4), // creationTime
 							res.getLong(5), // expirationTime
 							res.getString(6), // reason
-							res.getInt(7), // prevId
-							suspenderUserId, // suspenderUserId
+							IdArmor.encodeOptional(res.getInt(7)), // prevId
+							IdArmor.encodeOptional(rawSuspenderUserId), // suspenderUserId
 							suspendTime, // suspensionTime
 							res.getString(10))); // suspendReason
 				}
@@ -108,6 +113,10 @@ public final class ActionQueries {
 		if (targetUserId < 0) throw new IllegalArgumentException("invalid target userid");
 		if (actorUserId < 0) throw new IllegalArgumentException("invalid actor userid");
 		if (durationMs == 0 && type.hasDuration) throw new IllegalArgumentException("invalid zero duration");
+
+		int rawTargetUserId = IdArmor.decodeOrThrow(targetUserId, "target user id");
+		int rawActorUserId = IdArmor.decodeOrThrow(actorUserId, "actor user id");
+		int rawPrevId = IdArmor.decodeOptionalOrThrow(prevId, "prev id");
 
 		long creationTime = System.currentTimeMillis();
 		long expirationTime;
@@ -125,38 +134,38 @@ public final class ActionQueries {
 			conn.setAutoCommit(false);
 
 			ps.setString(1, type.id);
-			ps.setInt(2, targetUserId);
-			ps.setInt(3, actorUserId);
+			ps.setInt(2, rawTargetUserId);
+			ps.setInt(3, rawActorUserId);
 			ps.setLong(4, creationTime);
 			ps.setLong(5, expirationTime);
 			ps.setString(6, reason);
-			ps.setInt(7, prevId);
+			ps.setInt(7, rawPrevId);
 			ps.executeUpdate();
 
-			int actionId;
+			int rawActionId;
 
 			try (ResultSet res = ps.getGeneratedKeys()) {
 				if (!res.next()) throw new IllegalStateException();
-				actionId = res.getInt(1);
+				rawActionId = res.getInt(1);
 			}
 
 			if (type.hasDuration) {
 				if (expirationTime > 0) { // not permanent
-					psExpire.setInt(1, actionId);
+					psExpire.setInt(1, rawActionId);
 					psExpire.setLong(2, expirationTime);
 					psExpire.executeUpdate();
 				}
 
-				psActive.setInt(1, actionId);
-				psActive.setInt(2, targetUserId);
+				psActive.setInt(1, rawActionId);
+				psActive.setInt(2, rawTargetUserId);
 				psActive.executeUpdate();
 			}
 
 			conn.commit();
 
-			return new ActionEntry(actionId, type, targetUserId, actorUserId,
+			return new ActionEntry(IdArmor.encode(rawActionId), type, targetUserId, actorUserId,
 					creationTime, expirationTime,
-					reason, prevId,
+					reason, IdArmor.encodeOptional(prevId),
 					-1, -1, null);
 		}
 	}
@@ -177,7 +186,7 @@ public final class ActionQueries {
 				List<ExpiringActionEntry> ret = new ArrayList<>();
 
 				while (res.next()) {
-					ret.add(new ExpiringActionEntry(res.getInt(1), ActionType.get(res.getString(2)), res.getInt(3), res.getLong(4)));
+					ret.add(new ExpiringActionEntry(IdArmor.encode(res.getInt(1)), ActionType.get(res.getString(2)), IdArmor.encode(res.getInt(3)), res.getLong(4)));
 				}
 
 				return ret;
@@ -190,9 +199,11 @@ public final class ActionQueries {
 	public static boolean isExpiringAction(Database db, int actionId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
+		int rawActionId = IdArmor.decodeOrThrow(actionId, "action id");
+
 		try (Connection conn = db.getConnection();
 				PreparedStatement ps = conn.prepareStatement("SELECT COUNT(*) FROM `actionexpiration` WHERE action_id = ?")) {
-			ps.setInt(1, actionId);
+			ps.setInt(1, rawActionId);
 
 			try (ResultSet res = ps.executeQuery()) {
 				if (!res.next()) throw new IllegalStateException();
@@ -205,15 +216,17 @@ public final class ActionQueries {
 	public static boolean expireAction(Database db, int actionId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
+		int rawActionId = IdArmor.decodeOrThrow(actionId, "action id");
+
 		try (Connection conn = db.getConnection();
 				PreparedStatement psExpire = conn.prepareStatement("DELETE FROM `actionexpiration` WHERE action_id = ?");
 				PreparedStatement psActive = conn.prepareStatement("DELETE FROM `activeaction` WHERE action_id = ?")) {
 			conn.setAutoCommit(false);
-			psExpire.setInt(1, actionId);
+			psExpire.setInt(1, rawActionId);
 
 			boolean ret = psExpire.executeUpdate() > 0;
 
-			psActive.setInt(1, actionId);
+			psActive.setInt(1, rawActionId);
 			psActive.executeUpdate();
 
 			conn.commit();
@@ -225,6 +238,9 @@ public final class ActionQueries {
 	public static boolean suspendAction(Database db, int actionId, int suspenderUserId, String reason) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
+		int rawActionId = IdArmor.decodeOrThrow(actionId, "action id");
+		int rawSuspenderUserId = IdArmor.decodeOrThrow(suspenderUserId, "suspender user id");
+
 		long time = System.currentTimeMillis();
 
 		try (Connection conn = db.getConnection();
@@ -233,16 +249,16 @@ public final class ActionQueries {
 				PreparedStatement psActive = conn.prepareStatement("DELETE FROM `activeaction` WHERE action_id = ?")) {
 			conn.setAutoCommit(false);
 
-			psSuspend.setInt(1, actionId);
-			psSuspend.setInt(2, suspenderUserId);
+			psSuspend.setInt(1, rawActionId);
+			psSuspend.setInt(2, rawSuspenderUserId);
 			psSuspend.setLong(3, time);
 			psSuspend.setString(4, reason);
 			if (psSuspend.executeUpdate() == 0) return false;
 
-			psExpire.setInt(1, actionId);
+			psExpire.setInt(1, rawActionId);
 			psExpire.executeUpdate();
 
-			psActive.setInt(1, actionId);
+			psActive.setInt(1, rawActionId);
 			psActive.executeUpdate();
 
 			conn.commit();
@@ -254,15 +270,17 @@ public final class ActionQueries {
 	public static int getActiveAction(Database db, int userId, ActionType type) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
+		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
+
 		try (Connection conn = db.getConnection();
 				PreparedStatement ps = conn.prepareStatement("SELECT a.id FROM `activeaction` aa, `action` a WHERE aa.target_user_id = ? AND a.id = aa.action_id AND a.type = ?")) {
-			ps.setInt(1, userId);
+			ps.setInt(1, rawUserId);
 			ps.setString(2, type.id);
 
 			try (ResultSet res = ps.executeQuery()) {
 				if (!res.next()) return -1;
 
-				return res.getInt(1);
+				return IdArmor.encode(res.getInt(1));
 			}
 		}
 	}
@@ -287,7 +305,12 @@ public final class ActionQueries {
 
 				try (ResultSet res = ps.executeQuery()) {
 					while (res.next()) {
-						ret.add(new ActiveActionEntry(res.getInt(1), ActionType.get(res.getString(2)), res.getInt(3), discordUserId, res.getLong(4), res.getString(5)));
+						ret.add(new ActiveActionEntry(IdArmor.encode(res.getInt(1)),
+								ActionType.get(res.getString(2)),
+								IdArmor.encode(res.getInt(3)),
+								discordUserId,
+								res.getLong(4),
+								res.getString(5)));
 					}
 				}
 			}
