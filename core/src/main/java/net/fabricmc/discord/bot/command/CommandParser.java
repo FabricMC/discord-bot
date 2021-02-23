@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 import net.fabricmc.discord.bot.command.UsageParser.FloatingArgNode;
-import net.fabricmc.discord.bot.command.UsageParser.ListNode;
+import net.fabricmc.discord.bot.command.UsageParser.GroupNode;
 import net.fabricmc.discord.bot.command.UsageParser.Node;
 import net.fabricmc.discord.bot.command.UsageParser.OrNode;
 import net.fabricmc.discord.bot.command.UsageParser.PlainNode;
@@ -33,13 +33,15 @@ import net.fabricmc.discord.bot.command.UsageParser.VarNode;
 public final class CommandParser {
 	public static void main(String[] args) {
 		UsageParser usageParser = new UsageParser();
-		//Node node = usageParser.parse("(any|block|be|blockentity|entity) (class <class> | id <id>) [<dimId>] [--ticking] [--unloaded] [--countOnly | --chunkCounts] [--filter[=<x>]] [--clear]", false);
-		Node node = usageParser.parse("list [<user>] | (add|remove) [<user>] <name>", false);
-		System.out.printf("root node: %s%n", node);
+		Node node = usageParser.parse("(any|block|be|blockentity|entity) (class <class> | id <id>) [<dimId>] [--ticking] [--unloaded] [--countOnly | --chunkCounts] [--filter[=<x>]] [--clear]");
+		//Node node = usageParser.parse("list [<user>] | (add|remove) [<user>] <name>");
+		//Node node = usageParser.parse("warn <user> <reason...> <test> ss [<asd>]");
+		System.out.printf("root node: %s%n", node.toStringFull());
 
 		//String input = "be id minecraft:chest nether --unloaded --countOnly --filter=test --clear";
-		String input = "add somegroup";
-		//String input = "be id minecraft:chest nether --unloaded --chunkCounts --filter=test --clear";
+		String input = "be id minecraft:chest nether --unloaded --chunkCounts --filter=test --clear";
+		//String input = "add somegroup";
+		//String input = "warn someone reason asd xy ss qwe";
 		Map<String, String> result = new LinkedHashMap<>();
 		CommandParser cmdParser = new CommandParser();
 		boolean rval = cmdParser.parse(input, node, result);
@@ -75,7 +77,7 @@ public final class CommandParser {
 	 */
 	public boolean parse(CharSequence input, int inputStart, int inputEnd, Node node, Map<String, String> out) {
 		this.input = input;
-		this.tokenCount = 0;
+		this.tokenIndex = 0;
 		floatingArgs.clear();
 
 		for (int i = inputStart; i < inputEnd; i++) {
@@ -97,7 +99,7 @@ public final class CommandParser {
 
 				if (end == start) throw new IllegalArgumentException("-- not followed by key");
 
-				String key = input.subSequence(start, end).toString();
+				String key = getValue(start, end);
 				String value;
 
 				if (c == '=') {
@@ -116,7 +118,7 @@ public final class CommandParser {
 					value = null;
 				}
 
-				// System.out.printf("new flarg: %s = %s%n", key, value);
+				if (DEBUG) System.out.printf("new flarg: %s = %s%n", key, value);
 				floatingArgs.put(key, value);
 				i = end;
 			} else if (!Character.isWhitespace(c)) {
@@ -126,11 +128,17 @@ public final class CommandParser {
 			}
 		}
 
+		int tokenCount = tokenIndex / TOKEN_STRIDE;
+
+		if (tokenCount < node.getMinTokensTotal() || tokenCount > node.getMaxTokensTotal()) {
+			return false;
+		}
+
 		capturedArgs.clear();
 		allowedFloatingArgs.clear();
 		queueSize = 0;
 
-		boolean ret = processNode(node, 0, true) >= 0;
+		boolean ret = processNodes(node, 0, tokenCount);
 
 		if (ret) {
 			for (int i = 0; i < capturedArgs.size(); i += 2) {
@@ -172,146 +180,192 @@ public final class CommandParser {
 	}
 
 	private void addToken(int start, int end) {
-		if (tokenCount == tokens.length) tokens = Arrays.copyOf(tokens, tokens.length * TOKEN_STRIDE);
-		tokens[tokenCount++] = start;
-		tokens[tokenCount++] = end;
+		if (tokenIndex == tokens.length) tokens = Arrays.copyOf(tokens, tokens.length * TOKEN_STRIDE);
+		tokens[tokenIndex++] = start;
+		tokens[tokenIndex++] = end;
+
+		if (DEBUG) System.out.printf("new token: %s%n", input.subSequence(start, end));
 	}
 
-	private int processNode(Node node, int token, boolean last) {
-		// TOOD: repeat
-		boolean matched;
+	private boolean processNodes(Node node, int token, int tokensAvailable) {
+		// TODO: implement repeat
+		queue(node, 0, token, tokensAvailable);
 
-		if (node instanceof FloatingArgNode) {
-			FloatingArgNode faNode = (FloatingArgNode) node;
+		queueLoop: while ((node = deQueue()) != null) {
+			int nodeData = getQueueNodeData();
+			token = getQueueToken();
+			tokensAvailable = getQueueTokensAvailable();
 
-			if (floatingArgs.containsKey(faNode.key)) {
-				String value = floatingArgs.get(faNode.key);
+			do {
+				Node next = null;
+				boolean matched;
 
-				if (value == null) {
-					if (faNode.value != null && !faNode.value.isOptional()) {
-						return -1; // missing value
-					}
-				} else if (faNode.value == null) {
-					return -1; // excess value
-				} else {
-					// TODO: check if value is compliant with whatever faNode.value requires
-				}
+				if (node instanceof FloatingArgNode) {
+					FloatingArgNode faNode = (FloatingArgNode) node;
 
-				allowedFloatingArgs.add(faNode.key);
-				matched = true;
-			} else {
-				matched = false;
-			}
-		} else if (node instanceof ListNode) {
-			ListNode list = (ListNode) node;
-			int initialCapturedArgsSize = capturedArgs.size();
-			int initialAllowedFloatingArgsSize = allowedFloatingArgs.size();
-			long ignore = 0; // FIXME: this works only up to size 64
-			int queueStart = queueSize;
-			matched = true;
+					if (floatingArgs.containsKey(faNode.key)) {
+						String value = floatingArgs.get(faNode.key);
 
-			for (int i = 0, max = list.size(); i < max; i++) {
-				if ((ignore & 1L << i) != 0) continue;
-
-				Node subNode = list.get(i);
-
-				if (subNode.isOptional() && subNode.isPositionDependent()) { // we're trying with the node present, but this may fail -> queue without for later
-					long newIgnore = ignore | 1L << i;
-					ensureQueueSpace(6);
-					queue[queueSize++] = i;
-					queue[queueSize++] = token;
-					queue[queueSize++] = capturedArgs.size();
-					queue[queueSize++] = allowedFloatingArgs.size();
-					queue[queueSize++] = (int) (newIgnore >>> 32);
-					queue[queueSize++] = (int) newIgnore;
-				}
-
-				int newToken = processNode(subNode, token, last && i + 1 == max);
-
-				if (newToken < 0) {
-					if (queueSize > queueStart) {
-						int idx = queueSize - 6;
-						i = queue[idx] - 1;
-						token = queue[idx + 1];
-						trimList(capturedArgs, queue[idx + 2]);
-						trimList(allowedFloatingArgs, queue[idx + 3]);
-						ignore = (long) queue[idx + 4] << 32 | queue[idx + 5] & 0xffffffffL;
-						queueSize = idx;
+						matched = value == null && (faNode.value == null || faNode.value.isOptional())
+								|| value != null && faNode.value != null;  // TODO: check if value is compliant with whatever faNode.value requires
 					} else {
-						// undo the whole list node, for when it gets skipped entirely as optional
-						trimList(capturedArgs, initialCapturedArgsSize);
-						trimList(allowedFloatingArgs, initialAllowedFloatingArgsSize);
 						matched = false;
-						break;
 					}
-				} else {
-					token = newToken;
-				}
-			}
+				} else if (node instanceof GroupNode) {
+					GroupNode group = (GroupNode) node;
+					next = group.child;
+					matched = true;
+				} else if (node instanceof OrNode) {
+					OrNode orNode = (OrNode) node;
 
-			if (queueSize > queueStart) {
+					for (Node option : orNode) {
+						if (next == null) {
+							next = option;
+						} else {
+							queue(option, 0, token, tokensAvailable);
+						}
+					}
+
+					matched = true;
+				} else if (token >= tokenIndex) {
+					matched = false;
+				} else if (node instanceof PlainNode) {
+					PlainNode plainNode = (PlainNode) node;
+					matched = plainNode.content.equals(getValue(token));
+				} else if (node instanceof VarNode) {
+					VarNode varNode = (VarNode) node;
+					// TODO: implement varNode value verification
+					matched = true;
+				} else {
+					throw new IllegalStateException();
+				}
+
+				if (!matched && !node.isOptional()) {
+					continue queueLoop; // dead end
+				}
+
+				if (next == null) {
+					next = node.getNext();
+
+					while (next == null && node.getParent() != null) {
+						next = node.getParent().getNext();
+					}
+				}
+
 				if (matched) {
-					// TODO: queue globally to restart from outside this list
+					if (node.isOptional() && node.isPositionDependent() && next != null) {
+						queue(next, 0, token, tokensAvailable); // may have to retry without node
+					}
+
+					int tokensConsumed;
+
+					if (node instanceof FloatingArgNode) {
+						allowedFloatingArgs.add(((FloatingArgNode) node).key);
+						tokensConsumed = 0;
+					} else if (node instanceof PlainNode) {
+						capturedArgs.add(null);
+						capturedArgs.add(((PlainNode) node).content);
+						tokensConsumed = 1;
+					} else if (node instanceof VarNode) {
+						VarNode varNode = (VarNode) node;
+
+						String value;
+
+						if (varNode.multiWord) {
+							int words = tokensAvailable - nodeData - node.getMinTokensNext();
+							assert words > 0;
+
+							if (words > 1) {
+								queue(node, nodeData + 1, token, tokensAvailable); // may have to retry with less words
+							}
+
+							value = getValue(tokens[token], tokens[token + (words - 1) * TOKEN_STRIDE + 1]);
+							tokensConsumed = words;
+						} else {
+							value = getValue(token);
+							tokensConsumed = 1;
+						}
+
+						capturedArgs.add(((VarNode) node).variable);
+						capturedArgs.add(value);
+					} else {
+						tokensConsumed = 0;
+					}
+
+					token += tokensConsumed * TOKEN_STRIDE;
+					tokensAvailable -= tokensConsumed;
 				}
 
-				queueSize = queueStart;
-			}
-		} else if (node instanceof OrNode) {
-			OrNode orNode = (OrNode) node;
-			int initialCapturedArgsSize = capturedArgs.size();
-			int initialAllowedFloatingArgsSize = allowedFloatingArgs.size();
+				if (next == null) {
+					if (!floatingArgs.isEmpty()) { // check if all floating args have been provided on the path taken
+						for (String arg : floatingArgs.keySet()) {
+							if (!allowedFloatingArgs.contains(arg)) {
+								continue queueLoop; // extra floating args
+							}
+						}
+					}
 
-			for (Node option : orNode) {
-				int newToken = processNode(option, token, last);
-
-				if (newToken >= 0) {
-					return newToken; // FIXME: later options need to be preserved for backtracking to them in case the current one fails later (for niche cases..)
-				} else {
-					trimList(capturedArgs, initialCapturedArgsSize);
-					trimList(allowedFloatingArgs, initialAllowedFloatingArgsSize);
+					return true;
 				}
-			}
 
-			matched = false;
-		} else if (token >= tokenCount) {
-			matched = false;
-		} else if (node instanceof PlainNode) {
-			PlainNode plainNode = (PlainNode) node;
+				nodeData = 0;
+				node = next;
+			} while (node != null);
+		}
 
-			if (plainNode.content.equals(getValue(token))) {
-				capturedArgs.add(null);
-				capturedArgs.add(plainNode.content);
+		return false;
+	}
 
-				token += TOKEN_STRIDE;
-				matched = true;
-			} else {
-				matched = false;
-			}
-		} else if (node instanceof VarNode) {
-			VarNode varNode = (VarNode) node;
-
-			capturedArgs.add(varNode.variable);
-			capturedArgs.add(getValue(token));
-
-			token += TOKEN_STRIDE;
-			matched = true;
+	private void queue(Node node, int nodeData, int token, int tokensAvailable) {
+		if (queuedNodes == null) {
+			queuedNodes = new Node[5 * QUEUE_NODE_STRIDE];
+			queuedData = new int[5 * QUEUE_DATA_STRIDE];
 		} else {
-			throw new IllegalStateException();
+			queuedNodes = Arrays.copyOf(queuedNodes, queuedNodes.length * 2);
+			queuedData = Arrays.copyOf(queuedData, queuedData.length * 2);
 		}
 
-		if (!matched && !node.isOptional() || last && token < tokenCount) {
-			return -1;
-		}
+		int nodeIdx = queueSize * QUEUE_NODE_STRIDE;
+		queuedNodes[nodeIdx++] = node;
 
-		if (last && !floatingArgs.isEmpty()) { // check if all floating args have been provided on the path taken
-			for (String arg : floatingArgs.keySet()) {
-				if (!allowedFloatingArgs.contains(arg)) {
-					return -1;
-				}
-			}
-		}
+		int dataIdx = queueSize * QUEUE_DATA_STRIDE;
+		queuedData[dataIdx++] = nodeData;
+		queuedData[dataIdx++] = token;
+		queuedData[dataIdx++] = tokensAvailable;
+		queuedData[dataIdx++] = capturedArgs.size();
+		queuedData[dataIdx++] = allowedFloatingArgs.size();
+		queueSize++;
 
-		return token;
+		assert nodeIdx == queueSize * QUEUE_NODE_STRIDE;
+		assert dataIdx == queueSize * QUEUE_DATA_STRIDE;
+	}
+
+	private Node deQueue() {
+		if (queueSize == 0) return null;
+
+		queueSize--;
+
+		int nodeIdx = queueSize * QUEUE_NODE_STRIDE;
+		Node ret = queuedNodes[nodeIdx];
+		queuedNodes[nodeIdx] = null;
+
+		int dataIdx = queueSize * QUEUE_DATA_STRIDE;
+		trimList(capturedArgs, queuedData[dataIdx + 3]);
+		trimList(allowedFloatingArgs, queuedData[dataIdx + 4]);
+
+		return ret;
+	}
+
+	private int getQueueNodeData() {
+		return queuedData[queueSize * QUEUE_DATA_STRIDE + 0];
+	}
+
+	private int getQueueToken() {
+		return queuedData[queueSize * QUEUE_DATA_STRIDE + 1];
+	}
+
+	private int getQueueTokensAvailable() {
+		return queuedData[queueSize * QUEUE_DATA_STRIDE + 2];
 	}
 
 	private static void trimList(List<?> list, int size) {
@@ -321,7 +375,7 @@ public final class CommandParser {
 	}
 
 	private String getValue(int token) {
-		assert token < tokenCount;
+		assert token < tokenIndex;
 
 		return getValue(tokens[token], tokens[token + 1]);
 	}
@@ -362,23 +416,21 @@ public final class CommandParser {
 		return buffer.toString();
 	}
 
-	private void ensureQueueSpace(int space) {
-		if (queue == null) {
-			queue = new int[Math.max(space, 30)];
-		} else if (queue.length - queueSize < space) {
-			queue = Arrays.copyOf(queue, Math.max(queue.length * 2, queue.length - queueSize + space));
-		}
-	}
+	private static final boolean DEBUG = false;
 
 	private static final int TOKEN_STRIDE = 2;
+	private static final int QUEUE_NODE_STRIDE = 1;
+	private static final int QUEUE_DATA_STRIDE = 5;
 
 	private CharSequence input;
 	private int[] tokens = new int[TOKEN_STRIDE * 20]; // [start,end[ position pairs
-	private int tokenCount = 0; // total token array entries (2 per actual token)
+	private int tokenIndex = 0; // total token array entries (2 per actual token)
 	private final Map<String, String> floatingArgs = new HashMap<>();
 	private final StringBuilder buffer = new StringBuilder();
 	private final List<String> capturedArgs = new ArrayList<>();
 	private final List<String> allowedFloatingArgs = new ArrayList<>();
-	private int[] queue;
+
+	private Node[] queuedNodes;
+	private int[] queuedData;
 	int queueSize = 0;
 }

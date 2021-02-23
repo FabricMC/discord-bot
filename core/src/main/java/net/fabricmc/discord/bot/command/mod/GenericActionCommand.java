@@ -39,9 +39,9 @@ public final class GenericActionCommand extends Command {
 	@Override
 	public String usage() {
 		if (type.hasDuration && activate) {
-			return "<user> <duration> <reason>";
+			return "<user> <duration> <reason...>";
 		} else {
-			return "<user> <reason>";
+			return "<user> <reason...>";
 		}
 	}
 

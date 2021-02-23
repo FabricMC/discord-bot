@@ -28,7 +28,6 @@ import java.util.Map;
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
-import net.fabricmc.discord.bot.database.query.UserQueries;
 
 public final class DbCommand extends Command {
 	@Override

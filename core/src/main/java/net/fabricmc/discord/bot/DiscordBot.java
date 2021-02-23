@@ -178,7 +178,7 @@ public final class DiscordBot {
 		UsageParser.Node node;
 
 		try {
-			node = usageParser.parse(command.usage(), false);
+			node = usageParser.parse(command.usage());
 		} catch (IllegalStateException e) {
 			LOGGER.error("Failed to register command {} due to invalid usage", command.name());
 			e.printStackTrace();

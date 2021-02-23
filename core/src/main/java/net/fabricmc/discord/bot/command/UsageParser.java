@@ -19,6 +19,7 @@ package net.fabricmc.discord.bot.command;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -40,15 +41,17 @@ import net.fabricmc.discord.bot.util.Collections2;
 public final class UsageParser {
 	public static void main(String[] args) throws IOException {
 		UsageParser parser = new UsageParser();
-		//Node node = parser.parse("(any|block|be|blockentity|entity) (class <class> | id <id>) [<dimId>] [--ticking] [--unloaded] [--countOnly | --chunkCounts] [--filter[=<x>]] [--clear]", false);
-		//Node node = parser.parse("(any|block|be|blockentity|entity) (class <class> | id <id>) [<dimId>] [--ticking] [--unloaded]", false);
-		//Node node = parser.parse("(any|block|be|blockentity|entity) (class <class> | id <id>) [<dimId>]", false);
-		Node node = parser.parse("[<dim-id>] [<limit>]", true);
-		//Node node = parser.parse("[<dim-id>] [<limit>] [--class]", false);
-		//Node node = parser.parse("[<dim-id>] [<limit>] [--class] [--asd]", false);
-		//Node node = parser.parse("<dim-id>", false);
-		System.out.printf("result: %s%n", node.toString());
-		GraphNode graph = toGraph(node, false, null);
+		//Node node = parser.parse("(any|block|be|blockentity|entity) (class <class> | id <id>) [<dimId>] [--ticking] [--unloaded] [--countOnly | --chunkCounts] [--filter[=<x>]] [--clear]");
+		//Node node = parser.parse("(any|block|be|blockentity|entity) (class <class> | id <id>) [<dimId>] [--ticking] [--unloaded]");
+		//Node node = parser.parse("(any|block|be|blockentity|entity) (class <class> | id <id>) [<dimId>]");
+		//Node node = parser.parse("[<dim-id>] [<limit>]");
+		//Node node = parser.parse("<test> [<dim-id>] [<limit>]");
+		//Node node = parser.parse("[<dim-id>] [<limit>] [--class]");
+		Node node = parser.parse("[<dim-id>] [<limit>] [--class] [--asd]");
+		//Node node = parser.parse("<dim-id>");
+		//Node node = parser.parse("<user> <msg...>");
+		System.out.printf("result: %s%n", node.toStringFull());
+		GraphNode graph = toGraph(node, true, null);
 		//System.out.println(graph);
 
 		Set<GraphNode> queued = Collections2.newIdentityHashSet();
@@ -60,7 +63,10 @@ public final class UsageParser {
 		queued.add(graph);
 		GraphNode gn;
 
-		try (PrintWriter pw = new PrintWriter(Files.newBufferedWriter(Paths.get("graph.gv")))) {
+		Path gvOut = Paths.get("graph.gv");
+		Path svgOut = Paths.get("graph.svg");
+
+		try (PrintWriter pw = new PrintWriter(Files.newBufferedWriter(gvOut))) {
 			pw.println("digraph G {");
 
 			while ((gn = toVisit.poll()) != null) {
@@ -80,6 +86,8 @@ public final class UsageParser {
 
 			pw.println("}");
 		}
+
+		Runtime.getRuntime().exec(new String[] { "dot", "-Tsvg", "-o"+svgOut.toString(), gvOut.toString() });
 	}
 
 	/**
@@ -101,19 +109,18 @@ public final class UsageParser {
 	 * (a b): a and b act as a common element in the surrounding context
 	 *     x: literal input "x" required
 	 * {@literal   <x>}: x is a variable capturing any input token
+	 * {@literal <x...>}: x is a multi-word variable capturing at least one input token
 	 *   --x: position independent flag x
 	 * --x=a: position independent flag x with mandatory value a (value may still be empty if a is e.g. (|b) or [b])
 	 * --x[=a]: position independent flag x, optinally with value a
 	 * </pre>
 	 *
 	 * @param usage usage string encoding the acceptable command parameters
-	 * @param fixPositionDependence whether to ensure that there can be only one optional position dependent parameter
-	 *        at a time by introducing the missing dependency between those parameters that removes ambiguity
 	 * @return root node representing the usage string's tree form
 	 */
-	public Node parse(String usage, boolean fixPositionDependence) {
+	public Node parse(String usage) {
 		this.input = usage;
-		this.tokenCount = 0;
+		this.tokenIndex = 0;
 
 		/* parse usage string into the following tokens:
 		 * - <..> where .. is anything
@@ -164,30 +171,34 @@ public final class UsageParser {
 
 		// turn tokens into a node tree
 
-		Node ret = toTree(0, tokenCount);
+		Node ret = toTree(0, tokenIndex);
 
-		if (fixPositionDependence) {
-			ret = fixPositionDependence(ret);
-		}
+		computeTokenCountBounds(ret);
+
+		this.input = null;
 
 		return ret;
 	}
 
 	private void addToken(int start, int end) {
-		if (tokenCount == tokens.length) tokens = Arrays.copyOf(tokens, tokens.length * TOKEN_STRIDE);
-		tokens[tokenCount++] = start;
-		tokens[tokenCount++] = end;
+		if (tokenIndex == tokens.length) tokens = Arrays.copyOf(tokens, tokens.length * TOKEN_STRIDE);
+		tokens[tokenIndex++] = start;
+		tokens[tokenIndex++] = end;
+
+		if (DEBUG) System.out.printf("new token: %s%n", input.subSequence(start, end));
 	}
 
 	private Node toTree(int startToken, int endToken) {
+		if (DEBUG) System.out.printf("toTree %d..%d: %s%n", startToken, endToken, input.subSequence(tokens[startToken], tokens[endToken - 1]));
+
 		if (startToken == endToken) {
 			return EmptyNode.INSTANCE;
 		}
 
 		OrNode orNode = null; // overall OrNode for this token range
-		Node cur = null; // node currently being assembled (excl. encompassing OrNode or OrNode siblings)
-		boolean isListNode = false; // whether cur was already wrapped in ListNode
-		boolean lastWasEmpty = false; // tracks whether the previous node was empty, thus not in the current list and not applicable for repeat (...)
+		Node head = null; // root node of the linked node list currently being assembled (excl. encompassing OrNode or OrNode siblings)
+		Node tail = null; // tail node of the linked node list currently being assembled
+		Node prevNode = null; // head node for the previous token (current context only, cut at OrNode boundaries)
 
 		for (int token = startToken; token < endToken; token += TOKEN_STRIDE) {
 			int startPos = tokens[token];
@@ -218,21 +229,26 @@ public final class UsageParser {
 
 				node = toTree(subStart, token);
 
-				if (c == '[') node.setOptional();
+				if (c == '[') { // optional node
+					if (node.hasNext()) { // more than a single node, use group node to flag the entire set of nodes
+						node = new GroupNode(node);
+					}
+
+					node.setOptional();
+				}
 			} else if (c == '|') { // alternative options: ..|..
 				if (orNode == null) orNode = new OrNode();
 
-				if (cur instanceof OrNode) {
-					for (Node n : ((OrNode) cur)) {
+				if (head instanceof OrNode) { // optimize (a|b)|c to a|b|c
+					for (Node n : ((OrNode) head)) {
 						orNode.add(n);
 					}
 				} else {
-					orNode.add(cur);
+					orNode.add(head);
 				}
 
 				// reset cur
-				cur = null;
-				isListNode = false;
+				head = tail = prevNode = null;
 				continue;
 			} else if (c == '-' && tokens[token + 1] > startPos + 2 && input.charAt(startPos + 1) == '-') { // --key or --key=value or --key[=value] pos-independent arg
 				String key = input.subSequence(startPos + 2, tokens[token + 1]).toString();
@@ -242,11 +258,11 @@ public final class UsageParser {
 
 				if (separatorToken < endToken
 						&& ((next = input.charAt(tokens[separatorToken])) == '='
-						|| next == '[' && separatorToken + TOKEN_STRIDE < endToken && input.charAt(tokens[separatorToken + TOKEN_STRIDE]) == '=')) { // next token is = -> --key=value
+						|| next == '[' && separatorToken + TOKEN_STRIDE < endToken && input.charAt(tokens[separatorToken + TOKEN_STRIDE]) == '=')) { // next is = or [= -> --key=value
 					int valueToken = separatorToken + TOKEN_STRIDE;
 					int lastToken = valueToken;
 
-					if (next == '[') {
+					if (next == '[') { // --key[=value] optional value
 						valueToken += TOKEN_STRIDE;
 						lastToken = valueToken + TOKEN_STRIDE;
 
@@ -265,136 +281,154 @@ public final class UsageParser {
 
 				node = new FloatingArgNode(key, value);
 			} else if (c == '.' && tokens[token + 1] == startPos + 3) { // repeat: x...
-				if (cur == null) throw new IllegalArgumentException("standalone ...");
+				if (prevNode == null) throw new IllegalArgumentException("standalone ...");
 
-				if (!lastWasEmpty) {
-					if (isListNode) {
-						ListNode prev = (ListNode) cur;
-						prev.get(prev.size() - 1).setRepeat();
-					} else {
-						cur.setRepeat();
+				if (!(prevNode instanceof EmptyNode)) { // not ()... and similar
+					if (prevNode.hasNext()) { // more than a single node, use group node to repeat the entire set of nodes
+						node = new GroupNode(prevNode);
+
+						// replace prevNode reference with node in the linked list starting at head
+						if (head == prevNode) { // replace list root
+							head = node;
+						} else { // replace list node
+							head.replaceNext(prevNode, node);
+						}
+
+						prevNode = node;
 					}
+
+					prevNode.setRepeat();
 				}
 
 				continue;
 			} else if (c == '<') { // variable <x>
-				node = new VarNode(input.subSequence(startPos + 1, tokens[token + 1] - 1).toString());
+				int endPos = tokens[token + 1];
+				boolean multiWord;
+
+				if (endPos - startPos > 5 && input.charAt(endPos - 4) == '.' && input.charAt(endPos - 3) == '.' && input.charAt(endPos - 2) == '.') { // multi word: <x...>
+					multiWord = true;
+					endPos -= 3; // strip trailing ... from the variable name
+				} else {
+					multiWord = false;
+				}
+
+				node = new VarNode(input.subSequence(startPos + 1, endPos - 1).toString(), multiWord);
 			} else { // plain string
 				node = new PlainNode(input.subSequence(startPos, tokens[token + 1]).toString());
 			}
 
-			lastWasEmpty = node instanceof EmptyNode;
-
-			if (cur == null || cur instanceof EmptyNode) {
-				cur = node;
-			} else if (!lastWasEmpty) { // 2+ consecutive nodes not separated by |, use ListNode
-				if (!isListNode) {
-					cur = new ListNode(cur);
-					isListNode = true;
-				}
-
-				((ListNode) cur).add(node);
+			if (head == null || head instanceof EmptyNode) {
+				head = node;
+				tail = node.getTail();
+			} else if (!(node instanceof EmptyNode)) { // 2+ consecutive nodes not separated by |, use ListNode
+				tail.setNext(node);
+				tail = node.getTail();
 			}
+
+			prevNode = node;
 		}
 
 		if (orNode != null) {
 			// add last node before end
-			orNode.add(cur);
+			orNode.add(head);
 
 			return orNode.simplify();
 		} else {
-			return cur;
+			return head;
 		}
 	}
 
-	private Node fixPositionDependence(Node node) {
-		if (node instanceof ListNode) {
-			// transform a list with multiple optional position dependent entries such that it will have only one position dependent entry
-			// e.g. [a] [b] [c]  ->  [a], a [b], a b [c]  <-  [a [b [c]]]
-			// or    a  [b] [c]  ->  a [b], a b [c]       <-   a [b [c]]
-			// or   a [b] [c] d  ->  a [b] d, a b [c] d   <-   a [b [c]] d
-
-			ListNode list = (ListNode) node;
-			OrNode orNode = null;
-			int lastOptional = -1;
-
-			for (int i = 0; i < list.size(); i++) {
-				Node element = list.get(i);
-
-				if (!element.isOptional() || !element.isPositionDependent()) {
-					continue;
-				}
-
-				if (lastOptional >= 0) {
-					if (orNode == null) {
-						orNode = new OrNode();
-
-						// set first option to list[0..firstOptional+1] + filterOpt(list[firstOptional+1..])
-
-						if (lastOptional > 0 || list.size() > lastOptional + 1 + 1) { // new list may have more than 1 element (2+ leading or 1+ trailing elements)
-							ListNode newList = new ListNode(list.size() - 1);
-							copyList(list, 0, lastOptional + 1, newList);
-							copyListNonOptional(list, lastOptional + 1, newList);
-
-							if (newList.size() > 1) {
-								orNode.add(newList);
-							} else {
-								orNode.add(newList.get(0));
-							}
-						} else {
-							orNode.add(list.get(0));
-						}
-					}
-
-					ListNode newList = new ListNode(list.size());
-
-					if (lastOptional > 0) {
-						ListNode prevList = (ListNode) orNode.get(orNode.size() - 1); // previously produced list has already at most 1 optional position dependent element at lastOptional
-						copyList(prevList, 0, lastOptional, newList);
-					}
-
-					Node opt = list.get(lastOptional).copy();
-					opt.clearOptional();
-					newList.add(opt);
-
-					copyList(list, lastOptional + 1, i + 1, newList);
-					copyListNonOptional(list, i + 1, newList);
-					orNode.add(newList);
-				}
-
-				lastOptional = i;
-			}
-
-			return orNode != null ? orNode : node;
-		} else if (node instanceof OrNode) {
-			for (ListIterator<Node> it = ((OrNode) node).options.listIterator(); it.hasNext(); ) {
-				Node option = it.next();
-				it.set(fixPositionDependence(option));
-			}
-
-			return node;
+	private void computeTokenCountBounds(Node node) {
+		if (!node.hasNext()) {
+			node.minTokensNext = 0;
 		} else {
-			return node;
+			Node next = node.getNext();
+			computeTokenCountBounds(next);
+			node.minTokensNext = next.minTokens + next.minTokensNext;
+			node.maxTokensNext = addSat(next.maxTokens, next.maxTokensNext);
 		}
-	}
 
-	private static void copyList(ListNode src, int start, int end, ListNode dst) {
-		for (int i = start; i < end; i++) {
-			dst.add(src.get(i));
-		}
-	}
+		if (node instanceof PlainNode) {
+			node.minTokens = node.isOptional() ? 0 : 1;
+			node.maxTokens = node.isRepeat() ? Integer.MAX_VALUE : 1;
+		} else if (node instanceof VarNode) {
+			VarNode n = (VarNode) node;
 
-	private static void copyListNonOptional(ListNode src, int start, ListNode dst) {
-		for (int i = start; i < src.size(); i++) {
-			Node element = src.get(i);
+			node.minTokens = node.isOptional() ? 0 : 1;
+			node.maxTokens = node.isRepeat() || n.multiWord ? Integer.MAX_VALUE : 1;
+		} else if (node instanceof FloatingArgNode) {
+			node.minTokens = node.maxTokens;
+		} else if (node instanceof GroupNode) {
+			GroupNode group = (GroupNode) node;
+			Node child = group.child;
+			computeTokenCountBounds(child);
+			node.minTokens = node.isOptional() ? 0 : child.minTokens + child.minTokensNext;
+			node.maxTokens = node.isRepeat() ? Integer.MAX_VALUE : addSat(child.maxTokens, child.maxTokensNext);
+		} else if (node instanceof OrNode) {
+			OrNode orNode = (OrNode) node;
+			assert orNode.size() > 0;
+			int min = node.isOptional() ? 0 : Integer.MAX_VALUE;
+			int max = node.isRepeat() ? Integer.MAX_VALUE : 0;
 
-			if (!element.isOptional() || !element.isPositionDependent()) {
-				dst.add(element);
+			for (Node n : orNode) {
+				computeTokenCountBounds(n);
+				min = Math.min(min, n.minTokens + n.minTokensNext);
+				max = Math.max(max, addSat(n.maxTokens, n.maxTokensNext));
 			}
+
+			node.minTokens = min;
+			node.maxTokens = max;
+		} else {
+			throw new IllegalStateException();
+		}
+	}
+
+	private static int addSat(int a, int b) {
+		if (a == Integer.MAX_VALUE || b == Integer.MAX_VALUE) {
+			return Integer.MAX_VALUE;
+		} else {
+			return a + b;
 		}
 	}
 
 	public static abstract class Node {
+		public final Node getParent() {
+			return parent;
+		}
+
+		public final boolean hasNext() {
+			return next != null;
+		}
+
+		public final Node getNext() {
+			return next;
+		}
+
+		final void setNext(Node next) {
+			this.next = next;
+		}
+
+		final void replaceNext(Node oldNext, Node newNext) {
+			Node parent = this;
+
+			while (parent.next != oldNext) {
+				parent = parent.next;
+				if (parent == null) throw new IllegalArgumentException();
+			}
+
+			parent.next = newNext;
+		}
+
+		public final Node getTail() {
+			Node ret = this;
+
+			while (ret.next != null) {
+				ret = ret.next;
+			}
+
+			return ret;
+		}
+
 		public final boolean isOptional() {
 			return optional;
 		}
@@ -415,13 +449,28 @@ public final class UsageParser {
 			this.repeat = true;
 		}
 
-		protected abstract Node copy();
+		public final int getMinTokens() {
+			return minTokens;
+		}
 
-		protected <T extends Node> T copyFlags(T node) {
-			if (optional) node.setOptional();
-			if (repeat) node.setRepeat();
+		public final int getMaxTokens() {
+			return maxTokens;
+		}
 
-			return node;
+		public final int getMinTokensNext() {
+			return minTokensNext;
+		}
+
+		public final int getMaxTokensNext() {
+			return maxTokensNext;
+		}
+
+		public final int getMinTokensTotal() {
+			return minTokens + minTokensNext;
+		}
+
+		public final int getMaxTokensTotal() {
+			return addSat(maxTokens, maxTokensNext);
 		}
 
 		abstract boolean isPositionDependent();
@@ -432,18 +481,54 @@ public final class UsageParser {
 			String s = toString0();
 
 			if (repeat) {
-				return s.concat("...");
+				s = s.concat("...");
 			} else if (optional && !ignoreOptional) {
-				return String.format("[%s]", s);
-			} else {
-				return s;
+				s = String.format("[%s]", s);
 			}
+
+			return s;
+			/*return s.concat(String.format("[%d-%s+%d-%s]",
+					minTokens,
+					(maxTokens == Integer.MAX_VALUE ? "inf" : Integer.toString(maxTokens)),
+					minTokensNext,
+					(maxTokensNext == Integer.MAX_VALUE ? "inf" : Integer.toString(maxTokensNext))));*/
 		}
 
 		@Override
 		public final String toString() {
 			return toString(false);
 		}
+
+		public final String toStringFull() {
+			return toStringFull(null);
+		}
+
+		protected final String toStringFull(Node end) {
+			String s = toString(false);
+
+			if (next == null) {
+				return s;
+			} else {
+				StringBuilder sb = new StringBuilder();
+				sb.append('{');
+				sb.append(s);
+
+				Node n = next;
+
+				while (n != null && n != end) {
+					sb.append(',');
+					sb.append(n.toString(false));
+					n = n.next;
+				}
+
+				sb.append('}');
+
+				return sb.toString();
+			}
+		}
+
+		protected Node parent;
+		private Node next;
 
 		/**
 		 * Whether this node may be omitted.
@@ -453,6 +538,11 @@ public final class UsageParser {
 		 * Whether this node may be repeatedly specified.
 		 */
 		private boolean repeat;
+
+		int minTokens;
+		int maxTokens;
+		int minTokensNext;
+		int maxTokensNext;
 	}
 
 	/**
@@ -461,11 +551,6 @@ public final class UsageParser {
 	public static final class PlainNode extends Node {
 		PlainNode(String content) {
 			this.content = content;
-		}
-
-		@Override
-		protected PlainNode copy() {
-			return copyFlags(new PlainNode(content));
 		}
 
 		@Override
@@ -485,13 +570,9 @@ public final class UsageParser {
 	 * Variable representing user input.
 	 */
 	public static final class VarNode extends Node {
-		VarNode(String variable) {
+		VarNode(String variable, boolean multiWord) {
 			this.variable = variable;
-		}
-
-		@Override
-		protected VarNode copy() {
-			return copyFlags(new VarNode(variable));
+			this.multiWord = multiWord;
 		}
 
 		@Override
@@ -501,10 +582,11 @@ public final class UsageParser {
 
 		@Override
 		protected String toString0() {
-			return String.format("<%s>", variable);
+			return String.format("<%s%s>", variable, multiWord ? "..." : "");
 		}
 
 		public final String variable;
+		public final boolean multiWord;
 	}
 
 	/**
@@ -514,11 +596,6 @@ public final class UsageParser {
 		FloatingArgNode(String key, Node value) {
 			this.key = key;
 			this.value = value;
-		}
-
-		@Override
-		protected FloatingArgNode copy() {
-			return copyFlags(new FloatingArgNode(key, value));
 		}
 
 		@Override
@@ -542,71 +619,42 @@ public final class UsageParser {
 	}
 
 	/**
-	 * List tree node with consecutive children (unless floating).
+	 * Group node to associate a linked list of nodes with optional/repeat flags in its entirety only.
 	 */
-	public static final class ListNode extends Node implements Iterable<Node> {
-		ListNode(Node element) {
-			elements = new ArrayList<>();
-			elements.add(element);
+	public static final class GroupNode extends Node {
+		GroupNode(Node child) {
+			this.child = child;
+			child.getTail().parent = this;
+
 			setOptional();
-		}
 
-		ListNode(int size) {
-			elements = new ArrayList<>(size);
-			setOptional();
-		}
+			Node n = child;
 
-		@Override
-		protected ListNode copy() {
-			ListNode ret = new ListNode(elements.size());
-			ret.elements.addAll(elements);
-
-			return copyFlags(ret);
+			do {
+				if (!n.optional) {
+					clearOptional();
+					break;
+				}
+			} while ((n = n.next) != null);
 		}
 
 		@Override
 		boolean isPositionDependent() {
-			for (Node element : elements) {
-				if (element.isPositionDependent()) return true;
-			}
+			Node n = child;
+
+			do {
+				if (n.isPositionDependent()) return true;
+			} while ((n = n.next) != null && n != getNext());
 
 			return false;
 		}
 
-		public int size() {
-			return elements.size();
-		}
-
-		public Node get(int index) {
-			return elements.get(index);
-		}
-
-		@Override
-		public Iterator<Node> iterator() {
-			return elements.iterator();
-		}
-
-		void add(Node node) {
-			elements.add(node);
-			if (!node.isOptional()) clearOptional();
-		}
-
 		@Override
 		protected String toString0() {
-			StringBuilder ret = new StringBuilder();
-			ret.append('{');
-
-			for (int i = 0; i < elements.size(); i++) {
-				if (i != 0) ret.append(',');
-				ret.append(elements.get(i).toString());
-			}
-
-			ret.append('}');
-
-			return ret.toString();
+			return String.format("{%s}", child.toString());
 		}
 
-		private final List<Node> elements;
+		public final Node child;
 	}
 
 	/**
@@ -619,14 +667,6 @@ public final class UsageParser {
 
 		OrNode(int size) {
 			options = new ArrayList<>(size);
-		}
-
-		@Override
-		protected OrNode copy() {
-			OrNode ret = new OrNode(options.size());
-			ret.options.addAll(options);
-
-			return copyFlags(ret);
 		}
 
 		@Override
@@ -652,6 +692,8 @@ public final class UsageParser {
 		}
 
 		void add(Node node) {
+			node.getTail().parent = this;
+
 			if (node == null || node instanceof EmptyNode) { // leading empty: (|x) or trailing empty: (x|)
 				setOptional();
 			} else { // regular: (x|y)
@@ -677,14 +719,14 @@ public final class UsageParser {
 		@Override
 		protected String toString0() {
 			StringBuilder ret = new StringBuilder();
-			ret.append('{');
+			ret.append('(');
 
 			for (int i = 0; i < options.size(); i++) {
 				if (i != 0) ret.append('|');
 				ret.append(options.get(i).toString());
 			}
 
-			ret.append('}');
+			ret.append(')');
 
 			return ret.toString();
 		}
@@ -696,9 +738,8 @@ public final class UsageParser {
 	 * Synthetic node representing no input.
 	 */
 	public static final class EmptyNode extends Node {
-		@Override
-		protected EmptyNode copy() {
-			return this;
+		protected EmptyNode() {
+			super();
 		}
 
 		@Override
@@ -745,7 +786,8 @@ public final class UsageParser {
 		Map<GraphNode, List<Node>> floatingNodeMap = new IdentityHashMap<>();
 		Queue<GraphNode> queue = new ArrayDeque<>();
 		Set<GraphNode> queued = Collections2.newIdentityHashSet();
-		GraphNode result = toGraph0(rootNode, false, queue, queued, floatingNodeMap);
+		GraphNode result = toGraph0(rootNode, false, false, queue, queued, floatingNodeMap);
+		if (DEBUG) System.out.println("floating: "+floatingNodeMap);
 
 		// process floating nodes (--x[=y] style arguments, potentially embedded in OrNode/ListNode)
 
@@ -782,7 +824,7 @@ public final class UsageParser {
 						GraphNode insert = targetedGraphNodes.get(next);
 
 						if (insert == null) {
-							insert = toGraph0(targetNode, true, queue, queued, null);
+							insert = toGraph0(targetNode, true, true, queue, queued, null);
 							insert.setTail(next.deepCopy(copies), false, queue, queued);
 							targetedGraphNodes.put(next, insert);
 						}
@@ -865,6 +907,8 @@ public final class UsageParser {
 			}
 		}
 
+		if (DEBUG) System.out.printf("%d nodes", queued.size());
+
 		return result;
 	}
 
@@ -908,72 +952,71 @@ public final class UsageParser {
 		tmpSet.clear();
 	}
 
-	private static GraphNode toGraph0(Node node, boolean ignoreOptional, Queue<GraphNode> tmpQueue, Set<GraphNode> tmpSet, Map<GraphNode, List<Node>> floatingNodeMap) {
-		GraphNode ret;
+	private static GraphNode toGraph0(Node node, boolean ignoreNext, boolean ignoreOptional, Queue<GraphNode> tmpQueue, Set<GraphNode> tmpSet, Map<GraphNode, List<Node>> floatingNodeMap) {
+		GraphNode ret = null;
+		GraphNode prev = null;
 
-		if (node instanceof ListNode) {
-			ret = null;
-			GraphNode prev = null;
-
-			for (Node element : ((ListNode) node).elements) {
-				if (floatingNodeMap != null && !element.isPositionDependent()) {
-					if (prev == null) {
-						ret = prev = new GraphNode(null);
-					}
-
-					floatingNodeMap.computeIfAbsent(prev, ignore -> new ArrayList<>()).add(element);
-
-					continue;
-				}
-
-				GraphNode gn = toGraph0(element, ignoreOptional || prev != null, tmpQueue, tmpSet, floatingNodeMap);
-
+		do {
+			if (floatingNodeMap != null && !node.isPositionDependent()) {
 				if (prev == null) {
-					ret = prev = gn;
+					ret = prev = new GraphNode(null);
+				}
+
+				floatingNodeMap.computeIfAbsent(prev, ignore -> new ArrayList<>()).add(node);
+
+				continue;
+			}
+
+			boolean optional = node.isOptional();
+			GraphNode gn;
+
+			if (node instanceof OrNode) {
+				OrNode orNode = (OrNode) node;
+				List<GraphNode> tails = new ArrayList<>(orNode.options.size());
+
+				for (Node option : orNode.options) {
+					tails.add(toGraph0(option, false, optional, tmpQueue, tmpSet, floatingNodeMap));
+				}
+
+				gn = new GraphNode(null);
+				gn.setTails(tails, false, tmpQueue, tmpSet);
+			} else if (node instanceof GroupNode) {
+				gn = toGraph0(((GroupNode) node).child, false, node.isOptional(), tmpQueue, tmpSet, floatingNodeMap);
+			} else {
+				gn = new GraphNode(node);
+			}
+
+			if (node.isRepeat()) {
+				gn.setTail(gn, true, tmpQueue, tmpSet);
+			}
+
+			if (prev == null) {
+				if (optional) {
+					ret = prev = new GraphNode(null);
+					prev.next.add(gn);
 				} else {
-					boolean optional = element.isOptional();
-
-					if (!gn.hasNode()) { // quickly inline phi node
-						if (prev.next.contains(END_NODE)) {
-							gn.next.remove(END_NODE);
-						}
-
-						prev.setTails(gn.next, optional, tmpQueue, tmpSet);
-					} else {
-						prev.setTail(gn, optional, tmpQueue, tmpSet);
+					ret = prev = gn;
+				}
+			} else {
+				if (!gn.hasNode()) { // quickly inline phi node
+					if (prev.next.contains(END_NODE)) {
+						gn.next.remove(END_NODE);
 					}
 
-					if (!optional) {
-						prev = gn;
-					}
+					prev.setTails(gn.next, optional, tmpQueue, tmpSet);
+				} else {
+					prev.setTail(gn, optional, tmpQueue, tmpSet);
+				}
+
+				if (!optional) {
+					prev = gn;
 				}
 			}
-		} else if (node instanceof OrNode) {
-			OrNode orNode = (OrNode) node;
-			List<GraphNode> tails = new ArrayList<>(orNode.options.size());
+		} while (!ignoreNext && (node = node.getNext()) != null);
 
-			for (Node option : orNode.options) {
-				tails.add(toGraph0(option, ignoreOptional || orNode.isOptional(), tmpQueue, tmpSet, floatingNodeMap));
-			}
-
-			ret = new GraphNode(null);
-			ret.setTails(tails, false, tmpQueue, tmpSet);
-		} else {
-			ret = new GraphNode(node);
-		}
-
-		if (node.isRepeat()) {
-			ret.setTail(ret, true, tmpQueue, tmpSet);
-		}
-
-		if (!ignoreOptional && node.isOptional()) {
-			if (ret.hasNode()) {
-				GraphNode newRet = new GraphNode(null);
-				newRet.next.add(ret);
-				ret = newRet;
-			} else if (!ret.next.contains(END_NODE)) {
-				ret.next.add(END_NODE);
-			}
+		if (ignoreOptional) {
+			ret.next.remove(END_NODE);
+			assert !ret.next.contains(END_NODE);
 		}
 
 		return ret;
@@ -985,15 +1028,15 @@ public final class UsageParser {
 			if (END_NODE != null) this.next.add(END_NODE);
 		}
 
-		GraphNode deepCopy(Map<GraphNode, GraphNode> copies) {
+		GraphNode deepCopy(Map<GraphNode, GraphNode> reusableCopies) {
 			if (this == END_NODE) return this;
 			assert hasNode();
 
-			GraphNode ret = copies.get(this);
+			GraphNode ret = reusableCopies.get(this);
 			if (ret != null) return ret;
 
 			ret = new GraphNode(node);
-			copies.put(this, ret);
+			reusableCopies.put(this, ret);
 			ret.next.clear();
 
 			Queue<GraphNode> queue = null;
@@ -1002,12 +1045,12 @@ public final class UsageParser {
 				if (n == END_NODE) {
 					ret.next.add(n);
 				} else if (n.hasNode()) {
-					ret.next.add(n.deepCopy(copies));
+					ret.next.add(n.deepCopy(reusableCopies));
 				} else {
 					for (GraphNode nsub : n.next) {
 						if (nsub.hasNode() || nsub == END_NODE) {
 							if (!next.contains(nsub)) {
-								ret.next.add(nsub.deepCopy(copies));
+								ret.next.add(nsub.deepCopy(reusableCopies));
 							}
 						} else {
 							if (queue == null) queue = new ArrayDeque<>();
@@ -1025,7 +1068,7 @@ public final class UsageParser {
 					for (GraphNode nsub : node.next) {
 						if (nsub.hasNode() || nsub == END_NODE) {
 							if (!next.contains(nsub)) {
-								ret.next.add(nsub.deepCopy(copies));
+								ret.next.add(nsub.deepCopy(reusableCopies));
 							}
 						} else {
 							queue.add(nsub);
@@ -1096,6 +1139,8 @@ public final class UsageParser {
 		public final List<GraphNode> next = new ArrayList<>();
 	}
 
+	private static final boolean DEBUG = false;
+
 	public static final GraphNode END_NODE = new GraphNode(null);
 	public static final Node FLAGS_NODE = new PlainNode("flags"); // special node type for graph nodes that may consume any number of flags (--x[=y])
 
@@ -1103,5 +1148,5 @@ public final class UsageParser {
 
 	private CharSequence input;
 	private int[] tokens = new int[TOKEN_STRIDE * 20]; // [start,end[ position pairs
-	private int tokenCount = 0; // total token array entries (2 per actual token)
+	private int tokenIndex = 0; // total token array entries (2 per actual token)
 }
