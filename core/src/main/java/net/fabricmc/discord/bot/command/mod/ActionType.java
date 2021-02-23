@@ -65,6 +65,10 @@ public enum ActionType {
 
 			return target != null && ActionUtil.isUserMuted(server, target, bot);
 		}
+	},
+	WARN("warn", false, "warned") {
+		@Override
+		public void activate(Server server, User target, String reason, DiscordBot bot) { }
 	};
 
 	private static final boolean NOP_MODE = true; // no-op mode for testing
