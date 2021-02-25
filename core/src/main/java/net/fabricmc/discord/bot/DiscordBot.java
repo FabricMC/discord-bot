@@ -54,6 +54,7 @@ import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
+import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.command.CommandParser;
 import net.fabricmc.discord.bot.command.UsageParser;
 import net.fabricmc.discord.bot.command.mod.ActionUtil;
@@ -377,36 +378,45 @@ public final class DiscordBot {
 
 		final String content = context.content();
 
-		if (content.startsWith(this.getCommandPrefix())) {
-			final int i = content.indexOf(" ");
-			String name;
-			String rawArguments;
+		if (!content.startsWith(this.getCommandPrefix())) {
+			return;
+		}
 
-			if (i == -1) {
-				name = content.substring(1);
-				rawArguments = "";
-			} else {
-				name = content.substring(1, i);
-				rawArguments = content.substring(i + 1);
-			}
+		final int i = content.indexOf(" ");
+		String name;
+		String rawArguments;
 
-			final CommandRecord commandRecord = this.commands.get(name);
+		if (i == -1) {
+			name = content.substring(1);
+			rawArguments = "";
+		} else {
+			name = content.substring(1, i);
+			rawArguments = content.substring(i + 1);
+		}
 
-			if (commandRecord == null
-					|| !checkAccess(context.author(), commandRecord.command())) {
-				context.channel().sendMessage("%s: Unknown command".formatted(Mentions.createUserMention(context.author())));
-				return;
-			}
+		final CommandRecord commandRecord = this.commands.get(name);
 
-			final CommandParser parser = new CommandParser();
-			final Map<String, String> arguments = new LinkedHashMap<>();
+		if (commandRecord == null
+				|| !checkAccess(context.author(), commandRecord.command())) {
+			context.channel().sendMessage("%s: Unknown command".formatted(Mentions.createUserMention(context.author())));
+			return;
+		}
 
-			if (!parser.parse(rawArguments, commandRecord.node(), arguments)) {
-				context.channel().sendMessage("%s: Invalid command syntax".formatted(Mentions.createUserMention(context.author())));
-				return;
-			}
+		final CommandParser parser = new CommandParser();
+		final Map<String, String> arguments = new LinkedHashMap<>();
 
+		if (!parser.parse(rawArguments, commandRecord.node(), arguments)) {
+			context.channel().sendMessage("%s: Invalid command syntax".formatted(Mentions.createUserMention(context.author())));
+			return;
+		}
+
+		try {
 			commandRecord.command().run(context, arguments);
+		} catch (CommandException e) {
+			context.channel().sendMessage(e.getMessage());
+		} catch (Throwable t) {
+			LOGGER.warn("Error executing command "+content, t);
+			context.channel().sendMessage("Error executing command: "+t);
 		}
 	}
 

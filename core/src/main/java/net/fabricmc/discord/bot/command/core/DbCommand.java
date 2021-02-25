@@ -19,7 +19,6 @@ package net.fabricmc.discord.bot.command.core;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,7 +45,7 @@ public final class DbCommand extends Command {
 	}
 
 	@Override
-	public boolean run(CommandContext context, Map<String, String> arguments) {
+	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
 		List<String> values = new ArrayList<>();
 		int cols;
 
@@ -67,9 +66,6 @@ public final class DbCommand extends Command {
 					}
 				}
 			}
-		} catch (SQLException e) {
-			context.channel().sendMessage("Query failed:\n`%s`".formatted(e));
-			return false;
 		}
 
 		int rows = values.size() / cols;

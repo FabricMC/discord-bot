@@ -16,12 +16,12 @@
 
 package net.fabricmc.discord.bot.command.core;
 
-import java.sql.SQLException;
 import java.util.Map;
 
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
+import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.database.query.UserQueries;
 
 public final class PermissionCommand extends Command {
@@ -41,34 +41,27 @@ public final class PermissionCommand extends Command {
 	}
 
 	@Override
-	public boolean run(CommandContext context, Map<String, String> arguments) {
-		try {
-			switch (arguments.get("unnamed_0")) {
-			case "list":
-				context.channel().sendMessage("Entries: "+String.join(", ", UserQueries.getDirectGroupPermissions(context.bot().getDatabase(), arguments.get("group"))));
-				return true;
-			case "add":
-				if (UserQueries.addGroupPermission(context.bot().getDatabase(), arguments.get("group"), arguments.get("permission"))) {
-					context.channel().sendMessage("Entry added");
-					return true;
-				} else {
-					context.channel().sendMessage("The entry already exists");
-					return false;
-				}
-			case "remove":
-				if (UserQueries.removeGroupPermission(context.bot().getDatabase(), arguments.get("group"), arguments.get("permission"))) {
-					context.channel().sendMessage("Entry removed");
-					return true;
-				} else {
-					context.channel().sendMessage("No such entry");
-					return false;
-				}
-			default:
-				throw new IllegalStateException();
+	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
+		switch (arguments.get("unnamed_0")) {
+		case "list":
+			context.channel().sendMessage("Entries: "+String.join(", ", UserQueries.getDirectGroupPermissions(context.bot().getDatabase(), arguments.get("group"))));
+			return true;
+		case "add":
+			if (!UserQueries.addGroupPermission(context.bot().getDatabase(), arguments.get("group"), arguments.get("permission"))) {
+				throw new CommandException("The entry already exists");
 			}
-		} catch (SQLException e) {
-			context.channel().sendMessage("Query failed:\n`%s`".formatted(e));
-			return false;
+
+			context.channel().sendMessage("Entry added");
+			return true;
+		case "remove":
+			if (!UserQueries.removeGroupPermission(context.bot().getDatabase(), arguments.get("group"), arguments.get("permission"))) {
+				throw new CommandException("No such entry");
+			}
+
+			context.channel().sendMessage("Entry removed");
+			return true;
+		default:
+			throw new IllegalStateException();
 		}
 	}
 }

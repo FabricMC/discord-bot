@@ -51,17 +51,19 @@ public final class GenericActionCommand extends Command {
 	}
 
 	@Override
-	public boolean run(CommandContext context, Map<String, String> arguments) {
+	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
 		String target = arguments.get("user");
 		String reason = arguments.get("reason");
 
 		if (activate) {
 			String duration = type.hasDuration ? arguments.get("duration") : null;
 
-			return ActionUtil.applyAction(type, target, duration, reason, 0, context);
+			ActionUtil.applyAction(type, target, duration, reason, 0, context);
 		} else {
-			return ActionUtil.suspendAction(type, target, reason, context);
+			ActionUtil.suspendAction(type, target, reason, context);
 		}
+
+		return true;
 	}
 
 	private final ActionType type;

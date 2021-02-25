@@ -16,12 +16,12 @@
 
 package net.fabricmc.discord.bot.command.core;
 
-import java.sql.SQLException;
 import java.util.Map;
 
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
+import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.database.query.UserQueries;
 
 public final class GroupCommand extends Command {
@@ -41,84 +41,68 @@ public final class GroupCommand extends Command {
 	}
 
 	@Override
-	public boolean run(CommandContext context, Map<String, String> arguments) {
-		try {
-			if (arguments.containsKey("user")) { // user-group assignment interaction
-				int userId = context.bot().getUserHandler().getUserId(arguments.get("user"), context.server(), true);
+	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
+		if (arguments.containsKey("user")) { // user-group assignment interaction
+			int userId = getUserId(context, arguments.get("user"));
 
-				if (userId < 0) {
-					context.channel().sendMessage("Unknown or ambiguous user");
-					return false;
+			switch (arguments.get("unnamed_0")) {
+			case "list":
+				context.channel().sendMessage("Groups: "+String.join(", ", UserQueries.getDirectGroups(context.bot().getDatabase(), userId)));
+				return true;
+			case "add":
+				if (!UserQueries.addToGroup(context.bot().getDatabase(), userId, arguments.get("group"))) {
+					throw new CommandException("The user is already in the group");
 				}
 
-				switch (arguments.get("unnamed_0")) {
-				case "list":
-					context.channel().sendMessage("Groups: "+String.join(", ", UserQueries.getDirectGroups(context.bot().getDatabase(), userId)));
-					return true;
-				case "add":
-					if (UserQueries.addToGroup(context.bot().getDatabase(), userId, arguments.get("group"))) {
-						context.channel().sendMessage("User added to group");
-						return true;
-					} else {
-						context.channel().sendMessage("The user is already in the group");
-						return false;
-					}
-				case "remove":
-					if (UserQueries.removeFromGroup(context.bot().getDatabase(), userId, arguments.get("group"))) {
-						context.channel().sendMessage("User removed from group");
-						return true;
-					} else {
-						context.channel().sendMessage("The user wasn't in the group");
-						return false;
-					}
+				context.channel().sendMessage("User added to group");
+				return true;
+			case "remove":
+				if (!UserQueries.removeFromGroup(context.bot().getDatabase(), userId, arguments.get("group"))) {
+					throw new CommandException("The user wasn't in the group");
 				}
-			} else { // group handling itself
-				switch (arguments.get("unnamed_0")) {
-				case "list":
-					context.channel().sendMessage("Groups: "+String.join(", ", UserQueries.getGroups(context.bot().getDatabase())));
-					return true;
-				case "add":
-					if (UserQueries.addGroup(context.bot().getDatabase(), arguments.get("group"))) {
-						context.channel().sendMessage("Group added");
-						return true;
-					} else {
-						context.channel().sendMessage("The group already exists");
-						return false;
-					}
-				case "remove":
-					if (UserQueries.removeGroup(context.bot().getDatabase(), arguments.get("group"))) {
-						context.channel().sendMessage("Group removed");
-						return true;
-					} else {
-						context.channel().sendMessage("No such group");
-						return false;
-					}
-				case "listsub":
-					context.channel().sendMessage(String.join(", ", UserQueries.getGroupChildren(context.bot().getDatabase(), arguments.get("group"))));
-					return true;
-				case "addsub":
-					if (UserQueries.addGroupChild(context.bot().getDatabase(), arguments.get("parent"), arguments.get("child"))) {
-						context.channel().sendMessage("Group relation added");
-						return true;
-					} else {
-						context.channel().sendMessage("The group relation already exists");
-						return false;
-					}
-				case "removesub":
-					if (UserQueries.removeGroupChild(context.bot().getDatabase(), arguments.get("parent"), arguments.get("child"))) {
-						context.channel().sendMessage("Group relation added");
-						return true;
-					} else {
-						context.channel().sendMessage("The group relation already exists");
-						return false;
-					}
-				}
+
+				context.channel().sendMessage("User removed from group");
+				return true;
 			}
+		} else { // group handling itself
+			switch (arguments.get("unnamed_0")) {
+			case "list":
+				context.channel().sendMessage("Groups: "+String.join(", ", UserQueries.getGroups(context.bot().getDatabase())));
+				return true;
+			case "add":
+				if (!UserQueries.addGroup(context.bot().getDatabase(), arguments.get("group"))) {
+					throw new CommandException("The group already exists");
+				}
 
-			throw new IllegalStateException();
-		} catch (SQLException e) {
-			context.channel().sendMessage("Query failed:\n`%s`".formatted(e));
-			return false;
+				context.channel().sendMessage("Group added");
+				return true;
+			case "remove":
+				if (!UserQueries.removeGroup(context.bot().getDatabase(), arguments.get("group"))) {
+					throw new CommandException("No such group");
+				}
+
+				context.channel().sendMessage("Group removed");
+				return true;
+			case "listsub":
+				context.channel().sendMessage(String.join(", ", UserQueries.getGroupChildren(context.bot().getDatabase(), arguments.get("group"))));
+				return true;
+			case "addsub":
+				if (!UserQueries.addGroupChild(context.bot().getDatabase(), arguments.get("parent"), arguments.get("child"))) {
+					throw new CommandException("The group relation already exists");
+				}
+
+				context.channel().sendMessage("Group relation added");
+				return true;
+			case "removesub":
+				if (!UserQueries.removeGroupChild(context.bot().getDatabase(), arguments.get("parent"), arguments.get("child"))) {
+					throw new CommandException("The group relation already exists");
+				}
+
+				context.channel().sendMessage("Group relation added");
+				return true;
+			}
 		}
+
+		throw new IllegalStateException();
 	}
 }

@@ -49,5 +49,12 @@ public abstract class Command {
 	 * @param arguments the arguments the command was run with
 	 * @return whether the command was successfully executed
 	 */
-	public abstract boolean run(CommandContext context, Map<String, String> arguments);
+	public abstract boolean run(CommandContext context, Map<String, String> arguments) throws Exception;
+
+	public static final int getUserId(CommandContext context, String user) throws CommandException {
+		int ret = context.bot().getUserHandler().getUserId(user, context.server(), true);
+		if (ret < 0) throw new CommandException("Unknown or ambiguous user");
+
+		return ret;
+	}
 }
