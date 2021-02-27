@@ -44,10 +44,10 @@ public enum ActionType {
 			if (!NOP_MODE) server.kickUser(target, reason).join();
 		}
 	},
-	MUTE("mute", true, "muted") {
+	META_MUTE("metaMute", true, "meta muted") {
 		@Override
 		public void activate(Server server, User target, String reason, DiscordBot bot) {
-			if (!NOP_MODE) ActionUtil.muteUser(server, target, reason, bot);
+			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.META_MUTE, reason, bot);
 		}
 
 		@Override
@@ -56,14 +56,102 @@ public enum ActionType {
 
 			User target = server.getMemberById(targetDiscordUserId).orElse(null);
 
-			if (target!= null) ActionUtil.unmuteUser(server, target, reason, bot);
+			if (target!= null) ActionUtil.removeRole(server, target, ActionRole.META_MUTE, reason, bot);
 		}
 
 		@Override
 		public boolean isActive(Server server, long targetDiscordUserId, DiscordBot bot) {
 			User target = server.getMemberById(targetDiscordUserId).orElse(null);
 
-			return target != null && ActionUtil.isUserMuted(server, target, bot);
+			return target != null && ActionUtil.hasRole(server, target, ActionRole.META_MUTE, bot);
+		}
+	},
+	MUTE("mute", true, "muted") {
+		@Override
+		public void activate(Server server, User target, String reason, DiscordBot bot) {
+			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.MUTE, reason, bot);
+		}
+
+		@Override
+		public void deactivate(Server server, long targetDiscordUserId, String reason, DiscordBot bot) {
+			if (NOP_MODE) return;
+
+			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+
+			if (target!= null) ActionUtil.removeRole(server, target, ActionRole.MUTE, reason, bot);
+		}
+
+		@Override
+		public boolean isActive(Server server, long targetDiscordUserId, DiscordBot bot) {
+			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+
+			return target != null && ActionUtil.hasRole(server, target, ActionRole.MUTE, bot);
+		}
+	},
+	REACTION_MUTE("reactionMute", true, "reaction muted") {
+		@Override
+		public void activate(Server server, User target, String reason, DiscordBot bot) {
+			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.REACTION_MUTE, reason, bot);
+		}
+
+		@Override
+		public void deactivate(Server server, long targetDiscordUserId, String reason, DiscordBot bot) {
+			if (NOP_MODE) return;
+
+			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+
+			if (target!= null) ActionUtil.removeRole(server, target, ActionRole.REACTION_MUTE, reason, bot);
+		}
+
+		@Override
+		public boolean isActive(Server server, long targetDiscordUserId, DiscordBot bot) {
+			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+
+			return target != null && ActionUtil.hasRole(server, target, ActionRole.REACTION_MUTE, bot);
+		}
+	},
+	REQUESTS_MUTE("requestsMute", true, "requests muted") {
+		@Override
+		public void activate(Server server, User target, String reason, DiscordBot bot) {
+			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.REQUESTS_MUTE, reason, bot);
+		}
+
+		@Override
+		public void deactivate(Server server, long targetDiscordUserId, String reason, DiscordBot bot) {
+			if (NOP_MODE) return;
+
+			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+
+			if (target!= null) ActionUtil.removeRole(server, target, ActionRole.REQUESTS_MUTE, reason, bot);
+		}
+
+		@Override
+		public boolean isActive(Server server, long targetDiscordUserId, DiscordBot bot) {
+			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+
+			return target != null && ActionUtil.hasRole(server, target, ActionRole.REQUESTS_MUTE, bot);
+		}
+	},
+	SUPPORT_MUTE("supportMute", true, "support muted") {
+		@Override
+		public void activate(Server server, User target, String reason, DiscordBot bot) {
+			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.SUPPORT_MUTE, reason, bot);
+		}
+
+		@Override
+		public void deactivate(Server server, long targetDiscordUserId, String reason, DiscordBot bot) {
+			if (NOP_MODE) return;
+
+			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+
+			if (target!= null) ActionUtil.removeRole(server, target, ActionRole.SUPPORT_MUTE, reason, bot);
+		}
+
+		@Override
+		public boolean isActive(Server server, long targetDiscordUserId, DiscordBot bot) {
+			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+
+			return target != null && ActionUtil.hasRole(server, target, ActionRole.SUPPORT_MUTE, bot);
 		}
 	},
 	WARN("warn", false, "warned") {

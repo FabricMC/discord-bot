@@ -44,51 +44,31 @@ import net.fabricmc.discord.bot.database.query.ActionQueries.ExpiringActionEntry
 public final class ActionUtil {
 	public static final DateTimeFormatter dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE.withZone(ZoneOffset.UTC);
 	public static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("EEE, d MMM y HH:mm:ss z", Locale.ENGLISH).withZone(ZoneOffset.UTC);
-	private static final ConfigKey<Long> MUTE_ROLE = new ConfigKey<>("action.muteRole", ValueSerializers.LONG);
 	private static final ConfigKey<String> APPEAL_MESSAGE = new ConfigKey<>("action.appealMessage", ValueSerializers.STRING);
 
 	public static void registerConfig(DiscordBot bot) {
-		bot.registerConfigEntry(MUTE_ROLE, () -> -1L);
 		bot.registerConfigEntry(APPEAL_MESSAGE, () -> "Please contact the moderation to appeal this action.");
+		ActionRole.registerConfig(bot);
 	}
 
-	public static boolean isUserMuted(Server server, User target, DiscordBot bot) {
-		return hasRole(server, target, MUTE_ROLE, bot);
-	}
-
-	public static void muteUser(Server server, User target, String reason, DiscordBot bot) {
-		addRole(server, target, MUTE_ROLE, reason, bot);
-	}
-
-	public static void unmuteUser(Server server, User target, String reason, DiscordBot bot) {
-		removeRole(server, target, MUTE_ROLE, reason, bot);
-	}
-
-	private static boolean hasRole(Server server, User target, ConfigKey<Long> roleKey, DiscordBot bot) {
-		Role role = getRole(server, roleKey, bot);
+	static boolean hasRole(Server server, User target, ActionRole actionRole, DiscordBot bot) {
+		Role role = actionRole.resolve(server, bot);
 
 		return role != null && target.getRoles(server).contains(role);
 	}
 
-	private static void addRole(Server server, User target, ConfigKey<Long> roleKey, String reason, DiscordBot bot) {
-		Role role = getRole(server, roleKey, bot);
-		if (role == null) throw new RuntimeException("role unconfigured/missing");
+	static void addRole(Server server, User target, ActionRole actionRole, String reason, DiscordBot bot) {
+		Role role = actionRole.resolve(server, bot);
+		if (role == null) throw new IllegalArgumentException("role unconfigured/missing");
 
 		server.addRoleToUser(target, role, reason).join();
 	}
 
-	private static void removeRole(Server server, User target, ConfigKey<Long> roleKey, String reason, DiscordBot bot) {
-		Role role = getRole(server, roleKey, bot);
+	static void removeRole(Server server, User target, ActionRole actionRole, String reason, DiscordBot bot) {
+		Role role = actionRole.resolve(server, bot);
 		if (role == null) return;
 
 		server.removeRoleFromUser(target, role, reason).join();
-	}
-
-	private static Role getRole(Server server, ConfigKey<Long> key, DiscordBot bot) {
-		long roleId = bot.getConfigEntry(key);
-		if (roleId < 0) return null;
-
-		return server.getRoleById(roleId).orElse(null);
 	}
 
 	/**
