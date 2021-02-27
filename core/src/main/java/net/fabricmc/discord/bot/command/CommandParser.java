@@ -245,11 +245,13 @@ public final class CommandParser {
 				}
 
 				if (next == null) {
-					next = node.getNext();
+					next = node;
 
-					while (next == null && node.getParent() != null) {
-						next = node.getParent().getNext();
+					while (next.getNext() == null && next.getParent() != null) {
+						next = next.getParent();
 					}
+
+					next = next.getNext();
 				}
 
 				if (matched) {

@@ -57,6 +57,7 @@ final class DbMigration {
 			case 1: migrate_1_2(st);
 			case 2: migrate_2_3(st);
 			case 3: migrate_3_4(st);
+			case 4: migrate_4_5(st);
 			}
 
 			st.executeUpdate(String.format("REPLACE INTO `config` VALUES ('dbVersion', '%d')", Database.currentVersion));
@@ -101,5 +102,10 @@ final class DbMigration {
 		st.executeUpdate("CREATE INDEX `actionexpiration_time` ON `actionexpiration` (`time`)");
 		st.executeUpdate("CREATE TABLE `activeaction` (`action_id` INTEGER PRIMARY KEY, `target_user_id` INTEGER)");
 		st.executeUpdate("CREATE INDEX `activeaction_target_user_id` ON `activeaction` (`target_user_id`)");
+	}
+
+	private static void migrate_4_5(Statement st) throws SQLException {
+		st.executeUpdate("CREATE TABLE `note` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `target_user_id` INTEGER, `actor_user_id` INTEGER, `creation` INTEGER, `content` TEXT)");
+		st.executeUpdate("CREATE INDEX `note_target_user_id` ON `note` (`target_user_id`)");
 	}
 }

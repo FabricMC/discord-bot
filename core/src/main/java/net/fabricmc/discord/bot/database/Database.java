@@ -23,7 +23,7 @@ import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
 public final class Database {
-	static final int currentVersion = 4;
+	static final int currentVersion = 5;
 
 	private static final int preparedStatementCacheSize = 250;
 	private static final int preparedStatementCacheSqlLimit = 2048;

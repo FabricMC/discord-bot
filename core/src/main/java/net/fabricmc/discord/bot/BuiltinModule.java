@@ -34,6 +34,7 @@ import net.fabricmc.discord.bot.command.core.PermissionCommand;
 import net.fabricmc.discord.bot.command.mod.ActionCommand;
 import net.fabricmc.discord.bot.command.mod.ActionType;
 import net.fabricmc.discord.bot.command.mod.GenericActionCommand;
+import net.fabricmc.discord.bot.command.mod.NoteCommand;
 
 /**
  * The builtin module of the discord bot.
@@ -69,7 +70,10 @@ final class BuiltinModule implements Module, MessageCreateListener {
 		bot.registerCommand(new GroupCommand());
 		bot.registerCommand(new PermissionCommand());
 		bot.registerCommand(new DbCommand());
+
+		// mod/action
 		bot.registerCommand(new ActionCommand());
+		bot.registerCommand(new NoteCommand());
 
 		for (ActionType type : ActionType.values()) {
 			bot.registerCommand(new GenericActionCommand(type, true));
