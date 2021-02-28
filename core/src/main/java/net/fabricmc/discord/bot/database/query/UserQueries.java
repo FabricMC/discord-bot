@@ -297,7 +297,14 @@ public final class UserQueries {
 					long discordUserId = res.getLong(1);
 					List<DiscordNameHistory> nameLog = fetchNameHistory ? new ArrayList<>() : null;
 					List<DiscordNickHistory> nickLog = fetchNickHistory ? new ArrayList<>() : null;
-					DiscordUserData data = new DiscordUserData(discordUserId, res.getString(2), res.getString(3), res.getString(4), res.getLong(5), res.getLong(6), nameLog, nickLog);
+					DiscordUserData data = new DiscordUserData(discordUserId, // id
+							userId, // userId
+							res.getString(2), // username
+							res.getString(3), // discriminator
+							res.getString(4), // nickname
+							res.getLong(5), // firstSeen
+							res.getLong(6), // lastSeen
+							nameLog, nickLog);
 					ret.discordUsers.add(data);
 
 					if (fetchNameHistory) {
@@ -326,8 +333,56 @@ public final class UserQueries {
 		}
 	}
 
+	public static DiscordUserData getDiscordUserData(Database db, long discordUserId, boolean fetchNameHistory, boolean fetchNickHistory) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement psDU = conn.prepareStatement("SELECT user_id, username, discriminator, nickname, firstseen, lastseen FROM discorduser WHERE id = ?");
+				PreparedStatement psNameLog = conn.prepareStatement("SELECT username, discriminator, firstused, lastused, duration, count FROM discorduser_namelog WHERE discorduser_id = ?");
+				PreparedStatement psNickLog = conn.prepareStatement("SELECT nickname, firstused, lastused, duration, count FROM discorduser_nicklog WHERE discorduser_id = ?")) {
+			psDU.setLong(1, discordUserId);
+
+			try (ResultSet res = psDU.executeQuery()) {
+				if (!res.next()) return null;
+
+				List<DiscordNameHistory> nameLog = fetchNameHistory ? new ArrayList<>() : null;
+				List<DiscordNickHistory> nickLog = fetchNickHistory ? new ArrayList<>() : null;
+				DiscordUserData ret = new DiscordUserData(discordUserId, // id
+						IdArmor.encode(res.getInt(1)), // userId
+						res.getString(2), // username
+						res.getString(3), // discriminator
+						res.getString(4), // nickname
+						res.getLong(5), // firstSeen
+						res.getLong(6), // lastSeen
+						nameLog, nickLog);
+
+				if (fetchNameHistory) {
+					psNameLog.setLong(1, discordUserId);
+
+					try (ResultSet res2 = psNameLog.executeQuery()) {
+						while (res2.next()) {
+							nameLog.add(new DiscordNameHistory(res2.getString(1), res2.getString(2), res2.getLong(3), res2.getLong(4), res2.getLong(5), res2.getInt(6)));
+						}
+					}
+				}
+
+				if (fetchNickHistory) {
+					psNickLog.setLong(1, discordUserId);
+
+					try (ResultSet res2 = psNickLog.executeQuery()) {
+						while (res2.next()) {
+							nickLog.add(new DiscordNickHistory(res2.getString(1), res2.getLong(2), res2.getLong(3), res2.getLong(4), res2.getInt(5)));
+						}
+					}
+				}
+
+				return ret;
+			}
+		}
+	}
+
 	public record UserData(int id, String stickyName, Collection<DiscordUserData> discordUsers) { }
-	public record DiscordUserData(long id, String username, String discriminator, String nickname, long firstSeen, long lastSeen,
+	public record DiscordUserData(long id, int userId, String username, String discriminator, String nickname, long firstSeen, long lastSeen,
 			@Nullable Collection<DiscordNameHistory> nameHistory, @Nullable Collection<DiscordNickHistory> nickHistory) { }
 	public record DiscordNameHistory(String username, String discriminator, long firstUsed, long lastUsed, long duration, int count) { }
 	public record DiscordNickHistory(String nickname, long firstUsed, long lastUsed, long duration, int count) { }

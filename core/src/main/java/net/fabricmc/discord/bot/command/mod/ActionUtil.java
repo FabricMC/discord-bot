@@ -95,7 +95,7 @@ public final class ActionUtil {
 
 		if (type.hasDuration) {
 			int existingActionId = ActionQueries.getActiveAction(context.bot().getDatabase(), targetUserId, type);
-			if (existingActionId >= 0) throw new CommandException("The user is already %s", type.actionDesc);
+			if (existingActionId >= 0) throw new CommandException("The user is already %s", type.getDesc(false));
 		}
 
 		// determine duration
@@ -117,9 +117,9 @@ public final class ActionUtil {
 
 		// determine target discord users
 
-		List<User> targets = context.bot().getUserHandler().getDiscordUsers(targetUserId, context.server());
+		List<Long> targetDiscordIds = context.bot().getUserHandler().getDiscordUserIds(targetUserId);
 
-		if (!type.hasDuration && targets.isEmpty()) {
+		if (!type.hasDuration && targetDiscordIds.isEmpty()) {
 			throw new CommandException("Absent target user");
 		}
 
@@ -127,65 +127,19 @@ public final class ActionUtil {
 
 		ActionEntry entry = ActionQueries.createAction(context.bot().getDatabase(), type, targetUserId, context.userId(), durationMs, reason, prevId);
 
-		// log to original channel
+		// announce action
 
-		String expirationSuffix;
-
-		if (!type.hasDuration) {
-			expirationSuffix = "";
-		} else if (entry.expirationTime() < 0) {
-			expirationSuffix = " permanently";
-		} else {
-			expirationSuffix = " until ".concat(dateTimeFormatter.format(Instant.ofEpochMilli(entry.expirationTime())));
-		}
-
-		String reasonSuffix;
-
-		if (reason == null || reason.isEmpty()) {
-			reasonSuffix = "";
-		} else {
-			reasonSuffix = "\n\n**Reason:** %s".formatted(reason);
-		}
-
-		Instant creationTime = Instant.ofEpochMilli(entry.creationTime());
-		String description = "User %d has been %s%s:%s%s".formatted(targetUserId, type.actionDesc, expirationSuffix, formatUserList(targets), reasonSuffix);
-		TextChannel logChannel = context.bot().getLogHandler().getLogChannel();
-
-		EmbedBuilder msg = new EmbedBuilder()
-				.setTitle("User %s".formatted(type.actionDesc))
-				.setDescription(description)
-				.setFooter("Action ID: %d".formatted(entry.id()))
-				.setTimestamp(creationTime);
-
-		if (context.channel() != logChannel) {
-			context.channel().sendMessage(msg).get();
-		}
-
-		// log to log channel
-
-		if (logChannel != null) {
-			// include executing moderator info
-			msg.setDescription("%s\n**Moderator:** %s".formatted(description, UserHandler.formatDiscordUser(context.author().asUser().get())));
-
-			logChannel.sendMessage(msg).get();
-		}
-
-		// message target user
-
-		EmbedBuilder userMsg = new EmbedBuilder()
-				.setTitle("%s!".formatted(type.actionDesc))
-				.setDescription("You have been %s%s.%s\n\n%s".formatted(type.actionDesc, expirationSuffix, reasonSuffix, context.bot().getConfigEntry(APPEAL_MESSAGE)))
-				.setFooter("Action ID: %d".formatted(entry.id()))
-				.setTimestamp(creationTime);
-
-		for (User user : targets) {
-			user.sendMessage(userMsg); // no get
-		}
+		announceAction(type, false, "", "",
+				targetUserId, targetDiscordIds, entry.creationTime(), entry.expirationTime(), reason,
+				entry.id(),
+				context.channel(), context.author().asUser().get(),
+				context.bot(), context.server());
 
 		// apply discord action
 
-		for (User user : targets) {
-			type.activate(context.server(), user, reason, context.bot());
+		for (long targetDiscordId : targetDiscordIds) {
+			User user = context.server().getMemberById(targetDiscordId).orElse(null);
+			if (user != null) type.activate(context.server(), user, reason, context.bot());
 		}
 
 		context.bot().getActionSyncHandler().onNewAction(entry);
@@ -200,7 +154,7 @@ public final class ActionUtil {
 
 		// determine target discord users
 
-		List<Long> targets = context.bot().getUserHandler().getDiscordUserIds(targetUserId);
+		List<Long> targetDiscordIds = context.bot().getUserHandler().getDiscordUserIds(targetUserId);
 
 		// determine action
 
@@ -208,7 +162,7 @@ public final class ActionUtil {
 
 		if (actionId < 0
 				|| !ActionQueries.suspendAction(context.bot().getDatabase(), actionId, context.userId(), reason)) { // action wasn't applied through the bot, determine direct applications (directly through discord)
-			for (Iterator<Long> it = targets.iterator(); it.hasNext(); ) {
+			for (Iterator<Long> it = targetDiscordIds.iterator(); it.hasNext(); ) {
 				long targetDiscordId = it.next();
 
 				if (!type.isActive(context.server(), targetDiscordId, context.bot())) {
@@ -216,52 +170,22 @@ public final class ActionUtil {
 				}
 			}
 
-			if (targets.isEmpty()) throw new CommandException("User %d is not %s.", targetUserId, type.actionDesc);
+			if (targetDiscordIds.isEmpty()) throw new CommandException("User %d is not %s.", targetUserId, type.getDesc(false));
 		} else { // action was applied through the bot, update db record and remove from action sync handler
 			context.bot().getActionSyncHandler().onActionSuspension(actionId);
 		}
 
-		// log to original channel
+		// announce action
 
-		String reasonSuffix;
-
-		if (reason == null || reason.isEmpty()) {
-			reasonSuffix = "";
-		} else {
-			reasonSuffix = "\n\n**Reason:** %s".formatted(reason);
-		}
-
-		Instant creationTime = Instant.now();
-		String description = "User %d has been un%s:%s%s".formatted(targetUserId, type.actionDesc, formatUserList(targets, context), reasonSuffix);
-		TextChannel logChannel = context.bot().getLogHandler().getLogChannel();
-
-		EmbedBuilder msg = new EmbedBuilder()
-				.setTitle("User un%s".formatted(type.actionDesc))
-				.setDescription(description)
-				.setTimestamp(creationTime);
-
-		if (actionId < 0) {
-			msg.setFooter("Unknown action");
-		} else {
-			msg.setFooter("Action ID: %d".formatted(actionId));
-		}
-
-		if (context.channel() != logChannel) {
-			context.channel().sendMessage(msg).get();
-		}
-
-		// log to log channel
-
-		if (logChannel != null) {
-			// include executing moderator info
-			msg.setDescription("%s\n**Moderator:** %s".formatted(description, UserHandler.formatDiscordUser(context.author().asUser().get())));
-
-			logChannel.sendMessage(msg).get();
-		}
+		announceAction(type, true, "", "",
+				targetUserId, targetDiscordIds, System.currentTimeMillis(), 0, reason,
+				actionId,
+				context.channel(), context.author().asUser().get(),
+				context.bot(), context.server());
 
 		// apply discord action
 
-		for (long targetDiscordId : targets) {
+		for (long targetDiscordId : targetDiscordIds) {
 			type.deactivate(context.server(), targetDiscordId, reason, context.bot());
 		}
 	}
@@ -277,14 +201,86 @@ public final class ActionUtil {
 
 		ActionQueries.expireAction(bot.getDatabase(), entry.id());
 
-		TextChannel logChannel = bot.getLogHandler().getLogChannel();
-		if (logChannel == null) return;
+		announceAction(entry.type(), true, "(expiration)", "automatically",
+				entry.targetUserId(), targets, System.currentTimeMillis(), 0, null,
+				entry.id(),
+				null, null,
+				bot, server);
+	}
 
-		logChannel.sendMessage(new EmbedBuilder()
-				.setTitle("User un%s (expiration)".formatted(entry.type().actionDesc))
-				.setDescription("User %d has been un%s automatically:%s".formatted(entry.targetUserId(), entry.type().actionDesc, formatUserList(targets, bot, server)))
-				.setFooter("Action ID: %d".formatted(entry.id()))
-				.setTimestampToNow());
+	static void announceAction(ActionType type, boolean reversal, String extraTitleDesc, String extraBodyDesc,
+			int targetUserId, List<Long> targetDiscordIds, long creation, long expiration, String reason,
+			int actionId,
+			TextChannel channel, User actor,
+			DiscordBot bot, Server server) {
+		if (!extraTitleDesc.isEmpty()) extraTitleDesc = " "+extraTitleDesc;
+		if (!extraBodyDesc.isEmpty()) extraBodyDesc = " "+extraBodyDesc;
+
+		// log to original channel
+
+		String expirationSuffix;
+
+		if (expiration == 0) {
+			expirationSuffix = "";
+		} else if (expiration < 0) {
+			expirationSuffix = " permanently";
+		} else {
+			expirationSuffix = " until ".concat(dateTimeFormatter.format(Instant.ofEpochMilli(expiration)));
+		}
+
+		String reasonSuffix;
+
+		if (reason == null || reason.isEmpty()) {
+			reasonSuffix = "";
+		} else {
+			reasonSuffix = "\n\n**Reason:** %s".formatted(reason);
+		}
+
+		Instant creationTime = Instant.ofEpochMilli(creation);
+		String desc = type.getDesc(reversal);
+		String description = String.format("User %d has been %s%s%s:%s%s",
+				targetUserId,
+				desc, extraBodyDesc,
+				expirationSuffix,
+				formatUserList(targetDiscordIds, bot, server),
+				reasonSuffix);
+		String actionRef = actionId >= 0 ? "Action ID: %d".formatted(actionId) : "Unknown action";
+		TextChannel logChannel = bot.getLogHandler().getLogChannel();
+
+		EmbedBuilder msg = new EmbedBuilder()
+				.setTitle("User %s%s".formatted(desc, extraTitleDesc))
+				.setDescription(description)
+				.setFooter(actionRef)
+				.setTimestamp(creationTime);
+
+		if (channel != null && channel != logChannel) {
+			channel.sendMessage(msg);
+		}
+
+		// log to log channel
+
+		if (logChannel != null) {
+			if (actor != null) {
+				// include executing moderator info
+				msg.setDescription("%s\n**Moderator:** %s".formatted(description, UserHandler.formatDiscordUser(actor)));
+			}
+
+			logChannel.sendMessage(msg);
+		}
+
+		// message target user
+
+		String appealSuffix = !reversal ? "\n\n%s".formatted(bot.getConfigEntry(APPEAL_MESSAGE)) : "";
+		EmbedBuilder userMsg = new EmbedBuilder()
+				.setTitle("%s!".formatted(desc, extraTitleDesc))
+				.setDescription("You have been %s%s%s.%s%s".formatted(desc, extraBodyDesc, expirationSuffix, reasonSuffix, appealSuffix))
+				.setFooter(actionRef)
+				.setTimestamp(creationTime);
+
+		for (long targetDiscordId : targetDiscordIds) {
+			User user = server.getMemberById(targetDiscordId).orElse(null);
+			if (user != null) user.sendMessage(userMsg); // no get
+		}
 	}
 
 	private static long parseDurationMs(String str) {

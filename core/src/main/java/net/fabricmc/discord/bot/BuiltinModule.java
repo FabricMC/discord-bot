@@ -34,6 +34,7 @@ import net.fabricmc.discord.bot.command.core.PermissionCommand;
 import net.fabricmc.discord.bot.command.mod.ActionCommand;
 import net.fabricmc.discord.bot.command.mod.ActionType;
 import net.fabricmc.discord.bot.command.mod.GenericActionCommand;
+import net.fabricmc.discord.bot.command.mod.NickCommand;
 import net.fabricmc.discord.bot.command.mod.NoteCommand;
 
 /**
@@ -73,9 +74,12 @@ final class BuiltinModule implements Module, MessageCreateListener {
 
 		// mod/action
 		bot.registerCommand(new ActionCommand());
+		bot.registerCommand(new NickCommand());
 		bot.registerCommand(new NoteCommand());
 
 		for (ActionType type : ActionType.values()) {
+			if (type.hasDedicatedCommand) continue;
+
 			bot.registerCommand(new GenericActionCommand(type, true));
 
 			if (type.hasDeactivation) {

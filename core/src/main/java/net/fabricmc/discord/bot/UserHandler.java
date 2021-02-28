@@ -33,9 +33,12 @@ import org.javacord.api.listener.server.member.ServerMemberJoinListener;
 import org.javacord.api.listener.server.member.ServerMemberLeaveListener;
 import org.javacord.api.listener.user.UserChangeNameListener;
 import org.javacord.api.listener.user.UserChangeNicknameListener;
+import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.database.query.UserQueries;
+import net.fabricmc.discord.bot.database.query.UserQueries.DiscordUserData;
 import net.fabricmc.discord.bot.database.query.UserQueries.SessionDiscordUserData;
+import net.fabricmc.discord.bot.database.query.UserQueries.UserData;
 
 public final class UserHandler implements ServerMemberJoinListener, ServerMemberLeaveListener, UserChangeNameListener, UserChangeNicknameListener {
 	public static final String ADMIN_PERMISSION = "admin";
@@ -75,27 +78,25 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		}
 	}
 
-	/*public long getDiscordUserId(String user, Server server, boolean unique) {
+	public long getDiscordUserId(String user, Server server, boolean unique) {
 		long ret = parseUserId(user, server, unique, true);
 
 		if (ret == -1 || isDiscordUserId(ret)) {
 			return ret;
 		} else {
-			return getDiscordUserId((int) ret, unique);
+			List<Long> matches = getDiscordUserIds((int) ret);
+
+			return matches.isEmpty() || unique && matches.size() > 1 ? -1 : matches.get(matches.size() - 1);
 		}
 	}
 
 	public @Nullable User getDiscordUser(String user, Server server, boolean unique) {
-		long id = parseUserId(user, server, unique, false);
-
-		if (id >= 0 && !isDiscordUserId(id)) {
-			id = getDiscordUserId((int) id, unique);
-		}
+		long id = getDiscordUserId(user, server, unique);
 
 		return id >= 0 ? server.getMemberById(id).orElse(null) : null;
 	}
 
-	public @Nullable UserEntry getUserEntry(String user, Server server, boolean unique) {
+	/*public @Nullable UserEntry getUserEntry(String user, Server server, boolean unique) {
 		long id = parseUserId(user, server, unique, true);
 
 		if (id == -1) {
@@ -107,9 +108,9 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 
 			return new UserEntry((int) id, discordId >= 0 ? server.getMemberById(discordId).orElse(null) : null);
 		}
-	}*/
+	}
 
-	public record UserEntry(int id, List<User> discordUsers) { }
+	public record UserEntry(int id, List<User> discordUsers) { }*/
 
 	private long parseUserId(String user, Server server, boolean unique, boolean searchOffline) {
 		// find by id if applicable
@@ -205,6 +206,22 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		return val < 0 || val > Integer.MAX_VALUE; // a snowflake in 0..2^31-1 would required creation within the first 511 ms of its defined time span
 	}
 
+	public UserData getUserData(int userId, boolean fetchNameHistory, boolean fetchNickHistory) {
+		try {
+			return UserQueries.getUserData(bot.getDatabase(), userId, fetchNameHistory, fetchNickHistory);
+		} catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	public DiscordUserData getDiscordUserData(long discordUserId, boolean fetchNameHistory, boolean fetchNickHistory) {
+		try {
+			return UserQueries.getDiscordUserData(bot.getDatabase(), discordUserId, fetchNameHistory, fetchNickHistory);
+		} catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
 	public String formatUser(int userId, Server server) {
 		List<Long> ids = getDiscordUserIds(userId);
 		if (ids.isEmpty()) return Integer.toString(userId);
@@ -266,42 +283,56 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 
 	@Override
 	public void onServerMemberJoin(ServerMemberJoinEvent event) {
-		if (event.getServer().getId() == bot.getServerId()) {
-			refreshUser(event.getUser(), event.getServer(), true, false);
-		}
+		Server server = event.getServer();
+		if (server.getId() != bot.getServerId()) return;
+
+		refreshUser(server, event.getUser(), true, false);
 	}
 
 	@Override
 	public void onServerMemberLeave(ServerMemberLeaveEvent event) {
-		if (event.getServer().getId() == bot.getServerId()) {
-			refreshUser(event.getUser(), event.getServer(), false, true);
-		}
+		Server server = event.getServer();
+		if (server.getId() != bot.getServerId()) return;
+
+		refreshUser(server, event.getUser(), false, true);
 	}
 
 	@Override
 	public void onUserChangeName(UserChangeNameEvent event) {
+		User user = event.getUser();
 		Server server = null;
 
-		for (Server s : event.getUser().getMutualServers()) {
+		for (Server s : user.getMutualServers()) {
 			if (s.getId() == bot.getServerId()) {
 				server = s;
 				break;
 			}
 		}
 
-		if (server != null) {
-			refreshUser(event.getUser(), server, true, true);
+		if (server == null) return;
+
+		assert user.getName().equals(event.getNewName());
+
+		if (!bot.getActionSyncHandler().applyNickLock(server, user)) {
+			refreshUser(server, user, true, true);
 		}
 	}
 
 	@Override
 	public void onUserChangeNickname(UserChangeNicknameEvent event) {
-		if (event.getServer().getId() == bot.getServerId()) {
-			refreshUser(event.getUser(), event.getServer(), true, true);
+		Server server = event.getServer();
+		if (server.getId() != bot.getServerId()) return;
+
+		User user = event.getUser();
+
+		assert user.getNickname(server).equals(event.getNewNickname());
+
+		if (!bot.getActionSyncHandler().applyNickLock(server, user)) {
+			refreshUser(server, user, true, true);
 		}
 	}
 
-	private void refreshUser(User user, Server server, boolean present, boolean wasPresent) {
+	private void refreshUser(Server server, User user, boolean present, boolean wasPresent) {
 		SessionDiscordUserData dbUser = toDbUser(user, server, present);
 
 		try {

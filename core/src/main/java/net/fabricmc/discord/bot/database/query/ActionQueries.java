@@ -305,12 +305,12 @@ public final class ActionQueries {
 
 				try (ResultSet res = ps.executeQuery()) {
 					while (res.next()) {
-						ret.add(new ActiveActionEntry(IdArmor.encode(res.getInt(1)),
-								ActionType.get(res.getString(2)),
-								IdArmor.encode(res.getInt(3)),
-								discordUserId,
-								res.getLong(4),
-								res.getString(5)));
+						ret.add(new ActiveActionEntry(IdArmor.encode(res.getInt(1)), // id
+								ActionType.get(res.getString(2)), // type
+								IdArmor.encode(res.getInt(3)), // targetUserId
+								discordUserId, // targetDiscordUserId
+								res.getLong(4), // expirationTime
+								res.getString(5))); // reason
 					}
 				}
 			}
@@ -320,4 +320,59 @@ public final class ActionQueries {
 	}
 
 	public record ActiveActionEntry(int id, ActionType type, int targetUserId, long targetDiscordUserId, long expirationTime, String reason) { }
+
+	public static String getLockedNick(Database db, long discordUserId) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement ps = conn.prepareStatement("SELECT nick FROM `nicklock` WHERE discorduser_id.id = ?")) {
+			ps.setLong(1, discordUserId);
+
+			try (ResultSet res = ps.executeQuery()) {
+				if (!res.next()) return null;
+
+				return res.getString(1);
+			}
+		}
+	}
+
+	public static boolean addNickLock(Database db, long discordUserId, String nickName) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+		if (nickName == null) throw new NullPointerException("null nickName");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement ps = conn.prepareStatement("INSERT OR IGNORE INTO `nicklock` (`discorduser_id`, `nick`) VALUES (?, ?)")) {
+			ps.setLong(1, discordUserId);
+			ps.setString(2, nickName);
+
+			return ps.executeUpdate() > 0;
+		}
+	}
+
+	public static boolean removeNickLock(Database db, long discordUserId) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement ps = conn.prepareStatement("DELETE FROM `nicklock` WHERE discorduser_id.id = ?")) {
+			ps.setLong(1, discordUserId);
+
+			return ps.executeUpdate() > 0;
+		}
+	}
+
+	public static boolean updateLockedNick(Database db, long discordUserId, String nick) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement ps = conn.prepareStatement("INSERT OR REPLACE INTO `nicklock` (`discorduser_id`, `nick`) "
+						+ "SELECT du.id, ? "
+						+ "FROM `discorduser` du "
+						+ "JOIN `activeaction` aa ON aa.target_user_id = du.user_id "
+						+ "WHERE du.id = ?")) {
+			ps.setString(1, nick);
+			ps.setLong(2, discordUserId);
+
+			return ps.executeUpdate() > 0;
+		}
+	}
 }

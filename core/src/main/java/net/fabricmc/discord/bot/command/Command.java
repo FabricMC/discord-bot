@@ -57,4 +57,11 @@ public abstract class Command {
 
 		return ret;
 	}
+
+	public static final long getDiscordUserId(CommandContext context, String user) throws CommandException {
+		long ret = context.bot().getUserHandler().getDiscordUserId(user, context.server(), true);
+		if (ret < 0) throw new CommandException("Unknown or ambiguous user");
+
+		return ret;
+	}
 }

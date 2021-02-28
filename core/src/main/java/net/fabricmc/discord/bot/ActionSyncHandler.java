@@ -216,4 +216,28 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 			e.printStackTrace();
 		}
 	}
+
+	public boolean applyNickLock(Server server, User user) {
+		try {
+			String displayName = user.getDisplayName(server);
+			String lockedNick = ActionQueries.getLockedNick(bot.getDatabase(), user.getId());
+
+			if (lockedNick == null // no active nicklock
+					|| lockedNick.equals(displayName)) { // permitted nick change
+				return false;
+			}
+
+			if (user.getName().equals(lockedNick)) { // user name is fine, drop nick
+				user.resetNickname(server, "nicklock");
+			} else {
+				user.updateNickname(server, lockedNick, "nicklock");
+			}
+
+			return true;
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			return false;
+		}
+	}
 }

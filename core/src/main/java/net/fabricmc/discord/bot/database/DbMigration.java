@@ -108,4 +108,8 @@ final class DbMigration {
 		st.executeUpdate("CREATE TABLE `note` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `target_user_id` INTEGER, `actor_user_id` INTEGER, `creation` INTEGER, `content` TEXT)");
 		st.executeUpdate("CREATE INDEX `note_target_user_id` ON `note` (`target_user_id`)");
 	}
+
+	private static void migrate_5_6(Statement st) throws SQLException {
+		st.executeUpdate("CREATE TABLE `nicklock` (`discorduser_id` INTEGER PRIMARY KEY, `nick` TEXT)");
+	}
 }
