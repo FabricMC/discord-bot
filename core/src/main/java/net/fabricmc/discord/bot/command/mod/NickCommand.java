@@ -25,8 +25,8 @@ import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
-import net.fabricmc.discord.bot.database.query.ActionQueries;
-import net.fabricmc.discord.bot.database.query.ActionQueries.ActionEntry;
+import net.fabricmc.discord.bot.database.query.UserActionQueries;
+import net.fabricmc.discord.bot.database.query.UserActionQueries.UserActionEntry;
 import net.fabricmc.discord.bot.database.query.UserQueries.DiscordUserData;
 
 public final class NickCommand extends Command {
@@ -37,7 +37,7 @@ public final class NickCommand extends Command {
 
 	@Override
 	public String usage() {
-		return "<user> <nick> <reason>";
+		return "<user> <nick> <reason...>";
 	}
 
 	@Override
@@ -50,7 +50,7 @@ public final class NickCommand extends Command {
 		long targetDiscordUserId = getDiscordUserId(context, arguments.get("user"));
 		User target = context.server().getMemberById(targetDiscordUserId).orElse(null);
 
-		if (target == null && ActionQueries.getLockedNick(context.bot().getDatabase(), targetDiscordUserId) == null) {
+		if (target == null && UserActionQueries.getLockedNick(context.bot().getDatabase(), targetDiscordUserId) == null) {
 			throw new CommandException("Target user is absent and not nicklocked");
 		}
 
@@ -73,11 +73,11 @@ public final class NickCommand extends Command {
 		// create db record
 
 		int targetUserId = userHandler.getUserId(targetDiscordUserId);
-		ActionEntry entry = ActionQueries.createAction(context.bot().getDatabase(), ActionType.RENAME, targetUserId, context.userId(), 0, arguments.get("reason"), 0);
+		UserActionEntry entry = UserActionQueries.createAction(context.bot().getDatabase(), UserActionType.RENAME, targetUserId, context.userId(), 0, arguments.get("reason"), 0);
 
 		// announce action
 
-		ActionUtil.announceAction(entry.type(), false, "", "from %s to %s".formatted(oldNick, newNick),
+		ActionUtil.announceUserAction(entry.type(), false, "", "from %s to %s".formatted(oldNick, newNick),
 				targetUserId, Collections.singletonList(targetDiscordUserId), entry.creationTime(), entry.expirationTime(), entry.reason(),
 				entry.id(),
 				context.channel(), context.author().asUser().get(),
@@ -85,7 +85,7 @@ public final class NickCommand extends Command {
 
 		// update nick lock entries
 
-		ActionQueries.updateLockedNick(context.bot().getDatabase(), targetDiscordUserId, newNick);
+		UserActionQueries.updateLockedNick(context.bot().getDatabase(), targetDiscordUserId, newNick);
 
 		// apply discord action
 

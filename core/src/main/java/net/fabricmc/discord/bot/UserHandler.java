@@ -120,10 +120,10 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 				char next = user.charAt(2);
 				int start = next >= '0' && next <= '9' ? 2 : 3;
 
-				return Long.parseLong(user.substring(start, user.length() - 1));
+				return Long.parseUnsignedLong(user.substring(start, user.length() - 1));
 			}
 
-			return Long.parseLong(user);
+			return Long.parseUnsignedLong(user);
 		} catch (NumberFormatException e) { }
 
 		// find by name#discriminator if applicable

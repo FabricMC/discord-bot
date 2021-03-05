@@ -20,6 +20,7 @@ import java.nio.file.Path;
 
 import org.apache.logging.log4j.Logger;
 import org.javacord.api.DiscordApi;
+import org.javacord.api.entity.channel.ServerTextChannel;
 import org.javacord.api.entity.message.MessageAuthor;
 import org.javacord.api.entity.user.User;
 import org.javacord.api.event.message.MessageCreateEvent;
@@ -32,10 +33,13 @@ import net.fabricmc.discord.bot.command.core.DbCommand;
 import net.fabricmc.discord.bot.command.core.GroupCommand;
 import net.fabricmc.discord.bot.command.core.PermissionCommand;
 import net.fabricmc.discord.bot.command.mod.ActionCommand;
-import net.fabricmc.discord.bot.command.mod.ActionType;
-import net.fabricmc.discord.bot.command.mod.GenericActionCommand;
+import net.fabricmc.discord.bot.command.mod.GenericUserActionCommand;
+import net.fabricmc.discord.bot.command.mod.LockCommand;
 import net.fabricmc.discord.bot.command.mod.NickCommand;
 import net.fabricmc.discord.bot.command.mod.NoteCommand;
+import net.fabricmc.discord.bot.command.mod.SlowmodeCommand;
+import net.fabricmc.discord.bot.command.mod.UnlockCommand;
+import net.fabricmc.discord.bot.command.mod.UserActionType;
 
 /**
  * The builtin module of the discord bot.
@@ -74,16 +78,19 @@ final class BuiltinModule implements Module, MessageCreateListener {
 
 		// mod/action
 		bot.registerCommand(new ActionCommand());
+		bot.registerCommand(new LockCommand());
+		bot.registerCommand(new UnlockCommand());
 		bot.registerCommand(new NickCommand());
 		bot.registerCommand(new NoteCommand());
+		bot.registerCommand(new SlowmodeCommand());
 
-		for (ActionType type : ActionType.values()) {
+		for (UserActionType type : UserActionType.values()) {
 			if (type.hasDedicatedCommand) continue;
 
-			bot.registerCommand(new GenericActionCommand(type, true));
+			bot.registerCommand(new GenericUserActionCommand(type, true));
 
 			if (type.hasDeactivation) {
-				bot.registerCommand(new GenericActionCommand(type, false));
+				bot.registerCommand(new GenericUserActionCommand(type, false));
 			}
 		}
 
@@ -108,7 +115,7 @@ final class BuiltinModule implements Module, MessageCreateListener {
 				event.getMessageLink(),
 				event.getMessageAuthor(),
 				bot.getUserHandler().getUserId(user),
-				event.getChannel(),
+				(ServerTextChannel) event.getChannel(),
 				event.getMessageContent(),
 				event.getMessageId()
 				);

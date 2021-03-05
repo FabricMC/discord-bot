@@ -22,10 +22,10 @@ import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
 
 import net.fabricmc.discord.bot.DiscordBot;
-import net.fabricmc.discord.bot.database.query.ActionQueries;
+import net.fabricmc.discord.bot.database.query.UserActionQueries;
 
-public enum ActionType {
-	BAN("ban", true, "banned") {
+public enum UserActionType {
+	BAN("ban", true, "banned", "unbanned") {
 		@Override
 		public void activate(Server server, User target, String reason, DiscordBot bot) {
 			if (!NOP_MODE) server.banUser(target, 0, reason).join();
@@ -41,13 +41,13 @@ public enum ActionType {
 			return server.getBans().thenApply(bans -> bans.stream().anyMatch(ban -> ban.getUser().getId() == targetDiscordUserId)).join();
 		}
 	},
-	KICK("kick", false, "kicked") {
+	KICK("kick", false, "kicked", null) {
 		@Override
 		public void activate(Server server, User target, String reason, DiscordBot bot) {
 			if (!NOP_MODE) server.kickUser(target, reason).join();
 		}
 	},
-	MUTE("mute", true, "muted") {
+	MUTE("mute", true, "muted", "unmuted") {
 		@Override
 		public void activate(Server server, User target, String reason, DiscordBot bot) {
 			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.MUTE, reason, bot);
@@ -69,7 +69,7 @@ public enum ActionType {
 			return target != null && ActionUtil.hasRole(server, target, ActionRole.MUTE, bot);
 		}
 	},
-	META_MUTE("metaMute", true, "meta muted") {
+	META_MUTE("metaMute", true, "meta muted", "meta unmuted") {
 		@Override
 		public void activate(Server server, User target, String reason, DiscordBot bot) {
 			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.META_MUTE, reason, bot);
@@ -91,7 +91,7 @@ public enum ActionType {
 			return target != null && ActionUtil.hasRole(server, target, ActionRole.META_MUTE, bot);
 		}
 	},
-	REACTION_MUTE("reactionMute", true, "reaction muted") {
+	REACTION_MUTE("reactionMute", true, "reaction muted", "reaction unmuted") {
 		@Override
 		public void activate(Server server, User target, String reason, DiscordBot bot) {
 			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.REACTION_MUTE, reason, bot);
@@ -113,7 +113,7 @@ public enum ActionType {
 			return target != null && ActionUtil.hasRole(server, target, ActionRole.REACTION_MUTE, bot);
 		}
 	},
-	REQUESTS_MUTE("requestsMute", true, "requests muted") {
+	REQUESTS_MUTE("requestsMute", true, "requests muted", "requests unmuted") {
 		@Override
 		public void activate(Server server, User target, String reason, DiscordBot bot) {
 			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.REQUESTS_MUTE, reason, bot);
@@ -135,7 +135,7 @@ public enum ActionType {
 			return target != null && ActionUtil.hasRole(server, target, ActionRole.REQUESTS_MUTE, bot);
 		}
 	},
-	SUPPORT_MUTE("supportMute", true, "support muted") {
+	SUPPORT_MUTE("supportMute", true, "support muted", "support unmuted") {
 		@Override
 		public void activate(Server server, User target, String reason, DiscordBot bot) {
 			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.SUPPORT_MUTE, reason, bot);
@@ -157,13 +157,13 @@ public enum ActionType {
 			return target != null && ActionUtil.hasRole(server, target, ActionRole.SUPPORT_MUTE, bot);
 		}
 	},
-	NICK_LOCK("nickLock", true, "nick locked") {
+	NICK_LOCK("nickLock", true, "nick locked", "nick unlocked") {
 		@Override
 		public void activate(Server server, User target, String reason, DiscordBot bot) {
 			if (NOP_MODE) return;
 
 			try {
-				if (!ActionQueries.addNickLock(bot.getDatabase(), target.getId(), target.getDisplayName(server))) {
+				if (!UserActionQueries.addNickLock(bot.getDatabase(), target.getId(), target.getDisplayName(server))) {
 					bot.getActionSyncHandler().applyNickLock(server, target);
 				}
 			} catch (SQLException e) {
@@ -174,7 +174,7 @@ public enum ActionType {
 		@Override
 		public void deactivate(Server server, long targetDiscordUserId, String reason, DiscordBot bot) {
 			try {
-				if (!NOP_MODE) ActionQueries.removeNickLock(bot.getDatabase(), targetDiscordUserId);
+				if (!NOP_MODE) UserActionQueries.removeNickLock(bot.getDatabase(), targetDiscordUserId);
 			} catch (SQLException e) {
 				throw new RuntimeException(e);
 			}
@@ -183,14 +183,14 @@ public enum ActionType {
 		@Override
 		public boolean isActive(Server server, long targetDiscordUserId, DiscordBot bot) {
 			try {
-				return ActionQueries.getLockedNick(bot.getDatabase(), targetDiscordUserId) != null;
+				return UserActionQueries.getLockedNick(bot.getDatabase(), targetDiscordUserId) != null;
 			} catch (SQLException e) {
 				throw new RuntimeException(e);
 			}
 		}
 	},
-	WARN("warn", false, "warned"),
-	RENAME("rename", false, "renamed", true);
+	WARN("warn", false, "warned", null),
+	RENAME("rename", false, "renamed", null, true);
 
 	private static final boolean NOP_MODE = true; // no-op mode for testing
 
@@ -198,10 +198,11 @@ public enum ActionType {
 	public final boolean hasDuration;
 	public final boolean hasDeactivation;
 	private final String actionDesc;
+	private final String revActionDesc;
 	public final boolean hasDedicatedCommand;
 
-	public static ActionType get(String id) {
-		for (ActionType type : values()) {
+	public static UserActionType get(String id) {
+		for (UserActionType type : values()) {
 			if (type.id.equals(id)) {
 				return type;
 			}
@@ -210,25 +211,28 @@ public enum ActionType {
 		throw new IllegalArgumentException("invalid type: "+id);
 	}
 
-	ActionType(String id, boolean hasDuration, String actionDesc) {
-		this(id, hasDuration, actionDesc, false);
+	UserActionType(String id, boolean hasDuration, String actionDesc, String revActionDesc) {
+		this(id, hasDuration, actionDesc, revActionDesc, false);
 	}
 
-	ActionType(String id, boolean hasDuration, String actionDesc, boolean hasDedicatedCommand) {
+	UserActionType(String id, boolean hasDuration, String actionDesc, String revActionDesc, boolean hasDedicatedCommand) {
+		if (revActionDesc == null && hasDuration) throw new NullPointerException("null reverse action desc for reversible action");
+
 		this.id = id;
 		this.hasDuration = hasDuration;
 		this.actionDesc = actionDesc;
+		this.revActionDesc = revActionDesc;
 		this.hasDedicatedCommand = hasDedicatedCommand;
 
 		try {
-			this.hasDeactivation = getClass().getMethod("deactivate", Server.class, long.class, String.class, DiscordBot.class).getDeclaringClass() != ActionType.class; // deactivate was overridden
+			this.hasDeactivation = getClass().getMethod("deactivate", Server.class, long.class, String.class, DiscordBot.class).getDeclaringClass() != UserActionType.class; // deactivate was overridden
 		} catch (ReflectiveOperationException e) {
 			throw new RuntimeException(e);
 		}
 	}
 
 	public String getDesc(boolean reversal) {
-		return reversal ? "un"+actionDesc : actionDesc;
+		return reversal ? revActionDesc : actionDesc;
 	}
 
 	public void activate(Server server, User target, String reason, DiscordBot bot) { }

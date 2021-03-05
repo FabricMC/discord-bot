@@ -117,7 +117,7 @@ public final class DiscordBot {
 
 		builder
 		.setWaitForUsersOnStartup(true)
-		.setIntents(Intent.GUILDS, Intent.GUILD_MEMBERS, Intent.GUILD_PRESENCES, Intent.GUILD_MESSAGES, Intent.GUILD_MESSAGE_REACTIONS)
+		.setIntents(Intent.GUILDS, Intent.GUILD_MEMBERS, Intent.GUILD_PRESENCES, Intent.GUILD_MESSAGES, Intent.GUILD_MESSAGE_REACTIONS, Intent.DIRECT_MESSAGES, Intent.DIRECT_MESSAGE_REACTIONS)
 		.setToken(this.config.getToken())
 		.login()
 		.thenAccept(api -> this.setup(api, dataDir))
@@ -406,7 +406,7 @@ public final class DiscordBot {
 		final Map<String, String> arguments = new LinkedHashMap<>();
 
 		if (!parser.parse(rawArguments, commandRecord.node(), arguments)) {
-			context.channel().sendMessage("%s: Invalid command syntax".formatted(Mentions.createUserMention(context.author())));
+			context.channel().sendMessage("%s: Invalid command syntax, usage: %s".formatted(Mentions.createUserMention(context.author()), commandRecord.command.usage()));
 			return;
 		}
 

@@ -26,8 +26,8 @@ import org.javacord.api.entity.message.embed.EmbedBuilder;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
-import net.fabricmc.discord.bot.database.query.ActionQueries;
-import net.fabricmc.discord.bot.database.query.ActionQueries.ActionEntry;
+import net.fabricmc.discord.bot.database.query.UserActionQueries;
+import net.fabricmc.discord.bot.database.query.UserActionQueries.UserActionEntry;
 
 public final class ActionCommand extends Command {
 	@Override
@@ -50,14 +50,14 @@ public final class ActionCommand extends Command {
 		switch (arguments.get("unnamed_0")) {
 		case "list": {
 			int userId = getUserId(context, arguments.get("user"));
-			Collection<ActionEntry> actions = ActionQueries.getActions(context.bot().getDatabase(), userId);
+			Collection<UserActionEntry> actions = UserActionQueries.getActions(context.bot().getDatabase(), userId);
 
 			if (actions.isEmpty()) {
 				context.channel().sendMessage(String.format("No actions for user %d", userId));
 			} else {
 				StringBuilder sb = new StringBuilder(String.format("Actions for user %d:", userId));
 
-				for (ActionEntry action : actions) {
+				for (UserActionEntry action : actions) {
 					String duration, reason;
 
 					if (action.expirationTime() < 0) {
@@ -93,7 +93,7 @@ public final class ActionCommand extends Command {
 		}
 		case "get": {
 			int actionId = Integer.parseInt(arguments.get("id"));
-			ActionEntry action = ActionQueries.getAction(context.bot().getDatabase(), actionId);
+			UserActionEntry action = UserActionQueries.getAction(context.bot().getDatabase(), actionId);
 			if (action == null) throw new CommandException("Unknown action");
 
 			long time = System.currentTimeMillis();

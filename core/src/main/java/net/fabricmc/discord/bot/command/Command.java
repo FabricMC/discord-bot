@@ -16,7 +16,11 @@
 
 package net.fabricmc.discord.bot.command;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+
+import org.javacord.api.entity.channel.ServerChannel;
 
 public abstract class Command {
 	/**
@@ -63,5 +67,37 @@ public abstract class Command {
 		if (ret < 0) throw new CommandException("Unknown or ambiguous user");
 
 		return ret;
+	}
+
+	public static final ServerChannel getChannel(CommandContext context, String channel) throws CommandException {
+		if (channel.startsWith("#")) {
+			String name = channel.substring(1);
+
+			List<ServerChannel> matches = context.server().getChannelsByName(name);
+			if (matches.isEmpty()) matches = context.server().getChannelsByNameIgnoreCase(name);
+			if (matches.size() == 1) return matches.get(0);
+		}
+
+		try {
+			int start, end;
+
+			if (channel.startsWith("<#") && channel.endsWith(">")) {
+				start = 2;
+				end = -1;
+			} else {
+				start = end = 0;
+			}
+
+			long id = Long.parseUnsignedLong(channel.substring(start, channel.length() + end));
+			Optional<ServerChannel> ret = context.server().getChannelById(id);
+
+			if (ret.isPresent()) return ret.get();
+		} catch (NumberFormatException e) { }
+
+		List<ServerChannel> matches = context.server().getChannelsByName(channel);
+		if (matches.isEmpty()) matches = context.server().getChannelsByNameIgnoreCase(channel);
+		if (matches.size() != 1) throw new CommandException("Unknown or ambiguous channel");
+
+		return matches.get(0);
 	}
 }

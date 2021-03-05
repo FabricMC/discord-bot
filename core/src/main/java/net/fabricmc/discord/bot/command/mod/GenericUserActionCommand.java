@@ -21,8 +21,8 @@ import java.util.Map;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 
-public final class GenericActionCommand extends Command {
-	public GenericActionCommand(ActionType type, boolean activate) {
+public final class GenericUserActionCommand extends Command {
+	public GenericUserActionCommand(UserActionType type, boolean activate) {
 		this.type = type;
 		this.activate = activate;
 	}
@@ -58,14 +58,14 @@ public final class GenericActionCommand extends Command {
 		if (activate) {
 			String duration = type.hasDuration ? arguments.get("duration") : null;
 
-			ActionUtil.applyAction(type, target, duration, reason, 0, context);
+			ActionUtil.applyUserAction(type, target, duration, reason, context);
 		} else {
-			ActionUtil.suspendAction(type, target, reason, context);
+			ActionUtil.suspendUserAction(type, target, reason, context);
 		}
 
 		return true;
 	}
 
-	private final ActionType type;
+	private final UserActionType type;
 	private final boolean activate;
 }

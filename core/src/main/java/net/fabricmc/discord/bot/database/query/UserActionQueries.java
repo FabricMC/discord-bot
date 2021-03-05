@@ -26,12 +26,12 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-import net.fabricmc.discord.bot.command.mod.ActionType;
+import net.fabricmc.discord.bot.command.mod.UserActionType;
 import net.fabricmc.discord.bot.database.Database;
 import net.fabricmc.discord.bot.database.IdArmor;
 
-public final class ActionQueries {
-	public static ActionEntry getAction(Database db, int actionId) throws SQLException {
+public final class UserActionQueries {
+	public static UserActionEntry getAction(Database db, int actionId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
 		int rawActionId = IdArmor.decodeOrThrow(actionId, "action id");
@@ -52,8 +52,8 @@ public final class ActionQueries {
 				long suspendTime = res.getLong(9);
 				if (res.wasNull()) suspendTime = -1;
 
-				return new ActionEntry(actionId, // id
-						ActionType.get(res.getString(1)), // type
+				return new UserActionEntry(actionId, // id
+						UserActionType.get(res.getString(1)), // type
 						IdArmor.encode(res.getInt(2)), // targetUserId
 						IdArmor.encode(res.getInt(3)), // actorUserId
 						res.getLong(4), // creationTime
@@ -67,7 +67,7 @@ public final class ActionQueries {
 		}
 	}
 
-	public static Collection<ActionEntry> getActions(Database db, int userId) throws SQLException {
+	public static Collection<UserActionEntry> getActions(Database db, int userId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
 		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
@@ -80,7 +80,7 @@ public final class ActionQueries {
 			ps.setInt(1, rawUserId);
 
 			try (ResultSet res = ps.executeQuery()) {
-				List<ActionEntry> ret = new ArrayList<>();
+				List<UserActionEntry> ret = new ArrayList<>();
 
 				while (res.next()) {
 					int rawSuspenderUserId = res.getInt(8);
@@ -89,8 +89,8 @@ public final class ActionQueries {
 					long suspendTime = res.getLong(9);
 					if (res.wasNull()) suspendTime = -1;
 
-					ret.add(new ActionEntry(IdArmor.encode(res.getInt(1)), // id
-							ActionType.get(res.getString(2)), // type
+					ret.add(new UserActionEntry(IdArmor.encode(res.getInt(1)), // id
+							UserActionType.get(res.getString(2)), // type
 							userId, // targetUserId
 							IdArmor.encode(res.getInt(3)), // actorUserId
 							res.getLong(4), // creationTime
@@ -107,7 +107,7 @@ public final class ActionQueries {
 		}
 	}
 
-	public static ActionEntry createAction(Database db, ActionType type, int targetUserId, int actorUserId, long durationMs, String reason, int prevId) throws SQLException {
+	public static UserActionEntry createAction(Database db, UserActionType type, int targetUserId, int actorUserId, long durationMs, String reason, int prevId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 		if (type == null) throw new NullPointerException("null type");
 		if (targetUserId < 0) throw new IllegalArgumentException("invalid target userid");
@@ -163,19 +163,19 @@ public final class ActionQueries {
 
 			conn.commit();
 
-			return new ActionEntry(IdArmor.encode(rawActionId), type, targetUserId, actorUserId,
+			return new UserActionEntry(IdArmor.encode(rawActionId), type, targetUserId, actorUserId,
 					creationTime, expirationTime,
 					reason, IdArmor.encodeOptional(prevId),
 					-1, -1, null);
 		}
 	}
 
-	public record ActionEntry(int id, ActionType type, int targetUserId, int actorUserId,
+	public record UserActionEntry(int id, UserActionType type, int targetUserId, int actorUserId,
 			long creationTime, long expirationTime,
 			String reason, int prevId,
 			int suspenderUserId, long suspensionTime, String suspendReason) { }
 
-	public static Collection<ExpiringActionEntry> getExpiringActions(Database db, long maxTime) throws SQLException {
+	public static Collection<ExpiringUserActionEntry> getExpiringActions(Database db, long maxTime) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
 		try (Connection conn = db.getConnection();
@@ -183,10 +183,10 @@ public final class ActionQueries {
 			ps.setLong(1, maxTime);
 
 			try (ResultSet res = ps.executeQuery()) {
-				List<ExpiringActionEntry> ret = new ArrayList<>();
+				List<ExpiringUserActionEntry> ret = new ArrayList<>();
 
 				while (res.next()) {
-					ret.add(new ExpiringActionEntry(IdArmor.encode(res.getInt(1)), ActionType.get(res.getString(2)), IdArmor.encode(res.getInt(3)), res.getLong(4)));
+					ret.add(new ExpiringUserActionEntry(IdArmor.encode(res.getInt(1)), UserActionType.get(res.getString(2)), IdArmor.encode(res.getInt(3)), res.getLong(4)));
 				}
 
 				return ret;
@@ -194,7 +194,7 @@ public final class ActionQueries {
 		}
 	}
 
-	public record ExpiringActionEntry(int id, ActionType type, int targetUserId, long expirationTime) { }
+	public record ExpiringUserActionEntry(int id, UserActionType type, int targetUserId, long expirationTime) { }
 
 	public static boolean isExpiringAction(Database db, int actionId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
@@ -267,13 +267,15 @@ public final class ActionQueries {
 		}
 	}
 
-	public static int getActiveAction(Database db, int userId, ActionType type) throws SQLException {
+	public static int getActiveAction(Database db, int userId, UserActionType type) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
 		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
 
 		try (Connection conn = db.getConnection();
-				PreparedStatement ps = conn.prepareStatement("SELECT a.id FROM `activeaction` aa, `action` a WHERE aa.target_user_id = ? AND a.id = aa.action_id AND a.type = ?")) {
+				PreparedStatement ps = conn.prepareStatement("SELECT a.id "
+						+ "FROM `activeaction` aa, `action` a "
+						+ "WHERE aa.target_user_id = ? AND a.id = aa.action_id AND a.type = ?")) {
 			ps.setInt(1, rawUserId);
 			ps.setString(2, type.id);
 
@@ -285,11 +287,11 @@ public final class ActionQueries {
 		}
 	}
 
-	public static Collection<ActiveActionEntry> getActiveActions(Database db, long discordUserId) throws SQLException {
+	public static Collection<ActiveUserActionEntry> getActiveActions(Database db, long discordUserId) throws SQLException {
 		return getActiveActions(db, Collections.singletonList(discordUserId));
 	}
 
-	public static Collection<ActiveActionEntry> getActiveActions(Database db, Collection<Long> discordUserIds) throws SQLException {
+	public static Collection<ActiveUserActionEntry> getActiveActions(Database db, Collection<Long> discordUserIds) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
 		try (Connection conn = db.getConnection();
@@ -298,15 +300,15 @@ public final class ActionQueries {
 						+ "JOIN `activeaction` aa ON aa.target_user_id = du.user_id "
 						+ "JOIN `action` a ON a.id = aa.action_id "
 						+ "WHERE du.id = ?")) {
-			List<ActiveActionEntry> ret = new ArrayList<>();
+			List<ActiveUserActionEntry> ret = new ArrayList<>();
 
 			for (long discordUserId : discordUserIds) {
 				ps.setLong(1, discordUserId);
 
 				try (ResultSet res = ps.executeQuery()) {
 					while (res.next()) {
-						ret.add(new ActiveActionEntry(IdArmor.encode(res.getInt(1)), // id
-								ActionType.get(res.getString(2)), // type
+						ret.add(new ActiveUserActionEntry(IdArmor.encode(res.getInt(1)), // id
+								UserActionType.get(res.getString(2)), // type
 								IdArmor.encode(res.getInt(3)), // targetUserId
 								discordUserId, // targetDiscordUserId
 								res.getLong(4), // expirationTime
@@ -319,7 +321,7 @@ public final class ActionQueries {
 		}
 	}
 
-	public record ActiveActionEntry(int id, ActionType type, int targetUserId, long targetDiscordUserId, long expirationTime, String reason) { }
+	public record ActiveUserActionEntry(int id, UserActionType type, int targetUserId, long targetDiscordUserId, long expirationTime, String reason) { }
 
 	public static String getLockedNick(Database db, long discordUserId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");

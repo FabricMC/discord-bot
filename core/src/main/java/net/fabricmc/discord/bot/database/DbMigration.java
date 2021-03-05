@@ -58,6 +58,7 @@ final class DbMigration {
 			case 2: migrate_2_3(st);
 			case 3: migrate_3_4(st);
 			case 4: migrate_4_5(st);
+			case 5: migrate_5_6(st);
 			}
 
 			st.executeUpdate(String.format("REPLACE INTO `config` VALUES ('dbVersion', '%d')", Database.currentVersion));
@@ -111,5 +112,13 @@ final class DbMigration {
 
 	private static void migrate_5_6(Statement st) throws SQLException {
 		st.executeUpdate("CREATE TABLE `nicklock` (`discorduser_id` INTEGER PRIMARY KEY, `nick` TEXT)");
+
+		st.executeUpdate("CREATE TABLE `channelaction` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `type` TEXT, `channel_id` INTEGER, `data` INTEGER, `resetdata` INTEGER, `actor_user_id` INTEGER, `creation` INTEGER, `expiration` INTEGER, `reason` TEXT, `prev_id` INTEGER)");
+		st.executeUpdate("CREATE INDEX `channelaction_channel_id` ON `channelaction` (`channel_id`)");
+		st.executeUpdate("CREATE TABLE `channelactionsuspension` (`channelaction_id` INTEGER PRIMARY KEY, `suspender_user_id` INTEGER, `time` INTEGER, `reason` TEXT)");
+		st.executeUpdate("CREATE TABLE `channelactionexpiration` (`channelaction_id` INTEGER PRIMARY KEY, `time` INTEGER)");
+		st.executeUpdate("CREATE INDEX `channelactionexpiration_time` ON `channelactionexpiration` (`time`)");
+		st.executeUpdate("CREATE TABLE `activechannelaction` (`channelaction_id` INTEGER PRIMARY KEY, `channel_id` INTEGER)");
+		st.executeUpdate("CREATE INDEX `activechannelaction_channel_id` ON `activechannelaction` (`channel_id`)");
 	}
 }

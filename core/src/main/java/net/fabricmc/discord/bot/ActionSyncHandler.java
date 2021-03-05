@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import org.javacord.api.entity.channel.ServerChannel;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
 import org.javacord.api.event.server.member.ServerMemberJoinEvent;
@@ -31,10 +32,14 @@ import org.javacord.api.listener.ChainableGloballyAttachableListenerManager;
 import org.javacord.api.listener.server.member.ServerMemberJoinListener;
 
 import net.fabricmc.discord.bot.command.mod.ActionUtil;
-import net.fabricmc.discord.bot.database.query.ActionQueries;
-import net.fabricmc.discord.bot.database.query.ActionQueries.ActionEntry;
-import net.fabricmc.discord.bot.database.query.ActionQueries.ActiveActionEntry;
-import net.fabricmc.discord.bot.database.query.ActionQueries.ExpiringActionEntry;
+import net.fabricmc.discord.bot.database.query.UserActionQueries;
+import net.fabricmc.discord.bot.database.query.UserActionQueries.UserActionEntry;
+import net.fabricmc.discord.bot.database.query.UserActionQueries.ActiveUserActionEntry;
+import net.fabricmc.discord.bot.database.query.UserActionQueries.ExpiringUserActionEntry;
+import net.fabricmc.discord.bot.database.query.ChannelActionQueries;
+import net.fabricmc.discord.bot.database.query.ChannelActionQueries.ActiveChannelActionEntry;
+import net.fabricmc.discord.bot.database.query.ChannelActionQueries.ChannelActionEntry;
+import net.fabricmc.discord.bot.database.query.ChannelActionQueries.ExpiringChannelActionEntry;
 
 /**
  * Mechanism to keep Discord up to date with the bot's actions.
@@ -49,6 +54,7 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 	private Server server;
 	private Future<?> expirationsUpdateFuture; // task for periodically scheduling expirations
 	private final Map<Integer, Future<?>> scheduledActionExpirations = new HashMap<>(); // tasks for every actual expiring action within the expiration window
+	private final Map<Integer, Future<?>> scheduledChannelActionExpirations = new HashMap<>(); // tasks for every actual expiring action within the expiration window
 
 	ActionSyncHandler(DiscordBot bot) {
 		this.bot = bot;
@@ -58,7 +64,7 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 	}
 
 	private synchronized void onReady(Server server, long prevActive) {
-		// re-activate active actions for all members
+		// re-activate active actions for all members and channels
 
 		this.server = server;
 
@@ -70,16 +76,32 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 		}
 
 		try {
-			Collection<ActiveActionEntry> activeActions = ActionQueries.getActiveActions(bot.getDatabase(), discordUserIds);
 			long time = System.currentTimeMillis();
+			Collection<ActiveUserActionEntry> activeActions = UserActionQueries.getActiveActions(bot.getDatabase(), discordUserIds);
 
-			for (ActiveActionEntry action : activeActions) {
+			for (ActiveUserActionEntry action : activeActions) {
 				User user = server.getMemberById(action.targetDiscordUserId()).orElse(null);
 				if (user == null) continue;
 
 				if (action.expirationTime() < 0 || action.expirationTime() > time) {
 					try {
 						action.type().activate(server, user, action.reason(), bot);
+					} catch (Exception e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				}
+			}
+
+			Collection<ActiveChannelActionEntry> activeChannelActions = ChannelActionQueries.getActiveActions(bot.getDatabase());
+
+			for (ActiveChannelActionEntry action : activeChannelActions) {
+				ServerChannel channel = server.getChannelById(action.channelId()).orElse(null);
+				if (channel == null) continue;
+
+				if (action.expirationTime() < 0 || action.expirationTime() > time) {
+					try {
+						action.type().activate(server, channel, action.data(), action.reason(), bot);
 					} catch (Exception e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
@@ -107,6 +129,12 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 		}
 
 		scheduledActionExpirations.clear();
+
+		for (Future<?> future : scheduledChannelActionExpirations.values()) {
+			future.cancel(false);
+		}
+
+		scheduledChannelActionExpirations.clear();
 	}
 
 	private synchronized void updateExpirations() {
@@ -116,8 +144,12 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 		long maxTime = time + expirationWindowMinutes * 60_000L;
 
 		try {
-			for (ExpiringActionEntry entry : ActionQueries.getExpiringActions(bot.getDatabase(), maxTime)) {
-				addEntry(entry, time);
+			for (ExpiringUserActionEntry entry : UserActionQueries.getExpiringActions(bot.getDatabase(), maxTime)) {
+				addUserEntry(entry, time);
+			}
+
+			for (ExpiringChannelActionEntry entry : ChannelActionQueries.getExpiringActions(bot.getDatabase(), maxTime)) {
+				addChannelEntry(entry, time);
 			}
 		} catch (SQLException e) {
 			// TODO Auto-generated catch block
@@ -125,24 +157,24 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 		}
 	}
 
-	public void onNewAction(ActionEntry entry) {
+	public void onNewUserAction(UserActionEntry entry) {
 		if (entry.expirationTime() <= 0) return; // no expiration
 
 		long time = System.currentTimeMillis();
 		if (time + expirationWindowMinutes * 60_000L < entry.expirationTime()) return;
 
-		ExpiringActionEntry expEntry = new ExpiringActionEntry(entry.id(), entry.type(), entry.targetUserId(), entry.expirationTime());
+		ExpiringUserActionEntry expEntry = new ExpiringUserActionEntry(entry.id(), entry.type(), entry.targetUserId(), entry.expirationTime());
 
 		try {
 			synchronized (this) {
 				// make sure the expiration didn't execute yet
 				// (updateExpirations may have run between creating the action and calling notify)
 
-				if (!ActionQueries.isExpiringAction(bot.getDatabase(), entry.id())) {
+				if (!UserActionQueries.isExpiringAction(bot.getDatabase(), entry.id())) {
 					return;
 				}
 
-				addEntry(expEntry, time);
+				addUserEntry(expEntry, time);
 			}
 		} catch (SQLException e) {
 			// TODO Auto-generated catch block
@@ -150,37 +182,96 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 		}
 	}
 
-	private void addEntry(ExpiringActionEntry entry, long time) {
+	private void addUserEntry(ExpiringUserActionEntry entry, long time) {
 		if (server == null) return; // server gone
 
 		long delay = entry.expirationTime() - time;
 
 		if (delay <= 0) {
-			expire(entry, false);
+			expireUserAction(entry, false);
 		} else if (!scheduledActionExpirations.containsKey(entry.id())) {
-			scheduledActionExpirations.put(entry.id(), bot.getScheduledExecutor().schedule(() -> expire(entry, true), delay, TimeUnit.MILLISECONDS));
+			scheduledActionExpirations.put(entry.id(), bot.getScheduledExecutor().schedule(() -> expireUserAction(entry, true), delay, TimeUnit.MILLISECONDS));
 		}
 	}
 
-	private synchronized void expire(ExpiringActionEntry entry, boolean scheduled) {
+	private synchronized void expireUserAction(ExpiringUserActionEntry entry, boolean scheduled) {
 		if (server == null) return; // server gone
 		if (scheduled && scheduledActionExpirations.remove(entry.id()) == null) return; // no longer valid
 
 		try {
-			ActionUtil.expireAction(entry, bot, server);
+			ActionUtil.expireUserAction(entry, bot, server);
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 
 			if (server != null) {
-				scheduledActionExpirations.put(entry.id(), bot.getScheduledExecutor().schedule(() -> expire(entry, true), 5, TimeUnit.MINUTES)); // retry after 5 min
+				scheduledActionExpirations.put(entry.id(), bot.getScheduledExecutor().schedule(() -> expireUserAction(entry, true), 5, TimeUnit.MINUTES)); // retry after 5 min
 			}
 		}
 	}
 
-	public synchronized void onActionSuspension(int actionId) {
+	public synchronized void onUserActionSuspension(int actionId) {
 		// cancel expiration, the suspension handling already reverted the action
 		Future<?> future = scheduledActionExpirations.remove(actionId);
+		if (future != null) future.cancel(false);
+	}
+
+	public void onNewChannelAction(ChannelActionEntry entry) {
+		if (entry.expirationTime() <= 0) return; // no expiration
+
+		long time = System.currentTimeMillis();
+		if (time + expirationWindowMinutes * 60_000L < entry.expirationTime()) return;
+
+		ExpiringChannelActionEntry expEntry = new ExpiringChannelActionEntry(entry.id(), entry.type(), entry.channelId(), entry.resetData(), entry.expirationTime());
+
+		try {
+			synchronized (this) {
+				// make sure the expiration didn't execute yet
+				// (updateExpirations may have run between creating the action and calling notify)
+
+				if (!ChannelActionQueries.isExpiringAction(bot.getDatabase(), entry.id())) {
+					return;
+				}
+
+				addChannelEntry(expEntry, time);
+			}
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+
+	private void addChannelEntry(ExpiringChannelActionEntry entry, long time) {
+		if (server == null) return; // server gone
+
+		long delay = entry.expirationTime() - time;
+
+		if (delay <= 0) {
+			expireChannelAction(entry, false);
+		} else if (!scheduledChannelActionExpirations.containsKey(entry.id())) {
+			scheduledChannelActionExpirations.put(entry.id(), bot.getScheduledExecutor().schedule(() -> expireChannelAction(entry, true), delay, TimeUnit.MILLISECONDS));
+		}
+	}
+
+	private synchronized void expireChannelAction(ExpiringChannelActionEntry entry, boolean scheduled) {
+		if (server == null) return; // server gone
+		if (scheduled && scheduledChannelActionExpirations.remove(entry.id()) == null) return; // no longer valid
+
+		try {
+			ActionUtil.expireChannelAction(entry, bot, server);
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+
+			if (server != null) {
+				scheduledChannelActionExpirations.put(entry.id(), bot.getScheduledExecutor().schedule(() -> expireChannelAction(entry, true), 5, TimeUnit.MINUTES)); // retry after 5 min
+			}
+		}
+	}
+
+	public synchronized void onChannelActionSuspension(int channelActionId) {
+		// cancel expiration, the suspension handling already reverted the action
+		Future<?> future = scheduledChannelActionExpirations.remove(channelActionId);
 		if (future != null) future.cancel(false);
 	}
 
@@ -197,10 +288,10 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 
 		try {
 			synchronized (this) {
-				Collection<ActiveActionEntry> actions = ActionQueries.getActiveActions(bot.getDatabase(), user.getId());
+				Collection<ActiveUserActionEntry> actions = UserActionQueries.getActiveActions(bot.getDatabase(), user.getId());
 				long time = System.currentTimeMillis();
 
-				for (ActiveActionEntry action : actions) {
+				for (ActiveUserActionEntry action : actions) {
 					if (action.expirationTime() < 0 || action.expirationTime() > time) {
 						try {
 							action.type().activate(server, user, action.reason(), bot);
@@ -220,7 +311,7 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 	public boolean applyNickLock(Server server, User user) {
 		try {
 			String displayName = user.getDisplayName(server);
-			String lockedNick = ActionQueries.getLockedNick(bot.getDatabase(), user.getId());
+			String lockedNick = UserActionQueries.getLockedNick(bot.getDatabase(), user.getId());
 
 			if (lockedNick == null // no active nicklock
 					|| lockedNick.equals(displayName)) { // permitted nick change
