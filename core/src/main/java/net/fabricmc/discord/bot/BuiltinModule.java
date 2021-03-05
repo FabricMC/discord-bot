@@ -33,6 +33,7 @@ import net.fabricmc.discord.bot.command.core.DbCommand;
 import net.fabricmc.discord.bot.command.core.GroupCommand;
 import net.fabricmc.discord.bot.command.core.PermissionCommand;
 import net.fabricmc.discord.bot.command.mod.ActionCommand;
+import net.fabricmc.discord.bot.command.mod.CleanCommand;
 import net.fabricmc.discord.bot.command.mod.GenericUserActionCommand;
 import net.fabricmc.discord.bot.command.mod.LockCommand;
 import net.fabricmc.discord.bot.command.mod.NickCommand;
@@ -78,6 +79,7 @@ final class BuiltinModule implements Module, MessageCreateListener {
 
 		// mod/action
 		bot.registerCommand(new ActionCommand());
+		bot.registerCommand(new CleanCommand());
 		bot.registerCommand(new LockCommand());
 		bot.registerCommand(new UnlockCommand());
 		bot.registerCommand(new NickCommand());

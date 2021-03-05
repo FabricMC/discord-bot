@@ -83,6 +83,7 @@ public final class DiscordBot {
 	private final ActiveHandler activeHandler;
 	private final UserHandler userHandler;
 	private final LogHandler logHandler;
+	private final MessageIndex messageIndex;
 	private final ActionSyncHandler actionSyncHandler;
 	/**
 	 * A list of all enabled modules.
@@ -101,6 +102,7 @@ public final class DiscordBot {
 		this.activeHandler = new ActiveHandler(this);
 		this.userHandler = new UserHandler(this);
 		this.logHandler = new LogHandler(this);
+		this.messageIndex = new MessageIndex(this);
 		this.actionSyncHandler = new ActionSyncHandler(this);
 
 		ActionUtil.registerConfig(this);
@@ -113,6 +115,7 @@ public final class DiscordBot {
 		// early event registrations to ensure nothing will be missed
 		activeHandler.registerEarlyHandlers(builder);
 		userHandler.registerEarlyHandlers(builder);
+		messageIndex.registerEarlyHandlers(builder);
 		actionSyncHandler.registerEarlyHandlers(builder);
 
 		builder
@@ -145,6 +148,10 @@ public final class DiscordBot {
 
 	public LogHandler getLogHandler() {
 		return logHandler;
+	}
+
+	public MessageIndex getMessageIndex() {
+		return messageIndex;
 	}
 
 	public ActionSyncHandler getActionSyncHandler() {

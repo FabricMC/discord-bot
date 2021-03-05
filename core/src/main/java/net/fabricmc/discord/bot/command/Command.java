@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.javacord.api.entity.channel.ServerChannel;
+import org.javacord.api.entity.channel.ServerTextChannel;
 
 public abstract class Command {
 	/**
@@ -99,5 +100,15 @@ public abstract class Command {
 		if (matches.size() != 1) throw new CommandException("Unknown or ambiguous channel");
 
 		return matches.get(0);
+	}
+
+	public static final ServerTextChannel getTextChannel(CommandContext context, String channel) throws CommandException {
+		ServerChannel ret = getChannel(context, channel);
+
+		if (ret instanceof ServerTextChannel) {
+			return (ServerTextChannel) ret;
+		} else {
+			throw new CommandException("Not a text channel");
+		}
 	}
 }
