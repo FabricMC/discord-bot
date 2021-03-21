@@ -13,6 +13,8 @@ import net.fabricmc.discord.bot.message.Paginator;
 import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.ClassMapping;
 
 public final class YarnClassCommand extends Command {
+	private final MappingRepository repo;
+
 	YarnClassCommand(MappingRepository repo) {
 		this.repo = repo;
 	}
@@ -63,6 +65,4 @@ public final class YarnClassCommand extends Command {
 
 		return true;
 	}
-
-	private final MappingRepository repo;
 }
