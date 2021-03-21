@@ -33,15 +33,17 @@ import net.fabricmc.discord.bot.command.UsageParser.VarNode;
 public final class CommandParser {
 	public static void main(String[] args) {
 		UsageParser usageParser = new UsageParser();
-		Node node = usageParser.parse("(any|block|be|blockentity|entity) (class <class> | id <id>) [<dimId>] [--ticking] [--unloaded] [--countOnly | --chunkCounts] [--filter[=<x>]] [--clear]");
+		//Node node = usageParser.parse("(any|block|be|blockentity|entity) (class <class> | id <id>) [<dimId>] [--ticking] [--unloaded] [--countOnly | --chunkCounts] [--filter[=<x>]] [--clear]");
 		//Node node = usageParser.parse("list [<user>] | (add|remove) [<user>] <name>");
 		//Node node = usageParser.parse("warn <user> <reason...> <test> ss [<asd>]");
+		Node node = usageParser.parse("<className> [latest | latestStable | <mcVersion>]");
 		System.out.printf("root node: %s%n", node.toStringFull());
 
 		//String input = "be id minecraft:chest nether --unloaded --countOnly --filter=test --clear";
-		String input = "be id minecraft:chest nether --unloaded --chunkCounts --filter=test --clear";
+		//String input = "be id minecraft:chest nether --unloaded --chunkCounts --filter=test --clear";
 		//String input = "add somegroup";
 		//String input = "warn someone reason asd xy ss qwe";
+		String input = "1337";
 		Map<String, String> result = new LinkedHashMap<>();
 		CommandParser cmdParser = new CommandParser();
 		boolean rval = cmdParser.parse(input, node, result);
@@ -197,7 +199,7 @@ public final class CommandParser {
 			tokensAvailable = getQueueTokensAvailable();
 
 			do {
-				Node next = null;
+				Node nested = null;
 				boolean matched;
 
 				if (node instanceof FloatingArgNode) {
@@ -213,14 +215,14 @@ public final class CommandParser {
 					}
 				} else if (node instanceof GroupNode) {
 					GroupNode group = (GroupNode) node;
-					next = group.child;
+					nested = group.child;
 					matched = true;
 				} else if (node instanceof OrNode) {
 					OrNode orNode = (OrNode) node;
 
 					for (Node option : orNode) {
-						if (next == null) {
-							next = option;
+						if (nested == null) {
+							nested = option;
 						} else {
 							queue(option, 0, token, tokensAvailable);
 						}
@@ -240,23 +242,27 @@ public final class CommandParser {
 					throw new IllegalStateException();
 				}
 
-				if (!matched && !node.isOptional()) {
-					continue queueLoop; // dead end
-				}
+				assert matched || nested == null; // nested should be null if !matched
 
-				if (next == null) {
-					next = node;
+				Node next = null;
 
-					while (next.getNext() == null && next.getParent() != null) {
-						next = next.getParent();
-					}
-
-					next = next.getNext();
+				if (!matched && !node.isOptional()) { // dead end
+					continue queueLoop;
+				} else if (nested != null) {
+					next = nested;
+				} else {
+					next = node.getNextRecursive();
 				}
 
 				if (matched) {
-					if (node.isOptional() && node.isPositionDependent() && next != null) {
-						queue(next, 0, token, tokensAvailable); // may have to retry without node
+					if (node.isOptional() && node.isPositionDependent()) { // queue retrying without node (only required for matched=true, otherwise it already skips in the linear loop)
+						Node nextWithSkip = nested == null ? next : node.getNextRecursive();
+
+						if (nextWithSkip == null) { // at last node
+							if (tokensAvailable == 0 && checkFloatingArgs()) return true;
+						} else {
+							queue(nextWithSkip, 0, token, tokensAvailable);
+						}
 					}
 
 					int tokensConsumed;
@@ -299,12 +305,8 @@ public final class CommandParser {
 				}
 
 				if (next == null) {
-					if (!floatingArgs.isEmpty()) { // check if all floating args have been provided on the path taken
-						for (String arg : floatingArgs.keySet()) {
-							if (!allowedFloatingArgs.contains(arg)) {
-								continue queueLoop; // extra floating args
-							}
-						}
+					if (tokensAvailable > 0 || !checkFloatingArgs()) {
+						continue queueLoop;
 					}
 
 					return true;
@@ -316,6 +318,18 @@ public final class CommandParser {
 		}
 
 		return false;
+	}
+
+	private boolean checkFloatingArgs() {
+		if (!floatingArgs.isEmpty()) { // check if all floating args have been provided on the path taken
+			for (String arg : floatingArgs.keySet()) {
+				if (!allowedFloatingArgs.contains(arg)) { // extra floating args
+					return false;
+				}
+			}
+		}
+
+		return true;
 	}
 
 	private void queue(Node node, int nodeData, int token, int tokensAvailable) {

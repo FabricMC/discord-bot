@@ -429,6 +429,19 @@ public final class UsageParser {
 			return ret;
 		}
 
+		public final Node getNextRecursive() {
+			Node cur = this;
+
+			do {
+				Node next = cur.getNext();
+				if (next != null) return next;
+
+				cur = cur.getParent();
+			} while (cur != null);
+
+			return null;
+		}
+
 		public final boolean isOptional() {
 			return optional;
 		}

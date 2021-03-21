@@ -49,10 +49,10 @@ public final class ConfigCommand extends Command {
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) {
 		return switch (arguments.get("unnamed_0")) {
-			case "get" -> this.runGet(context, arguments);
-			case "set" -> this.runSet(context, arguments);
-			case "list" -> this.runList(context, arguments);
-			default -> throw new IllegalStateException("Impossible command state reached!");
+		case "get" -> this.runGet(context, arguments);
+		case "set" -> this.runSet(context, arguments);
+		case "list" -> this.runList(context, arguments);
+		default -> throw new IllegalStateException("Impossible command state reached!");
 		};
 	}
 
@@ -65,7 +65,7 @@ public final class ConfigCommand extends Command {
 		for (ConfigKey<?> configEntry : context.bot().getConfigEntries()) {
 			if (pos % 10 == 0 && pos != 0) {
 				pages.add(currentPage.toString());
-				currentPage = new StringBuilder();
+				currentPage.setLength(0);;
 				currentPage.append("__**Config Entries:**__\n");
 			}
 
