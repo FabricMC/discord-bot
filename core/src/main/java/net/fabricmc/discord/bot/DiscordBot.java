@@ -193,8 +193,16 @@ public final class DiscordBot {
 			return;
 		}
 
-		if (this.commands.putIfAbsent(command.name(), new CommandRecord(node, command)) != null) {
+		CommandRecord cmdEntry = new CommandRecord(node, command);
+
+		if (commands.putIfAbsent(command.name(), cmdEntry) != null) {
 			throw new IllegalArgumentException("Cannot register command with name %s more than once".formatted(command.name()));
+		}
+
+		for (String alias : command.aliases()) {
+			if (commands.putIfAbsent(alias, cmdEntry) != null) {
+				throw new IllegalArgumentException("Cannot register command with name %s / alias %s more than once".formatted(command.name(), alias));
+			}
 		}
 	}
 

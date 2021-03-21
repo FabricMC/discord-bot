@@ -23,6 +23,11 @@ public final class YarnFieldCommand extends Command {
 	}
 
 	@Override
+	public List<String> aliases() {
+		return List.of("yf");
+	}
+
+	@Override
 	public String usage() {
 		return "<fieldName> [latest | latestStable | <mcVersion>]";
 	}

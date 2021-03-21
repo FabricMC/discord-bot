@@ -23,6 +23,11 @@ public final class YarnMethodCommand extends Command {
 	}
 
 	@Override
+	public List<String> aliases() {
+		return List.of("ym");
+	}
+
+	@Override
 	public String usage() {
 		return "<methodName> [latest | latestStable | <mcVersion>]";
 	}

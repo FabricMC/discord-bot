@@ -29,6 +29,10 @@ public abstract class Command {
 	 */
 	public abstract String name();
 
+	public List<String> aliases() {
+		return List.of();
+	}
+
 	/**
 	 * Gets the usage of the command.
 	 * The command usage will be used to parse arguments and determine whether an argument is required or not.
