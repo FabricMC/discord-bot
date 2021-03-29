@@ -318,14 +318,6 @@ public final class DiscordBot {
 	}
 
 	private void setup(DiscordApi api, Path dataDir) {
-		Server server = api.getServerById(config.getGuildId()).orElse(null);
-
-		if (server != null) {
-			activeHandler.onServerReady(server);
-		} else {
-			LOGGER.warn("server with configured id unavailable?");
-		}
-
 		// Must only iterate accepted modules
 		for (Module module : this.getModules()) {
 			module.setup(this, api, LogManager.getLogger(module.getName()), dataDir);
@@ -345,6 +337,14 @@ public final class DiscordBot {
 		}
 
 		DiscordBot.LOGGER.info("Loaded {} modules:\n{}", this.modules.size(), moduleList.toString());
+
+		Server server = api.getServerById(config.getGuildId()).orElse(null);
+
+		if (server != null) {
+			activeHandler.onServerReady(server);
+		} else {
+			LOGGER.warn("server with configured id unavailable?");
+		}
 	}
 
 	/**

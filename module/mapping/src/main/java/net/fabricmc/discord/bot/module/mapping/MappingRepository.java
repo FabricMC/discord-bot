@@ -19,15 +19,9 @@ package net.fabricmc.discord.bot.module.mapping;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.http.HttpClient;
-import java.net.http.HttpClient.Redirect;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,6 +37,7 @@ import org.jetbrains.annotations.Nullable;
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.module.mapping.mappinglib.MemoryMappingTree;
 import net.fabricmc.discord.bot.module.mapping.mappinglib.Tiny2Reader;
+import net.fabricmc.discord.bot.util.HttpUtil;
 
 public final class MappingRepository {
 	private static final int updatePeriodSec = 120;
@@ -52,11 +47,6 @@ public final class MappingRepository {
 	private static final String KIND_YARN = "yarn";
 
 	private static final Logger LOGGER = LogManager.getLogger(MappingRepository.class);
-	private static final Duration timeout = Duration.ofSeconds(20);
-	private static final HttpClient client = HttpClient.newBuilder()
-			.followRedirects(Redirect.NORMAL)
-			.connectTimeout(timeout)
-			.build();
 
 	private final DiscordBot bot;
 
@@ -90,7 +80,7 @@ public final class MappingRepository {
 	}
 
 	private void updateLatestMcVersions() throws IOException, InterruptedException, URISyntaxException {
-		HttpResponse<InputStream> response = makeHttpRequest(metaHost, "/v2/versions/game");
+		HttpResponse<InputStream> response = HttpUtil.makeRequest(metaHost, "/v2/versions/game");
 		if (response.statusCode() != 200) throw new IOException("request failed with code "+response.statusCode());
 
 		String latestMcVersion = null;
@@ -144,7 +134,7 @@ public final class MappingRepository {
 	private static @Nullable String getMavenId(String mcVersion, String kind) throws IOException, InterruptedException, URISyntaxException {
 		if (mcVersion.indexOf('/') >= 0)  throw new IllegalArgumentException("invalid mc version: "+mcVersion);
 
-		HttpResponse<InputStream> response = makeHttpRequest(metaHost, "/v2/versions/%s/%s".formatted(kind, mcVersion), "limit=1");
+		HttpResponse<InputStream> response = HttpUtil.makeRequest(metaHost, "/v2/versions/%s/%s".formatted(kind, mcVersion), "limit=1");
 		if (response.statusCode() != 200) throw new IOException("request failed with code "+response.statusCode());
 
 		String mavenId = null;
@@ -206,7 +196,7 @@ public final class MappingRepository {
 			String intermediaryMavenId = getMavenId(mcVersion, KIND_INTERMEDIARY);
 			MemoryMappingTree yarnMappingTree = null;
 
-			HttpResponse<InputStream> response = makeHttpRequest(mavenHost, getMavenPath(yarnMavenId, "mergedv2", "jar"));
+			HttpResponse<InputStream> response = HttpUtil.makeRequest(mavenHost, getMavenPath(yarnMavenId, "mergedv2", "jar"));
 
 			if (response.statusCode() != 200) {
 				response.body().close();
@@ -247,17 +237,5 @@ public final class MappingRepository {
 		}
 
 		return String.format("/%s/%s/%s/%s-%s%s.%s", group.replace('.', '/'), artifact, version, artifact, version, classifier, extension);
-	}
-
-	private static HttpResponse<InputStream> makeHttpRequest(String host, String path) throws URISyntaxException, IOException, InterruptedException {
-		return makeHttpRequest(host, path, null);
-	}
-
-	private static HttpResponse<InputStream> makeHttpRequest(String host, String path, String query) throws URISyntaxException, IOException, InterruptedException {
-		HttpRequest request = HttpRequest.newBuilder(new URI("https", null, host, -1, path, query, null))
-				.timeout(timeout)
-				.build();
-
-		return client.send(request, BodyHandlers.ofInputStream());
 	}
 }
