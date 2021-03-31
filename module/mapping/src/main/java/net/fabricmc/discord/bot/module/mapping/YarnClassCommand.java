@@ -1,11 +1,8 @@
 package net.fabricmc.discord.bot.module.mapping;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-
-import org.apache.logging.log4j.LogManager;
 
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
@@ -47,21 +44,19 @@ public final class YarnClassCommand extends Command {
 			return true;
 		}
 
-		List<String> pages = new ArrayList<>();
+		Paginator.Builder builder = new Paginator.Builder(context.author())
+				.title("%s matches", data.mcVersion);
 
 		for (ClassMapping result : results) {
-			pages.add(String.format("**%s matches**\n\n"
-					+ "**Names**\n\n**Official:** `%s`\n**Intermediary:** `%s`\n**Yarn:** `%s`\n\n"
+			builder.page("**Names**\n\n**Official:** `%s`\n**Intermediary:** `%s`\n**Yarn:** `%s`\n\n"
 					+ "**Yarn Access Widener**\n\n```accessible\tclass\t%s```",
-					data.mcVersion,
 					result.getName("official"),
 					result.getName("intermediary"),
 					result.getName("named"),
-					result.getName("named")));
+					result.getName("named"));
 		}
 
-		Paginator paginator = new Paginator(LogManager.getLogger("Commands"), pages, 200, context.author().getId());
-		paginator.send(context.channel());
+		builder.buildAndSend(context.channel());
 
 		return true;
 	}

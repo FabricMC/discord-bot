@@ -565,9 +565,18 @@ public final class ActionUtil {
 	}
 
 	public static String formatDuration(long durationMs) {
+		return formatDuration(durationMs, Integer.MAX_VALUE);
+	}
+
+	public static String formatDuration(long durationMs, int maxParts) {
 		StringBuilder ret = new StringBuilder();
 
-		while (durationMs > 0) {
+		if (durationMs < 0) {
+			ret.append('-');
+			durationMs = -durationMs;
+		}
+
+		while (durationMs > 0 && maxParts-- > 0) {
 			int maxQualIdx = 0;
 
 			for (int i = durationLengthsMs.length - 1; i > 0; i--) {
@@ -587,9 +596,11 @@ public final class ActionUtil {
 			ret.append(currentQual);
 		}
 
-		if (ret.length() == 0) return "0";
-
-		return ret.toString();
+		if (ret.length() == 0 || ret.length() == 1 && ret.charAt(0) == '-') {
+			return "0";
+		} else {
+			return ret.toString();
+		}
 	}
 
 	private static final String[][] durationQualifiers = { {"ms"},

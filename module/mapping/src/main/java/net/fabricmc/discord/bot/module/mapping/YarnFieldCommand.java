@@ -1,11 +1,8 @@
 package net.fabricmc.discord.bot.module.mapping;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-
-import org.apache.logging.log4j.LogManager;
 
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
@@ -47,15 +44,14 @@ public final class YarnFieldCommand extends Command {
 			return true;
 		}
 
-		List<String> pages = new ArrayList<>();
+		Paginator.Builder builder = new Paginator.Builder(context.author())
+				.title("%s matches", data.mcVersion);
 
 		for (FieldMapping result : results) {
-			pages.add(String.format("**%s matches**\n\n"
-					+ "**Class Names**\n\n**Official:** `%s`\n**Intermediary:** `%s`\n**Yarn:** `%s`\n\n"
+			builder.page("**Class Names**\n\n**Official:** `%s`\n**Intermediary:** `%s`\n**Yarn:** `%s`\n\n"
 					+ "**Field Names**\n\n**Official:** `%s`\n**Intermediary:** `%s`\n**Yarn:** `%s`\n\n"
 					+ "**Yarn Field Descriptor**\n\n```%s```\n\n"
 					+ "**Yarn Access Widener**\n\n```accessible\tfield\t%s\t%s\t%s```",
-					data.mcVersion,
 					result.getOwner().getName("official"),
 					result.getOwner().getName("intermediary"),
 					result.getOwner().getName("named"),
@@ -65,11 +61,10 @@ public final class YarnFieldCommand extends Command {
 					result.getDesc("named"),
 					result.getOwner().getName("named"),
 					result.getName("named"),
-					result.getDesc("named")));
+					result.getDesc("named"));
 		}
 
-		Paginator paginator = new Paginator(LogManager.getLogger("Commands"), pages, 200, context.author().getId());
-		paginator.send(context.channel());
+		builder.buildAndSend(context.channel());
 
 		return true;
 	}

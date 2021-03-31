@@ -17,15 +17,18 @@
 package net.fabricmc.discord.bot.message;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.emoji.Emoji;
 import org.javacord.api.entity.message.Message;
+import org.javacord.api.entity.message.MessageAuthor;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.javacord.api.entity.user.User;
 import org.javacord.api.event.message.reaction.ReactionAddEvent;
@@ -38,14 +41,15 @@ import org.jetbrains.annotations.Nullable;
  * Paginated messages will expire after a certain amount of time and will destroy all page controls.
  */
 public final class Paginator {
+	private static final Logger LOGGER = LogManager.getLogger(Paginator.class);
 
 	private static final String ARROW_FORWARDS_EMOTE = "\u25b6";
 	private static final String ARROW_BACKWARDS_EMOTE = "\u25c0";
 	private static final String X_EMOTE = "\u274c";
 	private final Logger logger;
-	private final List<String> pages;
-	private final int pageCount;
-	private final int timeout;
+	private final @Nullable String title;
+	private final List<Page> pages;
+	private final int timeout; // in s
 	private final long owner;
 	/**
 	 * The current page.
@@ -65,21 +69,9 @@ public final class Paginator {
 	 * @param logger the logger to log error messages to
 	 * @param pages the content of each page. This list cannot be empty
 	 * @param timeout the timeout in which the paginator will automatically be destroyed
-	 * @param owner the user who is allowed to interface with the paginator
-	 */
-	public Paginator(Logger logger, List<String> pages, int timeout, User owner) {
-		this(logger, pages, timeout, owner.getId());
-	}
-
-	/**
-	 * Creates a new paginator.
-	 *
-	 * @param logger the logger to log error messages to
-	 * @param pages the content of each page. This list cannot be empty
-	 * @param timeout the timeout in which the paginator will automatically be destroyed
 	 * @param ownerSnowflake the snowflake of the user who is allowed to interface with the paginator
 	 */
-	public Paginator(Logger logger, List<String> pages, int timeout, long ownerSnowflake) {
+	private Paginator(Logger logger, String title, List<Page> pages, int timeout, long ownerSnowflake) {
 		this.logger = logger;
 
 		if (pages.isEmpty()) {
@@ -90,10 +82,10 @@ public final class Paginator {
 			throw new IllegalArgumentException("Timeout cannot be negative value");
 		}
 
-		this.pages = new ArrayList<>(pages);
+		this.title = title;
+		this.pages = pages;
 		this.owner = ownerSnowflake;
 		this.timeout = timeout;
-		this.pageCount = pages.size();
 	}
 
 	/**
@@ -107,7 +99,7 @@ public final class Paginator {
 	 * @return the amount of pages the paginator has
 	 */
 	public int getPageCount() {
-		return this.pageCount;
+		return pages.size();
 	}
 
 	/**
@@ -140,7 +132,7 @@ public final class Paginator {
 		}
 
 		if (this.message != null) {
-			if (this.getCurrentPage() + 1 >= this.pageCount) {
+			if (this.getCurrentPage() + 1 >= pages.size()) {
 				return CompletableFuture.completedFuture(false);
 			}
 
@@ -216,10 +208,10 @@ public final class Paginator {
 					message.addReaction(ARROW_BACKWARDS_EMOTE),
 					message.addReaction(X_EMOTE),
 					message.addReaction(ARROW_FORWARDS_EMOTE)
-			).thenApply(_v -> {
-				message.addReactionAddListener(this::reactionAdded).removeAfter(this.timeout, TimeUnit.SECONDS).addRemoveHandler(this::destroy);
-				return message;
-			});
+					).thenApply(_v -> {
+						message.addReactionAddListener(this::reactionAdded).removeAfter(this.timeout, TimeUnit.SECONDS).addRemoveHandler(this::destroy);
+						return message;
+					});
 		}).exceptionally(e -> {
 			this.logger.error("Failed to setup paginator", e);
 			return null;
@@ -260,10 +252,142 @@ public final class Paginator {
 	}
 
 	private EmbedBuilder getEmbed() {
-		final String content = this.pages.get(this.getCurrentPage());
+		final Page page = this.pages.get(this.getCurrentPage());
 
-		return new EmbedBuilder()
-				.setDescription(content)
+		EmbedBuilder ret = new EmbedBuilder()
+				.setDescription(page.content)
 				.setFooter("Page %s/%s".formatted(this.getCurrentPage() + 1, this.getPageCount()));
+
+		if (title != null) ret.setTitle(title);
+		if (page.thumbnailUrl != null) ret.setThumbnail(page.thumbnailUrl);
+
+		return ret;
+	}
+
+	public static final class Builder {
+		private Logger logger = LOGGER;
+		private @Nullable String title;
+		private final List<Page> pages = new ArrayList<>();
+		private int timeout = 200; // in s
+		private final long ownerId;
+
+		public Builder(User owner) {
+			this.ownerId = owner.getId();
+		}
+
+		public Builder(MessageAuthor owner) {
+			this.ownerId = owner.getId();
+		}
+
+		public Builder(long ownerId) {
+			this.ownerId = ownerId;
+		}
+
+		public Builder title(@Nullable String title) {
+			this.title = title;
+
+			return this;
+		}
+
+		public Builder title(String format, Object... args) {
+			this.title = String.format(format, args);
+
+			return this;
+		}
+
+		public Builder pages(Collection<Page> pages) {
+			pages.addAll(pages);
+
+			return this;
+		}
+
+		public Builder plainPages(Collection<String> contents) {
+			for (String content : contents) {
+				pages.add(new Page(content));
+			}
+
+			return this;
+		}
+
+		public Builder page(Page page) {
+			Objects.requireNonNull(page, "page cannot be null");
+
+			pages.add(page);
+
+			return this;
+		}
+
+		public Builder page(Page.Builder pageBuilder) {
+			return page(pageBuilder.build());
+		}
+
+		public Builder page(CharSequence content) {
+			pages.add(new Page(content.toString()));
+
+			return this;
+		}
+
+		public Builder page(String format, Object... args) {
+			return page(String.format(format, args));
+		}
+
+		public Builder logger(Logger logger) {
+			Objects.requireNonNull(logger, "logger cannot be null");
+
+			this.logger = logger;
+
+			return this;
+		}
+
+		public Builder timeoutSec(int timeoutSec) {
+			this.timeout = timeoutSec;
+
+			return this;
+		}
+
+		public Paginator build() {
+			return new Paginator(logger, title, pages, timeout, ownerId);
+		}
+
+		public void buildAndSend(TextChannel channel) {
+			build().send(channel);
+		}
+	}
+
+	public static final class Page {
+		public final String content;
+		public final @Nullable String thumbnailUrl;
+
+		private Page(String content) {
+			this(content, null);
+		}
+
+		private Page(String content, String thumbnailUrl) {
+			this.content = content;
+			this.thumbnailUrl = thumbnailUrl;
+		}
+
+		public static final class Builder {
+			private final String content;
+			private String thumbnailUrl;
+
+			public Builder(CharSequence content) {
+				this.content = content.toString();
+			}
+
+			public Builder(String format, Object... args) {
+				this.content = String.format(format, args);
+			}
+
+			public Builder thumbnail(@Nullable String url) {
+				this.thumbnailUrl = url;
+
+				return this;
+			}
+
+			public Page build() {
+				return new Page(content, thumbnailUrl);
+			}
+		}
 	}
 }

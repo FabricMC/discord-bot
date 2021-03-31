@@ -33,7 +33,7 @@ public final class TestModule implements Module, MessageCreateListener {
 			"**The first page of the paginator**",
 			"*The second page of the paginator*",
 			"__The third page of the paginator__"
-	);
+			);
 	private static final boolean LOAD = System.getProperty("fabricBot.test", "false") != null;
 	private DiscordBot bot;
 	private Logger logger;
@@ -62,7 +62,12 @@ public final class TestModule implements Module, MessageCreateListener {
 	@Override
 	public void onMessageCreate(MessageCreateEvent event) {
 		if (event.getMessageContent().equals(this.bot.getCommandPrefix() + "paginatorTest")) {
-			final Paginator paginator = new Paginator(this.logger, PAGINATOR_TEXT, 30, event.getMessageAuthor().getId());
+			Paginator paginator = new Paginator.Builder(event.getMessageAuthor())
+					.logger(logger)
+					.title("some Title")
+					.plainPages(PAGINATOR_TEXT)
+					.timeoutSec(30)
+					.build();
 
 			paginator.send(event.getChannel());
 		}

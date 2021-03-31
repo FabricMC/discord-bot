@@ -16,11 +16,8 @@
 
 package net.fabricmc.discord.bot.command.core;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
-import org.apache.logging.log4j.LogManager;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.UserHandler;
@@ -58,26 +55,21 @@ public final class ConfigCommand extends Command {
 
 	private boolean runList(CommandContext context, Map<String, String> arguments) {
 		int pos = 0;
-		List<String> pages = new ArrayList<>();
+		Paginator.Builder builder = new Paginator.Builder(context.author()).title("Config Entries");
 		StringBuilder currentPage = new StringBuilder();
-		currentPage.append("__**Config Entries:**__\n");
 
 		for (ConfigKey<?> configEntry : context.bot().getConfigEntries()) {
 			if (pos % 10 == 0 && pos != 0) {
-				pages.add(currentPage.toString());
+				builder.page(currentPage);
 				currentPage.setLength(0);;
-				currentPage.append("__**Config Entries:**__\n");
 			}
 
 			pos++;
 			currentPage.append("%s\n".formatted(configEntry.name()));
 		}
 
-		pages.add(currentPage.toString());
-
-		// TODO: Config
-		final Paginator paginator = new Paginator(LogManager.getLogger("Commands"), pages, 200, context.author().getId());
-		paginator.send(context.channel());
+		builder.page(currentPage);
+		builder.buildAndSend(context.channel());
 
 		return true;
 	}

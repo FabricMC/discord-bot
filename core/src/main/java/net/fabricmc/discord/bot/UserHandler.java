@@ -248,6 +248,10 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		return formatDiscordUser(user.getId(), user.getName(), user.getDiscriminator());
 	}
 
+	public static String formatDiscordUser(DiscordUserData user) {
+		return formatDiscordUser(user.id(), user.username(), user.discriminator());
+	}
+
 	private static String formatDiscordUser(long discordUserId, String name, String discriminator) {
 		if (name != null && discriminator != null) {
 			return "<@!%d> (%s#%s / `%d`)".formatted(discordUserId, name, discriminator, discordUserId);

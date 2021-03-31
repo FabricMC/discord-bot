@@ -41,6 +41,7 @@ import net.fabricmc.discord.bot.command.mod.NoteCommand;
 import net.fabricmc.discord.bot.command.mod.SlowmodeCommand;
 import net.fabricmc.discord.bot.command.mod.UnlockCommand;
 import net.fabricmc.discord.bot.command.mod.UserActionType;
+import net.fabricmc.discord.bot.command.mod.UserCommand;
 
 /**
  * The builtin module of the discord bot.
@@ -85,6 +86,7 @@ final class BuiltinModule implements Module, MessageCreateListener {
 		bot.registerCommand(new NickCommand());
 		bot.registerCommand(new NoteCommand());
 		bot.registerCommand(new SlowmodeCommand());
+		bot.registerCommand(new UserCommand());
 
 		for (UserActionType type : UserActionType.values()) {
 			if (type.hasDedicatedCommand) continue;
