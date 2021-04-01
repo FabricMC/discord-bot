@@ -59,6 +59,7 @@ final class DbMigration {
 			case 3: migrate_3_4(st);
 			case 4: migrate_4_5(st);
 			case 5: migrate_5_6(st);
+			case 6: migrate_6_7(st);
 			}
 
 			st.executeUpdate(String.format("REPLACE INTO `config` VALUES ('dbVersion', '%d')", Database.currentVersion));
@@ -120,5 +121,11 @@ final class DbMigration {
 		st.executeUpdate("CREATE INDEX `channelactionexpiration_time` ON `channelactionexpiration` (`time`)");
 		st.executeUpdate("CREATE TABLE `activechannelaction` (`channelaction_id` INTEGER PRIMARY KEY, `channel_id` INTEGER)");
 		st.executeUpdate("CREATE INDEX `activechannelaction_channel_id` ON `activechannelaction` (`channel_id`)");
+	}
+
+	private static void migrate_6_7(Statement st) throws SQLException {
+		st.executeUpdate("CREATE TABLE `filter` (`id` INTEGER PRIMARY KEY, `type` TEXT, `pattern` TEXT, `filtergroup_id` INTEGER, `hits` INTEGER DEFAULT 0)");
+		st.executeUpdate("CREATE TABLE `filtergroup` (`id` INTEGER PRIMARY KEY, `name` TEXT UNIQUE, `description` TEXT, `filteraction_id` INTEGER)");
+		st.executeUpdate("CREATE TABLE `filteraction` (`id` INTEGER PRIMARY KEY, `name` TEXT UNIQUE, `description` TEXT, `action` TEXT, `actiondata` TEXT)");
 	}
 }

@@ -32,6 +32,9 @@ import net.fabricmc.discord.bot.command.core.ConfigCommand;
 import net.fabricmc.discord.bot.command.core.DbCommand;
 import net.fabricmc.discord.bot.command.core.GroupCommand;
 import net.fabricmc.discord.bot.command.core.PermissionCommand;
+import net.fabricmc.discord.bot.command.filter.FilterActionCommand;
+import net.fabricmc.discord.bot.command.filter.FilterCommand;
+import net.fabricmc.discord.bot.command.filter.FilterGroupCommand;
 import net.fabricmc.discord.bot.command.mod.ActionCommand;
 import net.fabricmc.discord.bot.command.mod.CleanCommand;
 import net.fabricmc.discord.bot.command.mod.GenericUserActionCommand;
@@ -97,6 +100,11 @@ final class BuiltinModule implements Module, MessageCreateListener {
 				bot.registerCommand(new GenericUserActionCommand(type, false));
 			}
 		}
+
+		// filter
+		bot.registerCommand(new FilterCommand());
+		bot.registerCommand(new FilterGroupCommand());
+		bot.registerCommand(new FilterActionCommand());
 
 		api.addMessageCreateListener(this);
 	}

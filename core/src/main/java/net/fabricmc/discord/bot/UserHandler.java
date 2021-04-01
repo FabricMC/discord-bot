@@ -22,6 +22,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import org.javacord.api.entity.message.MessageAuthor;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
 import org.javacord.api.event.server.member.ServerMemberJoinEvent;
@@ -242,6 +243,12 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		} else {
 			return formatDiscordUser(discordUserId, null, null); // TODO: fetch extra data from db
 		}
+	}
+
+	public static String formatDiscordUser(MessageAuthor author) {
+		User user = author.asUser().orElse(null);
+
+		return user != null ? formatDiscordUser(user) : "(unknown)";
 	}
 
 	public static String formatDiscordUser(User user) {

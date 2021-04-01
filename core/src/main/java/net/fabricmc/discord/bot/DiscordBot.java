@@ -62,6 +62,7 @@ import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializer;
 import net.fabricmc.discord.bot.database.Database;
 import net.fabricmc.discord.bot.database.query.ConfigQueries;
+import net.fabricmc.discord.bot.filter.FilterHandler;
 import net.fabricmc.discord.bot.message.Mentions;
 import net.fabricmc.discord.bot.util.DaemonThreadFactory;
 
@@ -85,6 +86,7 @@ public final class DiscordBot {
 	private final LogHandler logHandler;
 	private final MessageIndex messageIndex;
 	private final ActionSyncHandler actionSyncHandler;
+	private final FilterHandler filterHandler;
 	/**
 	 * A list of all enabled modules.
 	 */
@@ -104,6 +106,7 @@ public final class DiscordBot {
 		this.logHandler = new LogHandler(this);
 		this.messageIndex = new MessageIndex(this);
 		this.actionSyncHandler = new ActionSyncHandler(this);
+		this.filterHandler = new FilterHandler(this);
 
 		ActionUtil.registerConfig(this);
 		setupModules();
@@ -117,6 +120,7 @@ public final class DiscordBot {
 		userHandler.registerEarlyHandlers(builder);
 		messageIndex.registerEarlyHandlers(builder);
 		actionSyncHandler.registerEarlyHandlers(builder);
+		filterHandler.registerEarlyHandlers(builder);
 
 		builder
 		.setWaitForUsersOnStartup(true)
@@ -156,6 +160,10 @@ public final class DiscordBot {
 
 	public ActionSyncHandler getActionSyncHandler() {
 		return actionSyncHandler;
+	}
+
+	public FilterHandler getFilterHandler() {
+		return filterHandler;
 	}
 
 	public Collection<Module> getModules() {
