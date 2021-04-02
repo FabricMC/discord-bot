@@ -18,7 +18,6 @@ package net.fabricmc.discord.bot.command.core;
 
 import java.util.Map;
 
-import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
@@ -33,11 +32,6 @@ public final class HelpCommand extends Command {
 	@Override
 	public String usage() {
 		return "|<command>";
-	}
-
-	@Override
-	public String getPermission() {
-		return UserHandler.ADMIN_PERMISSION;
 	}
 
 	@Override
