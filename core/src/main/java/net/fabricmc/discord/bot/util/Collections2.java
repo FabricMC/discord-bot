@@ -16,6 +16,7 @@
 
 package net.fabricmc.discord.bot.util;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Set;
@@ -23,6 +24,13 @@ import java.util.Set;
 public final class Collections2 {
 	public static <T> Set<T> newIdentityHashSet() {
 		return Collections.newSetFromMap(new IdentityHashMap<>());
+	}
+
+	public static <T> Set<T> newIdentityHashSet(Collection<? extends T> elements) {
+		Set<T> ret = Collections.newSetFromMap(new IdentityHashMap<>(elements.size()));
+		ret.addAll(elements);
+
+		return ret;
 	}
 
 	private Collections2() {

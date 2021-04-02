@@ -27,6 +27,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -64,6 +65,7 @@ import net.fabricmc.discord.bot.database.Database;
 import net.fabricmc.discord.bot.database.query.ConfigQueries;
 import net.fabricmc.discord.bot.filter.FilterHandler;
 import net.fabricmc.discord.bot.message.Mentions;
+import net.fabricmc.discord.bot.util.Collections2;
 import net.fabricmc.discord.bot.util.DaemonThreadFactory;
 
 public final class DiscordBot {
@@ -187,6 +189,24 @@ public final class DiscordBot {
 
 	public String getCommandPrefix() {
 		return this.config.getCommandPrefix();
+	}
+
+	public @Nullable Command getCommand(String name) {
+		CommandRecord ret = commands.get(name);
+
+		return ret != null ? ret.command : null;
+	}
+
+	public Collection<Command> getCommands() {
+		List<Command> ret = new ArrayList<>(commands.size());
+
+		for (CommandRecord cmd : Collections2.newIdentityHashSet(commands.values())) {
+			ret.add(cmd.command);
+		}
+
+		ret.sort(Comparator.comparing(Command::name));
+
+		return ret;
 	}
 
 	public void registerCommand(Command command) {
@@ -443,7 +463,7 @@ public final class DiscordBot {
 		}
 	}
 
-	private boolean checkAccess(MessageAuthor author, Command command) {
+	public boolean checkAccess(MessageAuthor author, Command command) {
 		String permission = command.getPermission();
 		if (permission == null) return true;
 

@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import net.fabricmc.discord.bot.command.UsageParser.EmptyNode;
 import net.fabricmc.discord.bot.command.UsageParser.FloatingArgNode;
 import net.fabricmc.discord.bot.command.UsageParser.GroupNode;
 import net.fabricmc.discord.bot.command.UsageParser.Node;
@@ -228,6 +229,8 @@ public final class CommandParser {
 						}
 					}
 
+					matched = true;
+				} else if (node instanceof EmptyNode) {
 					matched = true;
 				} else if (token >= tokenIndex) {
 					matched = false;

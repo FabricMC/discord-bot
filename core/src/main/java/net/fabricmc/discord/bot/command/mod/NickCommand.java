@@ -48,6 +48,8 @@ public final class NickCommand extends Command {
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
 		long targetDiscordUserId = getDiscordUserId(context, arguments.get("user"));
+		checkImmunity(context, targetDiscordUserId, false);
+
 		User target = context.server().getMemberById(targetDiscordUserId).orElse(null);
 
 		if (target == null && UserActionQueries.getLockedNick(context.bot().getDatabase(), targetDiscordUserId) == null) {

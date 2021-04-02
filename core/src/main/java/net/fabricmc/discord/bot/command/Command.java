@@ -60,21 +60,21 @@ public abstract class Command {
 	 */
 	public abstract boolean run(CommandContext context, Map<String, String> arguments) throws Exception;
 
-	public static final int getUserId(CommandContext context, String user) throws CommandException {
+	public static int getUserId(CommandContext context, String user) throws CommandException {
 		int ret = context.bot().getUserHandler().getUserId(user, context.server(), true);
 		if (ret < 0) throw new CommandException("Unknown or ambiguous user");
 
 		return ret;
 	}
 
-	public static final long getDiscordUserId(CommandContext context, String user) throws CommandException {
+	public static long getDiscordUserId(CommandContext context, String user) throws CommandException {
 		long ret = context.bot().getUserHandler().getDiscordUserId(user, context.server(), true);
 		if (ret < 0) throw new CommandException("Unknown or ambiguous user");
 
 		return ret;
 	}
 
-	public static final ServerChannel getChannel(CommandContext context, String channel) throws CommandException {
+	public static ServerChannel getChannel(CommandContext context, String channel) throws CommandException {
 		if (channel.startsWith("#")) {
 			String name = channel.substring(1);
 
@@ -106,13 +106,25 @@ public abstract class Command {
 		return matches.get(0);
 	}
 
-	public static final ServerTextChannel getTextChannel(CommandContext context, String channel) throws CommandException {
+	public static ServerTextChannel getTextChannel(CommandContext context, String channel) throws CommandException {
 		ServerChannel ret = getChannel(context, channel);
 
 		if (ret instanceof ServerTextChannel) {
 			return (ServerTextChannel) ret;
 		} else {
 			throw new CommandException("Not a text channel");
+		}
+	}
+
+	public static void checkImmunity(CommandContext context, int targetUserId, boolean allowBotTarget) throws CommandException {
+		if (context.bot().getUserHandler().hasImmunity(targetUserId, context.userId(), allowBotTarget)) {
+			throw new CommandException("The target has immunity");
+		}
+	}
+
+	public static void checkImmunity(CommandContext context, long targetDiscordUserId, boolean allowBotTarget) throws CommandException {
+		if (context.bot().getUserHandler().hasImmunity(targetDiscordUserId, context.userId(), allowBotTarget)) {
+			throw new CommandException("The target has immunity");
 		}
 	}
 }

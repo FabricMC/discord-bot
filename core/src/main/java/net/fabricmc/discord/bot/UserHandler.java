@@ -43,8 +43,12 @@ import net.fabricmc.discord.bot.database.query.UserQueries.UserData;
 
 public final class UserHandler implements ServerMemberJoinListener, ServerMemberLeaveListener, UserChangeNameListener, UserChangeNicknameListener {
 	public static final String ADMIN_PERMISSION = "admin";
+	public static final String IMMUNITY_PERMISSION = "immunity";
+	public static final String BYPASS_IMMUNITY_PERMISSION = "bypassImmunity";
 
 	private final DiscordBot bot;
+	private int botUserId;
+	private long botDiscordUserId;
 
 	public UserHandler(DiscordBot bot) {
 		this.bot = bot;
@@ -60,13 +64,76 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		}
 	}
 
-	public boolean hasPermission(User user, Server server, String permission) {
+	public int getBotUserId() {
+		return botUserId;
+	}
+
+	public long getBotDiscordUserId() {
+		return botDiscordUserId;
+	}
+
+	public boolean hasPermission(int userId, @Nullable Server server, String permission) {
 		try {
-			return UserQueries.discordUserHasPermission(bot.getDatabase(), user.getId(), permission, ADMIN_PERMISSION)
-					|| permission.equals(ADMIN_PERMISSION) && server.isAdmin(user) && !UserQueries.hasAnyPermittedUser(bot.getDatabase(), permission);
+			return UserQueries.userHasPermission(bot.getDatabase(), userId, permission, ADMIN_PERMISSION)
+					|| hasPermissionFallback(userId, server, permission);
 		} catch (SQLException e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	public boolean hasPermission(User user, @Nullable Server server, String permission) {
+		return hasPermission(user.getId(), server, permission);
+	}
+
+	public boolean hasPermission(long discordUserId, @Nullable Server server, String permission) {
+		try {
+			return UserQueries.discordUserHasPermission(bot.getDatabase(), discordUserId, permission, ADMIN_PERMISSION)
+					|| hasPermissionFallback(discordUserId, server, permission);
+		} catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	private boolean hasPermissionFallback(int userId, @Nullable Server server, String permission) throws SQLException {
+		if (!canUsePermissionFallback(server, permission)) return false;
+
+		for (User user : getDiscordUsers(userId, server)) {
+			if (server.isAdmin(user)) return true;
+		}
+
+		return false;
+	}
+
+	private boolean hasPermissionFallback(long discordUserId, @Nullable Server server, String permission) throws SQLException {
+		if (!canUsePermissionFallback(server, permission)) return false;
+
+		User user = server.getMemberById(discordUserId).orElse(null);
+
+		return user != null && server.isAdmin(user);
+	}
+
+	private boolean canUsePermissionFallback(@Nullable Server server, String permission) throws SQLException {
+		return permission.equals(ADMIN_PERMISSION)
+				&& server != null
+				&& !UserQueries.hasAnyPermittedUser(bot.getDatabase(), permission);
+	}
+
+	public boolean hasImmunity(int targetUserId, int actingUserId, boolean allowBotTarget) {
+		return !allowBotTarget && targetUserId == botUserId
+				|| hasPermission(targetUserId, null, IMMUNITY_PERMISSION) && !hasPermission(actingUserId, null, BYPASS_IMMUNITY_PERMISSION);
+	}
+
+	public boolean hasImmunity(User targetUser, int actingUserId, boolean allowBotTarget) {
+		return hasImmunity(targetUser.getId(), actingUserId, allowBotTarget);
+	}
+
+	public boolean hasImmunity(MessageAuthor targetAuthor, int actingUserId, boolean allowBotTarget) {
+		return !targetAuthor.isUser() || hasImmunity(targetAuthor.getId(), actingUserId, allowBotTarget);
+	}
+
+	public boolean hasImmunity(long targetDiscordUserId, int actingUserId, boolean allowBotTarget) {
+		return !allowBotTarget && targetDiscordUserId == botDiscordUserId
+				|| hasPermission(targetDiscordUserId, null, IMMUNITY_PERMISSION) && !hasPermission(actingUserId, null, BYPASS_IMMUNITY_PERMISSION);
 	}
 
 	public int getUserId(String user, Server server, boolean unique) {
@@ -290,6 +357,9 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		} catch (SQLException e) {
 			throw new RuntimeException(e);
 		}
+
+		botDiscordUserId = server.getApi().getYourself().getId();
+		botUserId = getUserId(botDiscordUserId);
 	}
 
 	@Override

@@ -53,6 +53,8 @@ public final class CleanCommand extends Command {
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
 		if (!"confirm".equals(arguments.get("unnamed_0"))) {
 			long targetDiscordUserId = getDiscordUserId(context, arguments.get("user"));
+			checkImmunity(context, targetDiscordUserId, true);
+
 			String targetChannelName = arguments.get("channel");
 			Collection<ServerTextChannel> targetChannels = targetChannelName != null ? Collections.singletonList(getTextChannel(context, targetChannelName)) : context.server().getTextChannels();
 

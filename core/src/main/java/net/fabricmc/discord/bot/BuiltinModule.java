@@ -31,6 +31,7 @@ import net.fabricmc.discord.bot.command.CommandResponder;
 import net.fabricmc.discord.bot.command.core.ConfigCommand;
 import net.fabricmc.discord.bot.command.core.DbCommand;
 import net.fabricmc.discord.bot.command.core.GroupCommand;
+import net.fabricmc.discord.bot.command.core.HelpCommand;
 import net.fabricmc.discord.bot.command.core.PermissionCommand;
 import net.fabricmc.discord.bot.command.filter.FilterActionCommand;
 import net.fabricmc.discord.bot.command.filter.FilterCommand;
@@ -75,6 +76,8 @@ final class BuiltinModule implements Module, MessageCreateListener {
 	public void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
 		this.bot = bot;
 		this.api = api;
+
+		bot.registerCommand(new HelpCommand());
 
 		bot.registerCommand(new ConfigCommand());
 		bot.registerCommand(new GroupCommand());

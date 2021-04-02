@@ -68,7 +68,10 @@ public final class ConfigCommand extends Command {
 			currentPage.append("%s\n".formatted(configEntry.name()));
 		}
 
-		builder.page(currentPage);
+		if (currentPage.length() > 0) {
+			builder.page(currentPage);
+		}
+
 		builder.buildAndSend(context.channel());
 
 		return true;

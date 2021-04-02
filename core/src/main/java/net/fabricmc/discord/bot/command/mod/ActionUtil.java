@@ -95,6 +95,8 @@ public final class ActionUtil {
 		int targetUserId = Command.getUserId(context, target);
 		if (targetUserId == context.userId()) throw new CommandException("You can't target yourself");
 
+		Command.checkImmunity(context, targetUserId, false);
+
 		// check for conflict
 
 		int prevId = -1;

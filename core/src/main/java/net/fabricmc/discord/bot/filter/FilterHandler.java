@@ -125,6 +125,9 @@ public final class FilterHandler implements MessageCreateListener, MessageEditLi
 	}
 
 	private void handleMessage(Message message, boolean isEdit) {
+		if (!message.getChannel().canYouManageMessages()) return;
+		if (bot.getUserHandler().hasImmunity(message.getAuthor(), bot.getUserHandler().getBotUserId(), false)) return;
+
 		String lcContent = message.getContent().toLowerCase(Locale.ENGLISH);
 		List<CompiledFilter> filters = this.filters;
 

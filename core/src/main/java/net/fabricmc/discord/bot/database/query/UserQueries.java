@@ -614,6 +614,39 @@ public final class UserQueries {
 		}
 	}
 
+	public static boolean userHasPermission(Database db, int userId, String permissionA, String permissionB) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+		if (permissionA == null) throw new NullPointerException("null permissionA");
+		if (permissionB == null) throw new NullPointerException("null permissionB");
+
+		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement ps = conn.prepareStatement("""
+						WITH RECURSIVE groups_cte (id) AS (
+						SELECT group_id FROM user_group WHERE user_id = ?
+						UNION
+						SELECT group_inheritance.child_id FROM group_inheritance INNER JOIN groups_cte ON group_inheritance.parent_id = groups_cte.id
+						)
+						SELECT COUNT(*)
+						FROM groups_cte, group_permission
+						WHERE
+						group_permission.group_id = groups_cte.id
+						AND (group_permission.permission = ? OR group_permission.permission = ?)
+						LIMIT 1
+						""")) {
+			ps.setInt(1, rawUserId);
+			ps.setString(2, permissionA);
+			ps.setString(3, permissionB);
+
+			try (ResultSet res = ps.executeQuery()) {
+				if (!res.next()) throw new IllegalStateException();
+
+				return res.getInt(1) > 0;
+			}
+		}
+	}
+
 	public static boolean discordUserHasPermission(Database db, long discordUserId, String permissionA, String permissionB) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 		if (permissionA == null) throw new NullPointerException("null permissionA");
@@ -632,16 +665,7 @@ public final class UserQueries {
 						group_permission.group_id = groups_cte.id
 						AND (group_permission.permission = ? OR group_permission.permission = ?)
 						LIMIT 1
-						"""
-						/*"""
-						SELECT COUNT(*)
-						FROM discorduser, user_group, group_permission
-						WHERE
-						discorduser.id = ?
-						AND user_group.user_id = discorduser.user_id
-						AND group_permission.group_id = user_group.group_id
-						AND group_permission.permission = ?
-						"""*/)) {
+						""")) {
 			ps.setLong(1, discordUserId);
 			ps.setString(2, permissionA);
 			ps.setString(3, permissionB);

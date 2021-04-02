@@ -243,8 +243,10 @@ public final class UsageParser {
 					for (Node n : ((OrNode) head)) {
 						orNode.add(n);
 					}
-				} else {
+				} else if (head != null) {
 					orNode.add(head);
+				} else if (!orNode.hasEmpty()){
+					orNode.add(EmptyNode.INSTANCE);
 				}
 
 				// reset cur
@@ -699,6 +701,10 @@ public final class UsageParser {
 			return options.get(index);
 		}
 
+		public boolean hasEmpty() {
+			return options.contains(EmptyNode.INSTANCE);
+		}
+
 		@Override
 		public Iterator<Node> iterator() {
 			return options.iterator();
@@ -751,7 +757,7 @@ public final class UsageParser {
 	 * Synthetic node representing no input.
 	 */
 	public static final class EmptyNode extends Node {
-		protected EmptyNode() {
+		private EmptyNode() {
 			super();
 		}
 
