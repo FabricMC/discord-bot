@@ -30,6 +30,7 @@ import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.database.query.NoteQueries;
 import net.fabricmc.discord.bot.database.query.NoteQueries.NoteEntry;
+import net.fabricmc.discord.bot.util.FormatUtil;
 
 public final class NoteCommand extends Command {
 	@Override
@@ -56,7 +57,7 @@ public final class NoteCommand extends Command {
 
 			List<Long> targets = context.bot().getUserHandler().getDiscordUserIds(targetUserId);
 			Instant creationTime = Instant.ofEpochMilli(entry.creationTime());
-			String description = "User %d has been noted:%s\n\n**Note:** %s".formatted(targetUserId, ActionUtil.formatUserList(targets, context), entry.content());
+			String description = "User %d has been noted:%s\n\n**Note:** %s".formatted(targetUserId, FormatUtil.formatUserList(targets, context), entry.content());
 			TextChannel logChannel = context.bot().getLogHandler().getLogChannel();
 
 			EmbedBuilder msg = new EmbedBuilder()
@@ -98,7 +99,7 @@ public final class NoteCommand extends Command {
 
 					sb.append(String.format("\n%d %s: %s",
 							note.id(),
-							ActionUtil.dateFormatter.format(Instant.ofEpochMilli(note.creationTime())),
+							FormatUtil.dateFormatter.format(Instant.ofEpochMilli(note.creationTime())),
 							content));
 				}
 
@@ -117,9 +118,9 @@ public final class NoteCommand extends Command {
 					.setTitle("Note %d details".formatted(note.id()))
 					.setDescription(String.format("**User %d:**%s\n**Moderator:** %s\n**Creation:** %s\n**Note:** %s",
 							note.targetUserId(),
-							ActionUtil.formatUserList(targets, context),
+							FormatUtil.formatUserList(targets, context),
 							context.bot().getUserHandler().formatUser(note.actorUserId(), context.server()),
-							ActionUtil.dateTimeFormatter.format(Instant.ofEpochMilli(note.creationTime())),
+							FormatUtil.dateTimeFormatter.format(Instant.ofEpochMilli(note.creationTime())),
 							note.content())));
 
 			return true;

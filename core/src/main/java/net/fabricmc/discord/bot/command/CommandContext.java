@@ -18,7 +18,7 @@ package net.fabricmc.discord.bot.command;
 
 import java.net.URL;
 
-import org.javacord.api.entity.channel.ServerTextChannel;
+import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.MessageAuthor;
 import org.javacord.api.entity.server.Server;
 import org.jetbrains.annotations.Nullable;
@@ -35,7 +35,7 @@ public record CommandContext(
 		URL messageLink,
 		MessageAuthor author,
 		int userId,
-		ServerTextChannel channel,
+		TextChannel channel,
 		String content,
 		long messageId
 		) {}

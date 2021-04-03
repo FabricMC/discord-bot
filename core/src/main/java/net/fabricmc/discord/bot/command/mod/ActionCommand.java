@@ -26,8 +26,9 @@ import org.javacord.api.entity.message.embed.EmbedBuilder;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
-import net.fabricmc.discord.bot.database.query.UserActionQueries;
-import net.fabricmc.discord.bot.database.query.UserActionQueries.UserActionEntry;
+import net.fabricmc.discord.bot.database.query.ActionQueries;
+import net.fabricmc.discord.bot.database.query.ActionQueries.ActionEntry;
+import net.fabricmc.discord.bot.util.FormatUtil;
 
 public final class ActionCommand extends Command {
 	@Override
@@ -50,14 +51,14 @@ public final class ActionCommand extends Command {
 		switch (arguments.get("unnamed_0")) {
 		case "list": {
 			int userId = getUserId(context, arguments.get("user"));
-			Collection<UserActionEntry> actions = UserActionQueries.getActions(context.bot().getDatabase(), userId);
+			Collection<ActionEntry> actions = ActionQueries.getActions(context.bot().getDatabase(), ActionType.Kind.USER, userId);
 
 			if (actions.isEmpty()) {
 				context.channel().sendMessage(String.format("No actions for user %d", userId));
 			} else {
 				StringBuilder sb = new StringBuilder(String.format("Actions for user %d:", userId));
 
-				for (UserActionEntry action : actions) {
+				for (ActionEntry action : actions) {
 					String duration, reason;
 
 					if (action.expirationTime() < 0) {
@@ -67,7 +68,7 @@ public final class ActionCommand extends Command {
 					} else {
 						long durationMs = action.expirationTime() - action.creationTime();
 
-						duration = " "+ActionUtil.formatDuration(durationMs);
+						duration = " "+FormatUtil.formatDuration(durationMs);
 					}
 
 					if (action.reason() == null || action.reason().isEmpty()) {
@@ -80,8 +81,8 @@ public final class ActionCommand extends Command {
 
 					sb.append(String.format("\n%d %s: %s%s%s",
 							action.id(),
-							ActionUtil.dateFormatter.format(Instant.ofEpochMilli(action.creationTime())),
-							action.type().id,
+							FormatUtil.dateFormatter.format(Instant.ofEpochMilli(action.creationTime())),
+							action.type().getId(),
 							duration,
 							reason));
 				}
@@ -93,7 +94,7 @@ public final class ActionCommand extends Command {
 		}
 		case "get": {
 			int actionId = Integer.parseInt(arguments.get("id"));
-			UserActionEntry action = UserActionQueries.getAction(context.bot().getDatabase(), actionId);
+			ActionEntry action = ActionQueries.getAction(context.bot().getDatabase(), actionId);
 			if (action == null) throw new CommandException("Unknown action");
 
 			long time = System.currentTimeMillis();
@@ -117,9 +118,9 @@ public final class ActionCommand extends Command {
 				durationSuffix = "";
 			} else {
 				expirationSuffix = String.format("\n**Expiration:** %s",
-						ActionUtil.dateTimeFormatter.format(Instant.ofEpochMilli(action.expirationTime())));
+						FormatUtil.dateTimeFormatter.format(Instant.ofEpochMilli(action.expirationTime())));
 				durationSuffix = String.format("\n**Duration:** %s",
-						ActionUtil.formatDuration(action.expirationTime() - action.creationTime()));
+						FormatUtil.formatDuration(action.expirationTime() - action.creationTime()));
 			}
 
 			if (action.suspensionTime() < 0) {
@@ -135,10 +136,10 @@ public final class ActionCommand extends Command {
 				}
 
 				suspensionSuffix = String.format("\n**Suspension:** %s\n**Suspender:** %s%s\n**Eff. Duration:** %s",
-						ActionUtil.dateTimeFormatter.format(Instant.ofEpochMilli(action.suspensionTime())),
+						FormatUtil.dateTimeFormatter.format(Instant.ofEpochMilli(action.suspensionTime())),
 						context.bot().getUserHandler().formatUser(action.suspenderUserId(), context.server()),
 						suspensionReasonSuffix,
-						ActionUtil.formatDuration(action.suspensionTime() - action.creationTime()));
+						FormatUtil.formatDuration(action.suspensionTime() - action.creationTime()));
 			}
 
 			if (action.reason() == null || action.reason().isEmpty()) {
@@ -147,17 +148,17 @@ public final class ActionCommand extends Command {
 				reasonSuffix = "\n**Reason:** %s".formatted(action.reason());
 			}
 
-			List<Long> targets = context.bot().getUserHandler().getDiscordUserIds(action.targetUserId());
+			List<Long> targets = context.bot().getUserHandler().getDiscordUserIds((int) action.targetId());
 
 			context.channel().sendMessage(new EmbedBuilder()
 					.setTitle("Action %d details".formatted(action.id()))
 					.setDescription(String.format("**User %d:**%s\n**Type:** %s\n**Status:** %s\n**Moderator:** %s\n**Creation:** %s%s%s%s%s",
-							action.targetUserId(),
-							ActionUtil.formatUserList(targets, context),
-							action.type().id,
+							action.targetId(),
+							FormatUtil.formatUserList(targets, context),
+							action.type().getId(),
 							status,
 							context.bot().getUserHandler().formatUser(action.actorUserId(), context.server()),
-							ActionUtil.dateTimeFormatter.format(Instant.ofEpochMilli(action.creationTime())),
+							FormatUtil.dateTimeFormatter.format(Instant.ofEpochMilli(action.creationTime())),
 							expirationSuffix, durationSuffix, suspensionSuffix, reasonSuffix)));
 
 			return true;

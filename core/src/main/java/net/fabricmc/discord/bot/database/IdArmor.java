@@ -52,6 +52,18 @@ public final class IdArmor {
 		return n < 0 ? n : encode(n);
 	}
 
+	public static long encodeOptional(long n) {
+		return n < 0 ? n : encode(n);
+	}
+
+	public static int encodeCond(int n, boolean encode) {
+		return !encode || n < 0 ? n : encode(n);
+	}
+
+	public static long encodeCond(long n, boolean encode) {
+		return !encode || n < 0 ? n : encode(n);
+	}
+
 	public static int decode(int n) {
 		return (int) decode((long) n);
 	}
@@ -82,7 +94,36 @@ public final class IdArmor {
 		return ret;
 	}
 
+	public static long decodeOrThrow(long n, String desc) {
+		long ret = decode(n);
+		if (ret < 0) throw new IllegalArgumentException("invalid "+desc);
+
+		return ret;
+	}
+
+	public static int decodeOrThrowCond(int n, boolean decode, String desc) {
+		if (!decode) return n;
+
+		int ret = decode(n);
+		if (ret < 0) throw new IllegalArgumentException("invalid "+desc);
+
+		return ret;
+	}
+
+	public static long decodeOrThrowCond(long n, boolean decode, String desc) {
+		if (!decode) return n;
+
+		long ret = decode(n);
+		if (ret < 0) throw new IllegalArgumentException("invalid "+desc);
+
+		return ret;
+	}
+
 	public static int decodeOptionalOrThrow(int n, String desc) {
+		return n <= 0 ? n : decodeOrThrow(n, desc);
+	}
+
+	public static long decodeOptionalOrThrow(long n, String desc) {
 		return n <= 0 ? n : decodeOrThrow(n, desc);
 	}
 

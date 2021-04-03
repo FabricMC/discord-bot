@@ -16,30 +16,23 @@
 
 package net.fabricmc.discord.bot.command.mod;
 
-import java.util.Map;
+public enum ActionTargetKind {
+	CHANNEL("channel"),
+	USER("user");
 
-import net.fabricmc.discord.bot.command.Command;
-import net.fabricmc.discord.bot.command.CommandContext;
+	public final String id;
 
-public final class UnlockCommand extends Command {
-	@Override
-	public String name() {
-		return "unlock";
+	public static ActionTargetKind get(String id) {
+		for (ActionTargetKind type : values()) {
+			if (type.id.equals(id)) {
+				return type;
+			}
+		}
+
+		throw new IllegalArgumentException("invalid kind: "+id);
 	}
 
-	@Override
-	public String usage() {
-		return "<channel> <reason...>";
-	}
-
-	@Override
-	public String getPermission() {
-		return "lock";
-	}
-
-	@Override
-	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
-		ActionUtil.suspendAction(ChannelActionType.LOCK, getChannel(context, arguments.get("channel")).getId(), arguments.get("reason"), context);
-		return true;
+	ActionTargetKind(String id) {
+		this.id = id;
 	}
 }

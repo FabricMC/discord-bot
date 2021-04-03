@@ -21,6 +21,7 @@ import java.util.Map;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
+import net.fabricmc.discord.bot.util.FormatUtil;
 
 public final class SlowmodeCommand extends Command {
 	@Override
@@ -40,6 +41,7 @@ public final class SlowmodeCommand extends Command {
 
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
+		long targetChannelId = getChannel(context, arguments.get("channel")).getId();
 		String valueStr = arguments.get("value");
 		String duration;
 		int valueSec;
@@ -48,7 +50,7 @@ public final class SlowmodeCommand extends Command {
 			valueSec = 0;
 			duration = "0";
 		} else {
-			long valueMs = ActionUtil.parseDurationMs(valueStr);
+			long valueMs = FormatUtil.parseDurationMs(valueStr);
 			if (valueMs < 0) throw new CommandException("Invalid value");
 
 			valueSec = Math.toIntExact(Math.addExact(valueMs,  500) / 1000);
@@ -56,10 +58,10 @@ public final class SlowmodeCommand extends Command {
 		}
 
 		if (valueSec > 0) {
-			String extraBodyDesc = "with %s delay".formatted(ActionUtil.formatDuration(valueSec * 1000));
-			ActionUtil.applyChannelAction(ChannelActionType.SLOWMODE, arguments.get("channel"), valueSec, duration, arguments.get("reason"), extraBodyDesc, context);
+			String extraBodyDesc = "with %s delay".formatted(FormatUtil.formatDuration(valueSec * 1000));
+			ActionUtil.applyAction(ChannelActionType.SLOWMODE, valueSec, targetChannelId, duration, arguments.get("reason"), extraBodyDesc, context);
 		} else {
-			ActionUtil.suspendChannelAction(ChannelActionType.SLOWMODE, arguments.get("channel"), arguments.get("reason"), context);
+			ActionUtil.suspendAction(ChannelActionType.SLOWMODE, targetChannelId, arguments.get("reason"), context);
 		}
 
 		return true;

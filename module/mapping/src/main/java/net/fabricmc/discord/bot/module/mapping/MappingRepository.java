@@ -215,6 +215,8 @@ public final class MappingRepository {
 				}
 			}
 
+			if (yarnMappingTree == null) return null;
+
 			return new MappingData(mcVersion, intermediaryMavenId, yarnMavenId, yarnMappingTree);
 		} catch (IOException | InterruptedException | URISyntaxException e) {
 			throw new RuntimeException(e);

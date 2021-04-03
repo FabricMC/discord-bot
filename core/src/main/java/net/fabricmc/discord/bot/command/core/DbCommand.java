@@ -51,7 +51,7 @@ public final class DbCommand extends Command {
 
 		try (Connection conn = context.bot().getDatabase().getConnection();
 				Statement st = conn.createStatement()) {
-			try (ResultSet res = st.executeQuery("SELECT * FROM `%s` LIMIT 30".formatted(arguments.get("table").replace('`', ' ')))) {
+			try (ResultSet res = st.executeQuery("SELECT * FROM `%s`".formatted(arguments.get("table").replace('`', ' ')))) {
 				ResultSetMetaData meta = res.getMetaData();
 				cols = meta.getColumnCount();
 
@@ -86,29 +86,66 @@ public final class DbCommand extends Command {
 			}
 		}
 
-		StringBuilder sb = new StringBuilder();
-		sb.append("```\n");
+		StringBuilder pageSb = new StringBuilder();
+		StringBuilder lineSb = new StringBuilder();
+		int row = 1;
 
-		for (int row = 0; row < rows; row++) {
+		while (row < rows) {
+			pageSb.append("```\n");
+
 			for (int col = 0; col < cols; col++) {
-				if (col > 0) sb.append(" | ");
-				int idx = row * cols + col;
+				if (col > 0) pageSb.append(" | ");
+				int idx = col;
 
 				String val = values.get(idx);
-				sb.append(val);
+				pageSb.append(val);
 
 				if (col + 1 < cols) {
 					for (int i = 0; i < pad[idx]; i++) {
-						sb.append(' ');
+						pageSb.append(' ');
 					}
 				}
 			}
 
-			sb.append('\n');
-		}
+			pageSb.append('\n');
 
-		sb.append("```");
-		context.channel().sendMessage(sb.toString());
+
+			if (lineSb.length() > 0) {
+				pageSb.append(lineSb);
+				row++;
+			}
+
+			while (row < rows) {
+				lineSb.setLength(0);
+
+				for (int col = 0; col < cols; col++) {
+					if (col > 0) lineSb.append(" | ");
+					int idx = row * cols + col;
+
+					String val = values.get(idx);
+					lineSb.append(val);
+
+					if (col + 1 < cols) {
+						for (int i = 0; i < pad[idx]; i++) {
+							lineSb.append(' ');
+						}
+					}
+				}
+
+				lineSb.append('\n');
+
+				if (pageSb.length() + lineSb.length() + 3 <= 2000) {
+					pageSb.append(lineSb);
+					row++;
+				} else {
+					break;
+				}
+			}
+
+			pageSb.append("```");
+			context.channel().sendMessage(pageSb.toString());
+			pageSb.setLength(0);
+		}
 
 		return true;
 	}

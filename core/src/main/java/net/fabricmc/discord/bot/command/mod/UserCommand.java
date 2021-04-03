@@ -33,13 +33,14 @@ import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
-import net.fabricmc.discord.bot.database.query.UserActionQueries;
-import net.fabricmc.discord.bot.database.query.UserActionQueries.ActiveUserActionEntry;
-import net.fabricmc.discord.bot.database.query.UserActionQueries.UserActionEntry;
+import net.fabricmc.discord.bot.database.query.ActionQueries;
+import net.fabricmc.discord.bot.database.query.ActionQueries.ActionEntry;
+import net.fabricmc.discord.bot.database.query.ActionQueries.ActiveActionEntry;
 import net.fabricmc.discord.bot.database.query.UserQueries.DiscordUserData;
 import net.fabricmc.discord.bot.database.query.UserQueries.UserData;
 import net.fabricmc.discord.bot.message.Paginator;
 import net.fabricmc.discord.bot.message.Paginator.Page;
+import net.fabricmc.discord.bot.util.FormatUtil;
 
 public final class UserCommand extends Command {
 	@Override
@@ -111,8 +112,8 @@ public final class UserCommand extends Command {
 			createTime = joinTime = seenTime = null;
 		}
 
-		Collection<UserActionEntry> actions = UserActionQueries.getActions(context.bot().getDatabase(), targetUserId);
-		Collection<ActiveUserActionEntry> activeActions = UserActionQueries.getActiveActions(context.bot().getDatabase(), targetUserId);
+		Collection<ActionEntry> actions = ActionQueries.getActions(context.bot().getDatabase(), ActionType.Kind.USER, targetUserId);
+		Collection<ActiveActionEntry> activeActions = ActionQueries.getActiveDUActions(context.bot().getDatabase(), targetUserId);
 
 		StringBuilder firstPageSb = new StringBuilder();
 		firstPageSb.append(String.format("**%d Discord Users:**%s\n"
@@ -124,7 +125,7 @@ public final class UserCommand extends Command {
 				userData.stickyName(),
 				(createTime != null ? formatTimes(createTime, joinTime, seenTime, currentTime) : ""),
 				actions.size(), activeActions.size(),
-				(activeActions.isEmpty() ? "-" : activeActions.stream().map(a -> a.type().id).distinct().sorted().collect(Collectors.joining(", ")))));
+				(activeActions.isEmpty() ? "-" : activeActions.stream().map(a -> a.type().getId()).distinct().sorted().collect(Collectors.joining(", ")))));
 		String firstThumbnail = null;
 		int num = 0;
 
@@ -202,8 +203,8 @@ public final class UserCommand extends Command {
 		if (time.toEpochMilli() >= currentTime) return "now";
 
 		return String.format("%s (%s ago)",
-				ActionUtil.dateTimeFormatter.format(time),
-				ActionUtil.formatDuration(currentTime - time.toEpochMilli(), 3));
+				FormatUtil.dateTimeFormatter.format(time),
+				FormatUtil.formatDuration(currentTime - time.toEpochMilli(), 3));
 	}
 
 	private static String getAvatarUrl(long discordUserId, Server server) {

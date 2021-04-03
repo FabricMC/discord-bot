@@ -18,37 +18,37 @@ package net.fabricmc.discord.bot.command.mod;
 
 import java.sql.SQLException;
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.javacord.api.entity.channel.ServerChannel;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.javacord.api.entity.permission.Role;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
+import org.javacord.api.exception.DiscordException;
+import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.UserHandler;
-import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
+import net.fabricmc.discord.bot.command.mod.ActionType.ActivateResult;
+import net.fabricmc.discord.bot.command.mod.ActionType.Kind;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
-import net.fabricmc.discord.bot.database.query.ChannelActionQueries;
-import net.fabricmc.discord.bot.database.query.ChannelActionQueries.ActiveChannelActionEntry;
-import net.fabricmc.discord.bot.database.query.ChannelActionQueries.ChannelActionEntry;
-import net.fabricmc.discord.bot.database.query.ChannelActionQueries.ExpiringChannelActionEntry;
-import net.fabricmc.discord.bot.database.query.UserActionQueries;
-import net.fabricmc.discord.bot.database.query.UserActionQueries.ExpiringUserActionEntry;
-import net.fabricmc.discord.bot.database.query.UserActionQueries.UserActionEntry;
+import net.fabricmc.discord.bot.database.query.ActionQueries;
+import net.fabricmc.discord.bot.database.query.ActionQueries.ActionData;
+import net.fabricmc.discord.bot.database.query.ActionQueries.ActionEntry;
+import net.fabricmc.discord.bot.database.query.ActionQueries.ActiveActionEntry;
+import net.fabricmc.discord.bot.database.query.ActionQueries.ExpiringActionEntry;
+import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.bot.util.FormatUtil;
 
 public final class ActionUtil {
-	public static final DateTimeFormatter dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE.withZone(ZoneOffset.UTC);
-	public static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("EEE, d MMM y HH:mm:ss z", Locale.ENGLISH).withZone(ZoneOffset.UTC);
+	static final Logger LOGGER = LogManager.getLogger("action");
 	private static final ConfigKey<String> APPEAL_MESSAGE = new ConfigKey<>("action.appealMessage", ValueSerializers.STRING);
 
 	public static void registerConfig(DiscordBot bot) {
@@ -62,18 +62,18 @@ public final class ActionUtil {
 		return role != null && target.getRoles(server).contains(role);
 	}
 
-	static void addRole(Server server, User target, ActionRole actionRole, String reason, DiscordBot bot) {
+	static void addRole(Server server, User target, ActionRole actionRole, String reason, DiscordBot bot) throws DiscordException {
 		Role role = actionRole.resolve(server, bot);
 		if (role == null) throw new IllegalArgumentException("role unconfigured/missing");
 
-		server.addRoleToUser(target, role, reason).join();
+		DiscordUtil.join(server.addRoleToUser(target, role, reason));
 	}
 
-	static void removeRole(Server server, User target, ActionRole actionRole, String reason, DiscordBot bot) {
+	static void removeRole(Server server, User target, ActionRole actionRole, String reason, DiscordBot bot) throws DiscordException {
 		Role role = actionRole.resolve(server, bot);
 		if (role == null) return;
 
-		server.removeRoleFromUser(target, role, reason).join();
+		DiscordUtil.join(server.removeRoleFromUser(target, role, reason));
 	}
 
 	/**
@@ -89,198 +89,95 @@ public final class ActionUtil {
 	 * @param context command context
 	 * @return true if the action was executed successfully
 	 */
-	static void applyUserAction(UserActionType type, String target, String duration, String reason, CommandContext context) throws Exception {
-		// determine target user
-
-		int targetUserId = Command.getUserId(context, target);
-		if (targetUserId == context.userId()) throw new CommandException("You can't target yourself");
-
-		Command.checkImmunity(context, targetUserId, false);
-
+	static void applyAction(ActionType type, int data, long targetId, String duration, String reason, @Nullable String extraBodyDesc, CommandContext context) throws Exception {
 		// check for conflict
 
 		int prevId = -1;
+		Integer prevResetData = null;
 
-		if (type.hasDuration) {
-			int existingActionId = UserActionQueries.getActiveAction(context.bot().getDatabase(), targetUserId, type);
-			if (existingActionId >= 0) throw new CommandException("The user is already %s", type.getDesc(false));
-		}
-
-		// determine duration
-
-		long durationMs = parseActionDurationMs(duration, type.hasDuration);
-
-		// determine target discord users
-
-		List<Long> targetDiscordIds = context.bot().getUserHandler().getDiscordUserIds(targetUserId);
-
-		if (!type.hasDuration && targetDiscordIds.isEmpty()) {
-			throw new CommandException("Absent target user");
-		}
-
-		// create db record
-
-		UserActionEntry entry = UserActionQueries.createAction(context.bot().getDatabase(), type, targetUserId, context.userId(), durationMs, reason, prevId);
-
-		// announce action
-
-		announceUserAction(type, false, "", "",
-				targetUserId, targetDiscordIds,
-				entry.creationTime(), entry.expirationTime(), reason,
-				entry.id(),
-				context.channel(), context.author().asUser().get(),
-				context.bot(), context.server());
-
-		// apply discord action
-
-		for (long targetDiscordId : targetDiscordIds) {
-			User user = context.server().getMemberById(targetDiscordId).orElse(null);
-			if (user != null) type.activate(context.server(), user, reason, context.bot());
-		}
-
-		context.bot().getActionSyncHandler().onNewUserAction(entry);
-	}
-
-	static void suspendUserAction(UserActionType type, String target, String reason, CommandContext context) throws Exception {
-		if (!type.hasDuration) throw new RuntimeException("Actions without a duration can't be suspended");
-
-		// determine target user
-
-		int targetUserId = Command.getUserId(context, target);
-
-		// determine target discord users
-
-		List<Long> targetDiscordIds = context.bot().getUserHandler().getDiscordUserIds(targetUserId);
-
-		// determine action to suspend
-
-		int actionId = UserActionQueries.getActiveAction(context.bot().getDatabase(), targetUserId, type);
-
-		// suspend action in bot
-
-		if (actionId < 0
-				|| !UserActionQueries.suspendAction(context.bot().getDatabase(), actionId, context.userId(), reason)) { // action wasn't applied through the bot, determine direct applications (directly through discord)
-			// filter for present users with the action active on discord, purely db-recorded users are irrelevant for direct interaction
-			for (Iterator<Long> it = targetDiscordIds.iterator(); it.hasNext(); ) {
-				long targetDiscordId = it.next();
-
-				if (!type.isActive(context.server(), targetDiscordId, context.bot())) {
-					it.remove();
-				}
-			}
-
-			if (targetDiscordIds.isEmpty()) throw new CommandException("User %d is not %s.", targetUserId, type.getDesc(false));
-		} else { // action was applied through the bot, update db record and remove from action sync handler
-			context.bot().getActionSyncHandler().onUserActionSuspension(actionId);
-		}
-
-		// announce action
-
-		announceUserAction(type, true, "", "",
-				targetUserId, targetDiscordIds,
-				System.currentTimeMillis(), 0, reason,
-				actionId,
-				context.channel(), context.author().asUser().get(),
-				context.bot(), context.server());
-
-		// apply discord action
-
-		for (long targetDiscordId : targetDiscordIds) {
-			type.deactivate(context.server(), targetDiscordId, reason, context.bot());
-		}
-	}
-
-	public static void expireUserAction(ExpiringUserActionEntry entry, DiscordBot bot, Server server) throws SQLException {
-		List<Long> targets = bot.getUserHandler().getDiscordUserIds(entry.targetUserId());
-
-		if (entry.type().hasDeactivation) {
-			for (long discordUserId : targets) {
-				entry.type().deactivate(server, discordUserId, "automatic expiration", bot);
-			}
-		}
-
-		UserActionQueries.expireAction(bot.getDatabase(), entry.id());
-
-		announceUserAction(entry.type(), true, "(expiration)", "automatically",
-				entry.targetUserId(), targets,
-				System.currentTimeMillis(), 0, null,
-				entry.id(),
-				null, null,
-				bot, server);
-	}
-
-	static void applyChannelAction(ChannelActionType type, String target, int data, String duration, String reason, String extraBodyDesc, CommandContext context) throws Exception {
-		// determine target channel
-
-		ServerChannel targetChannel = Command.getChannel(context, target);
-
-		// check for conflict
-
-		int prevId = -1;
-		int prevResetData = 0;
-
-		if (type.hasDuration) {
-			ActiveChannelActionEntry existingAction = ChannelActionQueries.getActiveAction(context.bot().getDatabase(), targetChannel.getId(), type);
+		if (type.hasDuration()) {
+			ActiveActionEntry existingAction = ActionQueries.getActiveAction(context.bot().getDatabase(), targetId, type);
 
 			if (existingAction != null) {
-				int cmp = type.compareData(existingAction.data(), data);
+				int cmp = existingAction.data() != null ? type.compareData(existingAction.data().data(), data) : 0;
 
 				if (cmp == 0) { // same action is already active
-					throw new CommandException("The channel is already %s", type.getDesc(false));
-				} else if (cmp > 0 && !type.checkData(data, existingAction.resetData())) { // downgrade to or below the prev action's reset level, just suspend with no new action
-					suspendChannelAction(type, target, reason, context);
+					throw new CommandException("The %s is already %s", type.getKind().id, type.getDesc(false));
+				} else if (cmp > 0 && !type.checkData(data, existingAction.data().resetData())) { // downgrade to or below the prev action's reset level, just suspend with no new action
+					suspendAction(type, targetId, reason, context);
 					return;
 				}
 
-				if (ChannelActionQueries.suspendAction(context.bot().getDatabase(), existingAction.id(), context.userId(), "superseded")) {
-					context.bot().getActionSyncHandler().onChannelActionSuspension(existingAction.id());
+				if (ActionQueries.suspendAction(context.bot().getDatabase(), existingAction.id(), context.userId(), "superseded")) {
+					context.bot().getActionSyncHandler().onActionSuspension(existingAction.id());
 					prevId = existingAction.id();
-					prevResetData = existingAction.resetData();
+					prevResetData = existingAction.data().resetData();
 				}
-			} else if (type.isActive(context.server(), targetChannel, data, context.bot())) { // channel already set to a higher level outside the bot
+			} else if (type.isActive(context.server(), targetId, data, context.bot())) { // channel already set to a higher level outside the bot
 				throw new CommandException("The channel is already %s", type.getDesc(false));
 			}
 		}
 
 		// determine duration
 
-		long durationMs = parseActionDurationMs(duration, type.hasDuration);
+		long durationMs = FormatUtil.parseActionDurationMs(duration, type.hasDuration());
+		ActivateResult result;
 
 		// apply discord action
 
-		Integer resetData = type.activate(context.server(), targetChannel, data, reason, context.bot());
-		if (resetData == null) throw new CommandException("The action is not applicable to the channel");
+		try {
+			result = type.activate(context.server(), targetId, false, data, reason, context.bot());
+		} catch (DiscordException e) {
+			throw new CommandException("Action failed: "+e);
+		}
 
-		if (prevId >= 0) resetData = prevResetData;
+		if (!type.hasDuration() && result.targets() == 0) {
+			throw new CommandException("Absent target");
+		}
+
+		if (!result.applicable()) {
+			throw new CommandException("The action is not applicable to the "+type.getKind().id);
+		}
+
+		Integer resetData = prevId >= 0 ? prevResetData : result.resetData();
 
 		// create db record
 
-		ChannelActionEntry entry = ChannelActionQueries.createAction(context.bot().getDatabase(), type, targetChannel.getId(), data, resetData, context.userId(), durationMs, reason, prevId);
+		ActionEntry entry = ActionQueries.createAction(context.bot().getDatabase(),
+				type,
+				(data != 0 || result.resetData() != null ? new ActionData(data, resetData) : null),
+				targetId, context.userId(), durationMs, reason, prevId);
+
+		// apply discord action again in case the user rejoined quickly (race condition)
+
+		if (type.hasDuration()) {
+			try {
+				type.activate(context.server(), targetId, false, data, reason, context.bot());
+			} catch (DiscordException e) {
+				LOGGER.warn("Action re-application failed: {}", e.toString());
+			}
+		}
 
 		// announce action
 
-		announceChannelAction(type, false, "", extraBodyDesc,
-				targetChannel,
+		announceAction(type, false, null, extraBodyDesc,
+				targetId,
 				entry.creationTime(), entry.expirationTime(), reason,
 				entry.id(),
 				context.channel(), context.author().asUser().get(),
 				context.bot(), context.server());
 
-		// apply discord action
+		// record action for expiration
 
-		context.bot().getActionSyncHandler().onNewChannelAction(entry);
+		context.bot().getActionSyncHandler().onNewAction(entry);
 	}
 
-	static void suspendChannelAction(ChannelActionType type, String target, String reason, CommandContext context) throws Exception {
-		if (!type.hasDuration) throw new RuntimeException("Actions without a duration can't be suspended");
-
-		// determine target channel
-
-		ServerChannel targetChannel = Command.getChannel(context, target);
+	static void suspendAction(ActionType type, long targetId, String reason, CommandContext context) throws Exception {
+		if (!type.hasDuration()) throw new RuntimeException("Actions without a duration can't be suspended");
 
 		// determine action to suspend
 
-		ActiveChannelActionEntry entry = ChannelActionQueries.getActiveAction(context.bot().getDatabase(), targetChannel.getId(), type);
+		ActiveActionEntry entry = ActionQueries.getActiveAction(context.bot().getDatabase(), targetId, type);
 		int actionId;
 		Integer resetData;
 
@@ -289,85 +186,76 @@ public final class ActionUtil {
 			resetData = null;
 		} else {
 			actionId = entry.id();
-			resetData = entry.resetData();
+			resetData = entry.data() != null ? entry.data().resetData() : null;
 		}
 
 		// suspend action in bot
 
 		if (entry == null
-				|| !ChannelActionQueries.suspendAction(context.bot().getDatabase(), entry.id(), context.userId(), reason)) { // action wasn't applied through the bot
-			throw new CommandException("Channel %s is not %s through the bot.", targetChannel.getName(), type.getDesc(false));
+				|| !ActionQueries.suspendAction(context.bot().getDatabase(), entry.id(), context.userId(), reason)) { // action wasn't applied through the bot, determine direct applications (directly through discord)
+			if (!type.canRevertBeyondBotDb()) {
+				throw new CommandException("%s %d is not %s through the bot.", type.getKind().id, targetId, type.getDesc(false));
+			} else if (!type.isActive(context.server(), targetId, 0, context.bot())) {
+				throw new CommandException("%s %d is not %s.", type.getKind().id, targetId, type.getDesc(false));
+			}
 		} else { // action was applied through the bot, update db record and remove from action sync handler
-			context.bot().getActionSyncHandler().onChannelActionSuspension(actionId);
+			context.bot().getActionSyncHandler().onActionSuspension(entry.id());
+		}
+
+		// apply discord action
+
+		try {
+			type.deactivate(context.server(), targetId, resetData, reason, context.bot());
+		} catch (DiscordException e) {
+			// TODO: reinstate
+			throw new CommandException("Action failed: "+e);
 		}
 
 		// announce action
 
-		announceChannelAction(type, true, "", "",
-				targetChannel,
+		announceAction(type, true, "", "",
+				targetId,
 				System.currentTimeMillis(), 0, reason,
 				actionId,
 				context.channel(), context.author().asUser().get(),
 				context.bot(), context.server());
-
-		// apply discord action
-
-		type.deactivate(context.server(), targetChannel, resetData, reason, context.bot());
 	}
 
-	public static void expireChannelAction(ExpiringChannelActionEntry entry, DiscordBot bot, Server server) throws SQLException {
-		ServerChannel targetChannel = server.getChannelById(entry.channelId()).orElse(null);
-
-		if (entry.type().hasDeactivation && targetChannel != null) {
-			entry.type().deactivate(server, targetChannel, entry.resetData(), "automatic expiration", bot);
+	public static void expireAction(ExpiringActionEntry entry, DiscordBot bot, Server server) throws SQLException {
+		try {
+			entry.type().deactivate(server, entry.targetId(), entry.data() != null ? entry.data().resetData() : null, "automatic expiration", bot);
+		} catch (DiscordException e) {
+			LOGGER.warn("{} {} action {} expiration failed: {}", entry.type().getKind().id, entry.type().getId(), entry.id(), e.toString());
+			return;
 		}
 
-		ChannelActionQueries.expireAction(bot.getDatabase(), entry.id());
+		ActionQueries.expireAction(bot.getDatabase(), entry.id());
 
-		if (targetChannel != null) {
-			announceChannelAction(entry.type(), true, "(expiration)", "automatically",
-					targetChannel,
-					System.currentTimeMillis(), 0, null,
-					entry.id(),
-					null, null,
-					bot, server);
+		announceAction(entry.type(), true, "(expiration)", "automatically",
+				entry.targetId(),
+				System.currentTimeMillis(), 0, null,
+				entry.id(),
+				null, null,
+				bot, server);
+	}
+
+	static void announceAction(ActionType type, boolean reversal, @Nullable String extraTitleDesc, @Nullable String extraBodyDesc,
+			long targetId,
+			long creation, long expiration, String reason,
+			int actionId,
+			TextChannel actingChannel, User actor,
+			DiscordBot bot, Server server) {
+		if (extraTitleDesc == null || extraTitleDesc.isEmpty()) {
+			extraTitleDesc = "";
+		} else {
+			extraTitleDesc = " "+extraTitleDesc;
 		}
-	}
 
-	static void announceUserAction(UserActionType type, boolean reversal, String extraTitleDesc, String extraBodyDesc,
-			int targetUserId, List<Long> targetDiscordIds,
-			long creation, long expiration, String reason,
-			int actionId,
-			TextChannel actingChannel, User actor,
-			DiscordBot bot, Server server) {
-		announceAction(type.getDesc(reversal), reversal, extraTitleDesc, extraBodyDesc,
-				targetUserId, targetDiscordIds, null,
-				creation, expiration, reason,
-				actionId,
-				actingChannel, actor, bot, server);
-	}
-
-	static void announceChannelAction(ChannelActionType type, boolean reversal, String extraTitleDesc, String extraBodyDesc,
-			ServerChannel targetChannel,
-			long creation, long expiration, String reason,
-			int actionId,
-			TextChannel actingChannel, User actor,
-			DiscordBot bot, Server server) {
-		announceAction(type.getDesc(reversal), reversal, extraTitleDesc, extraBodyDesc,
-				-1, null, targetChannel,
-				creation, expiration, reason,
-				actionId,
-				actingChannel, actor, bot, server);
-	}
-
-	private static void announceAction(String actionDesc, boolean reversal, String extraTitleDesc, String extraBodyDesc,
-			int targetUserId, List<Long> targetDiscordIds, ServerChannel targetChannel,
-			long creation, long expiration, String reason,
-			int actionId,
-			TextChannel actingChannel, User actor,
-			DiscordBot bot, Server server) {
-		if (!extraTitleDesc.isEmpty()) extraTitleDesc = " "+extraTitleDesc;
-		if (!extraBodyDesc.isEmpty()) extraBodyDesc = " "+extraBodyDesc;
+		if (extraBodyDesc == null || extraBodyDesc.isEmpty()) {
+			extraBodyDesc = "";
+		} else {
+			extraBodyDesc = " "+extraBodyDesc;
+		}
 
 		// log to original channel
 
@@ -378,7 +266,7 @@ public final class ActionUtil {
 		} else if (expiration < 0) {
 			expirationSuffix = " permanently";
 		} else {
-			expirationSuffix = " until ".concat(dateTimeFormatter.format(Instant.ofEpochMilli(expiration)));
+			expirationSuffix = " until ".concat(FormatUtil.dateTimeFormatter.format(Instant.ofEpochMilli(expiration)));
 		}
 
 		String reasonSuffix;
@@ -390,20 +278,27 @@ public final class ActionUtil {
 		}
 
 		Instant creationTime = Instant.ofEpochMilli(creation);
-		boolean targetIsUser = targetChannel == null;
+		List<Long> targetDiscordIds;
 		String targetType, targetName;
 		CharSequence targetListSuffix;
 
-		if (targetIsUser) {
+		if (type.getKind() == Kind.USER) {
+			int targetUserId = (int) targetId;
+			targetDiscordIds = bot.getUserHandler().getDiscordUserIds(targetUserId);
+
 			targetType = "User";
 			targetName = Integer.toString(targetUserId);
-			targetListSuffix = formatUserList(targetDiscordIds, bot, server);
+			targetListSuffix = FormatUtil.formatUserList(targetDiscordIds, bot, server);
 		} else {
+			ServerChannel targetChannel = server.getChannelById(targetId).orElse(null);
+			targetDiscordIds = null;
+
 			targetType = "Channel";
-			targetName = targetChannel.getName();
+			targetName = targetChannel != null ? targetChannel.getName() : "(unknown)";
 			targetListSuffix = "";
 		}
 
+		String actionDesc = type.getDesc(reversal);
 		String title = String.format("%s %s%s", // e.g. 'User' 'unbanned'' (expiration)'
 				targetType, actionDesc, extraTitleDesc);
 		String description = String.format("%s %s has been %s%s%s:%s%s", // e.g. 'User' '123' has been 'unbanned'' automatically' +exp/target/reason
@@ -439,7 +334,7 @@ public final class ActionUtil {
 
 		// message target user
 
-		if (targetIsUser) {
+		if (type.getKind() == Kind.USER) {
 			String appealSuffix = !reversal ? "\n\n%s".formatted(bot.getConfigEntry(APPEAL_MESSAGE)) : "";
 
 			title = String.format("%s%s!", // e.g. 'Unbanned'' (expiration)'!
@@ -461,180 +356,5 @@ public final class ActionUtil {
 				if (user != null) user.sendMessage(userMsg); // no get
 			}
 		}
-	}
-
-	private static long parseActionDurationMs(String duration, boolean requireDuration) throws CommandException {
-		long durationMs;
-
-		if (duration == null) {
-			durationMs = 0;
-		} else if (duration.equalsIgnoreCase("perm") || duration.equalsIgnoreCase("permanent")) {
-			durationMs = -1;
-		} else {
-			durationMs = parseDurationMs(duration);
-			if (durationMs < 0) throw new CommandException("Invalid duration");
-		}
-
-		if (durationMs == 0 && requireDuration) {
-			throw new CommandException("Invalid zero duration");
-		}
-
-		return durationMs;
-	}
-
-	static long parseDurationMs(String str) {
-		int start = 0;
-		int end = str.length();
-
-		boolean empty = true;
-		int lastQualifierIdx = 2; // pretend the prev qualifier was minutes (idx 2) to make it select seconds (idx 1) by default
-		long ret = 0;
-
-		mainLoop: while (start < end) {
-			char c = str.charAt(start);
-
-			// skip leading whitespace
-			while (Character.isWhitespace(c)) {
-				if (++start >= end) break mainLoop;
-				c = str.charAt(start);
-			}
-
-			// read numeric part
-			long accum = 0;
-
-			if (c < '0' || c > '9') {
-				return -1; // no numeric part
-			} else {
-				do {
-					accum = accum * 10 + (c - '0');
-
-					if (++start >= end) {
-						c = 0;
-					} else {
-						c = str.charAt(start);
-					}
-				} while (c >= '0' && c <= '9');
-			}
-
-			// skip whitespace between number and potential qualifier
-			while (c != 0 && Character.isWhitespace(c)) {
-				if (++start >= end) {
-					c = 0;
-				} else {
-					c = str.charAt(start);
-				}
-			}
-
-			// read qualifier (determine its end pos)
-			int qualStart = start;
-
-			while (c != 0 && (c < '0' || c > '9') && !Character.isWhitespace(c)) {
-				if (++start >= end) {
-					c = 0;
-				} else {
-					c = str.charAt(start);
-				}
-			}
-
-			// parse qualifier
-			long mul;
-
-			if (start == qualStart) { // no qualifier
-				// use one less than the prev qualifier if possible, interprets e.g. 4h30 as 4h30m
-				mul = durationLengthsMs[Math.max(lastQualifierIdx - 1, 0)];
-			} else {
-				mul = -1;
-				int len = start - qualStart;
-
-				qualLoop: for (int i = 0; i < durationQualifiers.length; i++) {
-					for (String q : durationQualifiers[i]) {
-						if (q.length() == len && str.startsWith(q, qualStart)) {
-							lastQualifierIdx = i;
-							mul = durationLengthsMs[i];
-							break qualLoop;
-						}
-					}
-				}
-
-				if (mul < 0) return -1; // no valid qualifier
-			}
-
-			empty = false;
-			ret += accum * mul;
-		}
-
-		return empty ? -1 : ret;
-	}
-
-	public static String formatDuration(long durationMs) {
-		return formatDuration(durationMs, Integer.MAX_VALUE);
-	}
-
-	public static String formatDuration(long durationMs, int maxParts) {
-		StringBuilder ret = new StringBuilder();
-
-		if (durationMs < 0) {
-			ret.append('-');
-			durationMs = -durationMs;
-		}
-
-		while (durationMs > 0 && maxParts-- > 0) {
-			int maxQualIdx = 0;
-
-			for (int i = durationLengthsMs.length - 1; i > 0; i--) {
-				if (durationLengthsMs[i] <= durationMs) {
-					maxQualIdx = i;
-					break;
-				}
-			}
-
-			long currentMul = durationLengthsMs[maxQualIdx];
-			String currentQual = durationQualifiers[maxQualIdx][0];
-
-			long count = durationMs / currentMul;
-			durationMs -= count * currentMul;
-
-			ret.append(Long.toString(count));
-			ret.append(currentQual);
-		}
-
-		if (ret.length() == 0 || ret.length() == 1 && ret.charAt(0) == '-') {
-			return "0";
-		} else {
-			return ret.toString();
-		}
-	}
-
-	private static final String[][] durationQualifiers = { {"ms"},
-			{"s", "sec", "second", "seconds"}, {"m", "min", "minute", "minutes"}, {"h", "hour", "hours"},
-			{"d", "D", "day", "days"}, {"w", "W", "week", "weeks"}, {"M", "mo", "month", "months"}, {"y", "Y", "year", "years"} };
-	private static final long[] durationLengthsMs = { 1,
-			1_000, 60_000L, 3_600_000L,
-			86_400_000L,  604_800_000L, 2_592_000_000L, 31_536_000_000L };
-
-	static CharSequence formatUserList(List<User> targets) {
-		StringBuilder ret = new StringBuilder();
-
-		for (User user : targets) {
-			ret.append('\n');
-			ret.append(UserHandler.formatDiscordUser(user));
-		}
-
-		return ret;
-	}
-
-	static CharSequence formatUserList(List<Long> targets, CommandContext context) {
-		return formatUserList(targets, context.bot(), context.server());
-	}
-
-	static CharSequence formatUserList(List<Long> targets, DiscordBot bot, Server server) {
-		StringBuilder ret = new StringBuilder();
-
-		for (long targetDiscordId : targets) {
-			ret.append('\n');
-			ret.append(bot.getUserHandler().formatDiscordUser(targetDiscordId, server));
-		}
-
-		return ret;
 	}
 }

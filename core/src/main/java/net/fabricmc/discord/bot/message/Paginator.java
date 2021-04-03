@@ -32,7 +32,10 @@ import org.javacord.api.entity.message.MessageAuthor;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.javacord.api.entity.user.User;
 import org.javacord.api.event.message.reaction.ReactionAddEvent;
+import org.javacord.api.exception.DiscordException;
 import org.jetbrains.annotations.Nullable;
+
+import net.fabricmc.discord.bot.util.DiscordUtil;
 
 /**
  * A utility to create paginated messages.
@@ -48,6 +51,7 @@ public final class Paginator {
 	private static final String X_EMOTE = "\u274c";
 	private final Logger logger;
 	private final @Nullable String title;
+	private final @Nullable String footer;
 	private final List<Page> pages;
 	private final int timeout; // in s
 	private final long owner;
@@ -71,7 +75,7 @@ public final class Paginator {
 	 * @param timeout the timeout in which the paginator will automatically be destroyed
 	 * @param ownerSnowflake the snowflake of the user who is allowed to interface with the paginator
 	 */
-	private Paginator(Logger logger, String title, List<Page> pages, int timeout, long ownerSnowflake) {
+	private Paginator(Logger logger, String title, String footer, List<Page> pages, int timeout, long ownerSnowflake) {
 		this.logger = logger;
 
 		if (pages.isEmpty()) {
@@ -83,6 +87,7 @@ public final class Paginator {
 		}
 
 		this.title = title;
+		this.footer = footer;
 		this.pages = pages;
 		this.owner = ownerSnowflake;
 		this.timeout = timeout;
@@ -256,7 +261,7 @@ public final class Paginator {
 
 		EmbedBuilder ret = new EmbedBuilder()
 				.setDescription(page.content)
-				.setFooter("Page %s/%s".formatted(this.getCurrentPage() + 1, this.getPageCount()));
+				.setFooter("Page %s/%s%s%s".formatted(this.getCurrentPage() + 1, this.getPageCount(), footer != null ? " " : "", footer != null ? footer : ""));
 
 		if (title != null) ret.setTitle(title);
 		if (page.thumbnailUrl != null) ret.setThumbnail(page.thumbnailUrl);
@@ -267,6 +272,7 @@ public final class Paginator {
 	public static final class Builder {
 		private Logger logger = LOGGER;
 		private @Nullable String title;
+		private @Nullable String footer;
 		private final List<Page> pages = new ArrayList<>();
 		private int timeout = 200; // in s
 		private final long ownerId;
@@ -290,9 +296,17 @@ public final class Paginator {
 		}
 
 		public Builder title(String format, Object... args) {
-			this.title = String.format(format, args);
+			return title(String.format(format, args));
+		}
+
+		public Builder footer(@Nullable String footer) {
+			this.footer = footer;
 
 			return this;
+		}
+
+		public Builder footer(String format, Object... args) {
+			return footer(String.format(format, args));
 		}
 
 		public Builder pages(Collection<Page> pages) {
@@ -346,11 +360,11 @@ public final class Paginator {
 		}
 
 		public Paginator build() {
-			return new Paginator(logger, title, pages, timeout, ownerId);
+			return new Paginator(logger, title, footer, pages, timeout, ownerId);
 		}
 
-		public void buildAndSend(TextChannel channel) {
-			build().send(channel);
+		public void buildAndSend(TextChannel channel) throws DiscordException {
+			DiscordUtil.join(build().send(channel));
 		}
 	}
 

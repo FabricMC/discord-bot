@@ -18,6 +18,7 @@ package net.fabricmc.discord.bot.command.core;
 
 import java.util.Map;
 
+import org.javacord.api.exception.DiscordException;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.UserHandler;
@@ -44,7 +45,7 @@ public final class ConfigCommand extends Command {
 	}
 
 	@Override
-	public boolean run(CommandContext context, Map<String, String> arguments) {
+	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
 		return switch (arguments.get("unnamed_0")) {
 		case "get" -> this.runGet(context, arguments);
 		case "set" -> this.runSet(context, arguments);
@@ -53,7 +54,7 @@ public final class ConfigCommand extends Command {
 		};
 	}
 
-	private boolean runList(CommandContext context, Map<String, String> arguments) {
+	private boolean runList(CommandContext context, Map<String, String> arguments) throws DiscordException {
 		int pos = 0;
 		Paginator.Builder builder = new Paginator.Builder(context.author()).title("Config Entries");
 		StringBuilder currentPage = new StringBuilder();

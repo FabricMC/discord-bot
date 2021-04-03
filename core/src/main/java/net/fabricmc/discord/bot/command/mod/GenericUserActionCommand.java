@@ -52,15 +52,18 @@ public final class GenericUserActionCommand extends Command {
 
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
-		String target = arguments.get("user");
+		int targetUserId = getUserId(context, arguments.get("user"));
 		String reason = arguments.get("reason");
 
 		if (activate) {
+			checkSelfTarget(context, targetUserId);
+			checkImmunity(context, targetUserId, false);
+
 			String duration = type.hasDuration ? arguments.get("duration") : null;
 
-			ActionUtil.applyUserAction(type, target, duration, reason, context);
+			ActionUtil.applyAction(type, 0, targetUserId, duration, reason, null, context);
 		} else {
-			ActionUtil.suspendUserAction(type, target, reason, context);
+			ActionUtil.suspendAction(type, targetUserId, reason, context);
 		}
 
 		return true;

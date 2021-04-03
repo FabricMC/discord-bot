@@ -35,7 +35,7 @@ public final class HelpCommand extends Command {
 	}
 
 	@Override
-	public boolean run(CommandContext context, Map<String, String> arguments) throws CommandException {
+	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
 		if (!arguments.containsKey("command")) {
 			Paginator.Builder builder = new Paginator.Builder(context.author()).title("Bot Usage Help");
 			StringBuilder currentPage = new StringBuilder();

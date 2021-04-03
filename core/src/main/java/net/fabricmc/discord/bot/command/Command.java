@@ -116,6 +116,12 @@ public abstract class Command {
 		}
 	}
 
+	public static void checkSelfTarget(CommandContext context, int targetUserId) throws CommandException {
+		if (targetUserId == context.userId()) {
+			throw new CommandException("You can't target yourself");
+		}
+	}
+
 	public static void checkImmunity(CommandContext context, int targetUserId, boolean allowBotTarget) throws CommandException {
 		if (context.bot().getUserHandler().hasImmunity(targetUserId, context.userId(), allowBotTarget)) {
 			throw new CommandException("The target has immunity");

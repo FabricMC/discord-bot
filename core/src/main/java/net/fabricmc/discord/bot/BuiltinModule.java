@@ -20,7 +20,6 @@ import java.nio.file.Path;
 
 import org.apache.logging.log4j.Logger;
 import org.javacord.api.DiscordApi;
-import org.javacord.api.entity.channel.ServerTextChannel;
 import org.javacord.api.entity.message.MessageAuthor;
 import org.javacord.api.entity.user.User;
 import org.javacord.api.event.message.MessageCreateEvent;
@@ -99,7 +98,7 @@ final class BuiltinModule implements Module, MessageCreateListener {
 
 			bot.registerCommand(new GenericUserActionCommand(type, true));
 
-			if (type.hasDeactivation) {
+			if (type.hasDeactivation()) {
 				bot.registerCommand(new GenericUserActionCommand(type, false));
 			}
 		}
@@ -130,7 +129,7 @@ final class BuiltinModule implements Module, MessageCreateListener {
 				event.getMessageLink(),
 				event.getMessageAuthor(),
 				bot.getUserHandler().getUserId(user),
-				(ServerTextChannel) event.getChannel(),
+				event.getChannel(),
 				event.getMessageContent(),
 				event.getMessageId()
 				);
