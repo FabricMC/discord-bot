@@ -205,19 +205,25 @@ public final class Paginator {
 		this.currentPage = 0;
 
 		// Send the message to create the paginator on first page
-		return channel.sendMessage(this.getEmbed()).thenCompose(message -> {
-			this.message = message;
+		CompletableFuture<Message> ret = channel.sendMessage(this.getEmbed());
 
-			// Add the control emotes and then setup the listeners for said emotes
-			return CompletableFuture.allOf(
-					message.addReaction(ARROW_BACKWARDS_EMOTE),
-					message.addReaction(X_EMOTE),
-					message.addReaction(ARROW_FORWARDS_EMOTE)
-					).thenApply(_v -> {
-						message.addReactionAddListener(this::reactionAdded).removeAfter(this.timeout, TimeUnit.SECONDS).addRemoveHandler(this::destroy);
-						return message;
-					});
-		}).exceptionally(e -> {
+		if (pages.size() > 1) {
+			ret = ret.thenCompose(message -> {
+				this.message = message;
+
+				// Add the control emotes and then setup the listeners for said emotes
+				return CompletableFuture.allOf(
+						message.addReaction(ARROW_BACKWARDS_EMOTE),
+						message.addReaction(X_EMOTE),
+						message.addReaction(ARROW_FORWARDS_EMOTE)
+						).thenApply(_v -> {
+							message.addReactionAddListener(this::reactionAdded).removeAfter(this.timeout, TimeUnit.SECONDS).addRemoveHandler(this::destroy);
+							return message;
+						});
+			});
+		}
+
+		return ret.exceptionally(e -> {
 			this.logger.error("Failed to setup paginator", e);
 			return null;
 		});
