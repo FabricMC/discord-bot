@@ -23,7 +23,7 @@ import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.message.MessageAuthor;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 
-public sealed abstract class TagInstance {
+public abstract class TagInstance {
 	private final String name;
 
 	public TagInstance(String name) {

@@ -79,24 +79,24 @@ allprojects {
 		modularity.inferModulePath = true
 
 		toolchain {
-			languageVersion = JavaLanguageVersion.of(15)
+			languageVersion = JavaLanguageVersion.of(16)
 		}
 	}
 
 	tasks.withType(JavaCompile).configureEach {
-		options.compilerArgs += ["--enable-preview"]
-		options.release = 15
+//		options.compilerArgs += ["--enable-preview"]
+		options.release = 16
 	}
 
-	tasks.withType(Test).configureEach {
-		jvmArgs += "--enable-preview"
-	}
+//	tasks.withType(Test).configureEach {
+//		jvmArgs += "--enable-preview"
+//	}
 }
 
 // Main bot module
 application {
 	mainClass = "net.fabricmc.discord.bot.Main"
-	applicationDefaultJvmArgs = ["--enable-preview"]
+//	applicationDefaultJvmArgs = ["--enable-preview"]
 	executableDir = "run"
 }
 
@@ -126,6 +126,6 @@ java {
 	modularity.inferModulePath = true
 
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(15)
+		languageVersion = JavaLanguageVersion.of(16)
 	}
 }
