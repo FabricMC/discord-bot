@@ -35,16 +35,16 @@ public final class CommandParser {
 	public static void main(String[] args) {
 		UsageParser usageParser = new UsageParser();
 		//Node node = usageParser.parse("(any|block|be|blockentity|entity) (class <class> | id <id>) [<dimId>] [--ticking] [--unloaded] [--countOnly | --chunkCounts] [--filter[=<x>]] [--clear]");
-		//Node node = usageParser.parse("list [<user>] | (add|remove) [<user>] <name>");
+		Node node = usageParser.parse("list [<user>] | (add|remove) [<user>] <group> | listsub <group> | (addsub|removesub) <parent> <child>");
 		//Node node = usageParser.parse("warn <user> <reason...> <test> ss [<asd>]");
-		Node node = usageParser.parse("<className> [latest | latestStable | <mcVersion>]");
+		//Node node = usageParser.parse("<className> [latest | latestStable | <mcVersion>]");
 		System.out.printf("root node: %s%n", node.toStringFull());
 
 		//String input = "be id minecraft:chest nether --unloaded --countOnly --filter=test --clear";
 		//String input = "be id minecraft:chest nether --unloaded --chunkCounts --filter=test --clear";
-		//String input = "add somegroup";
+		String input = "add admins";
 		//String input = "warn someone reason asd xy ss qwe";
-		String input = "1337";
+		//String input = "1337";
 		Map<String, String> result = new LinkedHashMap<>();
 		CommandParser cmdParser = new CommandParser();
 		boolean rval = cmdParser.parse(input, node, result);

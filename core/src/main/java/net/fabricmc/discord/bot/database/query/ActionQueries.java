@@ -473,7 +473,7 @@ public final class ActionQueries {
 		if (db == null) throw new NullPointerException("null db");
 
 		try (Connection conn = db.getConnection();
-				PreparedStatement ps = conn.prepareStatement("SELECT nick FROM `nicklock` WHERE discorduser_id.id = ?")) {
+				PreparedStatement ps = conn.prepareStatement("SELECT nick FROM `nicklock` WHERE discorduser_id = ?")) {
 			ps.setLong(1, discordUserId);
 
 			try (ResultSet res = ps.executeQuery()) {

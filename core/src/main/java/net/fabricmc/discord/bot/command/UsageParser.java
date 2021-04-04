@@ -239,7 +239,7 @@ public final class UsageParser {
 			} else if (c == '|') { // alternative options: ..|..
 				if (orNode == null) orNode = new OrNode();
 
-				if (head instanceof OrNode) { // optimize (a|b)|c to a|b|c
+				if (head instanceof OrNode && head.next == null) { // optimize (a|b)|c to a|b|c
 					for (Node n : ((OrNode) head)) {
 						orNode.add(n);
 					}
@@ -666,7 +666,7 @@ public final class UsageParser {
 
 		@Override
 		protected String toString0() {
-			return String.format("{%s}", child.toString());
+			return String.format("{%s}", child.toStringFull());
 		}
 
 		public final Node child;
@@ -742,7 +742,7 @@ public final class UsageParser {
 
 			for (int i = 0; i < options.size(); i++) {
 				if (i != 0) ret.append('|');
-				ret.append(options.get(i).toString());
+				ret.append(options.get(i).toStringFull());
 			}
 
 			ret.append(')');
