@@ -16,6 +16,7 @@
 
 package net.fabricmc.discord.bot.command.core;
 
+import java.util.List;
 import java.util.Map;
 
 import net.fabricmc.discord.bot.command.Command;
@@ -66,8 +67,12 @@ public final class HelpCommand extends Command {
 				throw new CommandException("Unknown command");
 			}
 
-			context.channel().sendMessage(String.format("%s `%s`\n",
-					cmd.name(), cmd.usage()));
+			List<String> aliases = cmd.aliases();
+			String aliasesSuffix = aliases.isEmpty() ? "" : String.format("\nAliases: %s", String.join(", ", aliases));
+
+			context.channel().sendMessage(String.format("%s `%s`%s",
+					cmd.name(), cmd.usage(),
+					aliasesSuffix));
 		}
 
 		return true;

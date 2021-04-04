@@ -22,6 +22,7 @@ import java.util.List;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
 import org.javacord.api.exception.DiscordException;
+import org.javacord.api.exception.NotFoundException;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.database.query.ActionQueries;
@@ -272,8 +273,12 @@ public enum UserActionType implements ActionType {
 			List<User> targets = bot.getUserHandler().getDiscordUsers((int) targetId, server);
 
 			for (User user : targets) {
-				activate(server, user, reason, bot);
-				count++;
+				try {
+					activate(server, user, reason, bot);
+					count++;
+				} catch (NotFoundException e) {
+					// ignore, user likely left between gathering users and executing the action
+				}
 			}
 		}
 
@@ -289,7 +294,11 @@ public enum UserActionType implements ActionType {
 		List<Long> targets = bot.getUserHandler().getDiscordUserIds((int) targetId);
 
 		for (long discordUserId : targets) {
-			deactivate(server, discordUserId, reason, bot);
+			try {
+				deactivate(server, discordUserId, reason, bot);
+			} catch (NotFoundException e) {
+				// ignore, user likely left between gathering users and executing the action
+			}
 		}
 	}
 

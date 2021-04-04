@@ -113,7 +113,7 @@ public final class UserCommand extends Command {
 		}
 
 		Collection<ActionEntry> actions = ActionQueries.getActions(context.bot().getDatabase(), ActionType.Kind.USER, targetUserId);
-		Collection<ActiveActionEntry> activeActions = ActionQueries.getActiveDUActions(context.bot().getDatabase(), targetUserId);
+		Collection<ActiveActionEntry> activeActions = ActionQueries.getActiveActions(context.bot().getDatabase(), ActionType.Kind.USER, targetUserId);
 
 		StringBuilder firstPageSb = new StringBuilder();
 		firstPageSb.append(String.format("**%d Discord Users:**%s\n"

@@ -187,7 +187,7 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 
 		try {
 			synchronized (this) {
-				Collection<ActiveActionEntry> actions = ActionQueries.getActiveDUActions(bot.getDatabase(), user.getId());
+				Collection<ActiveActionEntry> actions = ActionQueries.getActiveDiscordUserActions(bot.getDatabase(), user.getId());
 				long time = System.currentTimeMillis();
 
 				for (ActiveActionEntry action : actions) {

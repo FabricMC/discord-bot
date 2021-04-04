@@ -342,7 +342,7 @@ public final class ActionQueries {
 	public static ActiveActionEntry getActiveAction(Database db, long targetId, ActionType type) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
-		long rawTargetId = IdArmor.decodeOrThrowCond(targetId, type.getKind().useEncodedTargetId, "user id");
+		long rawTargetId = IdArmor.decodeOrThrowCond(targetId, type.getKind().useEncodedTargetId, "target id");
 
 		try (Connection conn = db.getConnection();
 				PreparedStatement ps = conn.prepareStatement("SELECT a.id, d.data, d.resetdata, a.expiration, a.reason "
@@ -370,15 +370,51 @@ public final class ActionQueries {
 		}
 	}
 
-	public static Collection<ActiveActionEntry> getActiveDUActions(Database db, long discordUserId) throws SQLException {
+	public static Collection<ActiveActionEntry> getActiveActions(Database db, ActionType.Kind kind, long targetId) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+
+		long rawTargetId = IdArmor.decodeOrThrowCond(targetId, kind.useEncodedTargetId, "target id");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement ps = conn.prepareStatement("SELECT a.id, a.type, d.data, d.resetdata, a.expiration, a.reason "
+						+ "FROM `activeaction` aa "
+						+ "JOIN `action` a ON a.id = aa.action_id "
+						+ "LEFT JOIN `actiondata` d ON d.action_id = aa.action_id "
+						+ "WHERE aa.target_id = ? AND a.targetkind = ?")) {
+			ps.setLong(1, rawTargetId);
+			ps.setString(2, kind.id);
+
+			try (ResultSet res = ps.executeQuery()) {
+				if (!res.next()) return Collections.emptyList();
+
+				List<ActiveActionEntry> ret = new ArrayList<>();
+
+				do {
+					int dataVal = res.getInt(3);
+					ActionData data = res.wasNull() ? null : new ActionData(dataVal, res.getInt(4));
+
+					ret.add(new ActiveActionEntry(IdArmor.encode(res.getInt(1)), // id
+							ActionType.get(kind.id, res.getString(2)), // type
+							data, // data
+							targetId, // targetId
+							res.getLong(5), // expirationTime
+							res.getString(6))); // reason
+				} while (res.next());
+
+				return ret;
+			}
+		}
+	}
+
+	public static Collection<ActiveActionEntry> getActiveDiscordUserActions(Database db, long discordUserId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
 		try (Connection conn = db.getConnection();
 				PreparedStatement ps = conn.prepareStatement("SELECT a.id, a.type, a.target_id, a.expiration, a.reason "
 						+ "FROM `discorduser` du "
-						+ "JOIN `activeaction` aa ON aa.target_id = du.user_id AND aa.targetkind = '"+ActionType.Kind.USER.id+"' "
+						+ "JOIN `activeaction` aa ON aa.target_id = du.user_id "
 						+ "JOIN `action` a ON a.id = aa.action_id "
-						+ "WHERE du.id = ?")) {
+						+ "WHERE du.id = ? AND a.targetkind = '"+ActionType.Kind.USER.id+"'")) {
 			ps.setLong(1, discordUserId);
 
 			try (ResultSet res = ps.executeQuery()) {
