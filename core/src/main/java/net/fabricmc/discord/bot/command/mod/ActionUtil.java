@@ -207,7 +207,6 @@ public final class ActionUtil {
 		try {
 			type.deactivate(context.server(), targetId, resetData, reason, context.bot());
 		} catch (DiscordException e) {
-			// TODO: reinstate
 			throw new CommandException("Action failed: "+e);
 		}
 

@@ -182,7 +182,10 @@ public final class McVersionModule implements Module {
 
 		if (announcedVersions.add(latestVersion)) { // already posted by this bot process, e.g. as a different kind or due to a mcmeta glitch
 			Message message = channel.sendMessage(NESSAGE.formatted(kind, latestVersion)).join();
-			//message.crossPost(); TODO: pending release of https://github.com/Javacord/Javacord/pull/650
+
+			//if (channel.getType() == ChannelType.SERVER_NEWS_CHANNEL) { TODO: check once javacord exposes this properly
+			message.crossPost();
+			//}
 		}
 
 		bot.setConfigEntry(announcedVersionKey, latestVersion);

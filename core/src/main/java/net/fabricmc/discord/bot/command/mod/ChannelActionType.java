@@ -35,11 +35,11 @@ public enum ChannelActionType implements ActionType {
 
 			Role role = server.getEveryoneRole();
 			Permissions oldPerms = target.getOverwrittenPermissions(role);
-			int extraDenyMask = restrictedPerms & ~oldPerms.getDeniedBitmask();
+			int extraDenyMask = (restrictedPerms & (int) ~oldPerms.getDeniedBitmask());
 			if (extraDenyMask == 0) return 0;
 
 			DiscordUtil.join(target.createUpdater()
-					.addPermissionOverwrite(role, Permissions.fromBitmask(oldPerms.getAllowedBitmask(), oldPerms.getDeniedBitmask() | extraDenyMask))
+					.addPermissionOverwrite(role, Permissions.fromBitmask((int) oldPerms.getAllowedBitmask(), (int) oldPerms.getDeniedBitmask() | extraDenyMask))
 					.setAuditLogReason(reason)
 					.update());
 
@@ -58,7 +58,7 @@ public enum ChannelActionType implements ActionType {
 			if ((oldPerms.getDeniedBitmask() & resetData) == 0) return;
 
 			DiscordUtil.join(target.createUpdater()
-					.addPermissionOverwrite(role, Permissions.fromBitmask(oldPerms.getAllowedBitmask(), oldPerms.getDeniedBitmask() & ~resetData))
+					.addPermissionOverwrite(role, Permissions.fromBitmask((int) oldPerms.getAllowedBitmask(), (int) oldPerms.getDeniedBitmask() & ~resetData))
 					.setAuditLogReason(reason)
 					.update());
 		}
