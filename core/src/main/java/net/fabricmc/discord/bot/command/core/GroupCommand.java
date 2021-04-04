@@ -47,21 +47,23 @@ public final class GroupCommand extends Command {
 
 			switch (arguments.get("unnamed_0")) {
 			case "list":
-				context.channel().sendMessage("Groups: "+String.join(", ", UserQueries.getDirectGroups(context.bot().getDatabase(), userId)));
+				context.channel().sendMessage(String.format("Groups for %s: %s",
+						context.bot().getUserHandler().formatUser(userId, context.server()),
+						String.join(", ", UserQueries.getDirectGroups(context.bot().getDatabase(), userId))));
 				return true;
 			case "add":
 				if (!UserQueries.addToGroup(context.bot().getDatabase(), userId, arguments.get("group"))) {
 					throw new CommandException("The user is already in the group");
 				}
 
-				context.channel().sendMessage("User added to group");
+				context.channel().sendMessage("User %s added to group".formatted(context.bot().getUserHandler().formatUser(userId, context.server())));
 				return true;
 			case "remove":
 				if (!UserQueries.removeFromGroup(context.bot().getDatabase(), userId, arguments.get("group"))) {
 					throw new CommandException("The user wasn't in the group");
 				}
 
-				context.channel().sendMessage("User removed from group");
+				context.channel().sendMessage("User %s removed from group".formatted(context.bot().getUserHandler().formatUser(userId, context.server())));
 				return true;
 			}
 		} else { // group handling itself

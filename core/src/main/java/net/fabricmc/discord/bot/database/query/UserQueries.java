@@ -393,7 +393,7 @@ public final class UserQueries {
 		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
 
 		try (Connection conn = db.getConnection();
-				PreparedStatement ps = conn.prepareStatement("SELECT `group`.id, group.name FROM user_group, `group` WHERE user_group.user_id = ? AND `group`.id = user_group.group_id")) {
+				PreparedStatement ps = conn.prepareStatement("SELECT g.id, g.name FROM `user_group`, `group` g WHERE user_group.user_id = ? AND g.id = user_group.group_id")) {
 			ps.setInt(1, rawUserId);
 
 			try (ResultSet res = ps.executeQuery()) {
