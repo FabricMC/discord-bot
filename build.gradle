@@ -48,6 +48,10 @@ allprojects {
 		// Logging
 		implementation("org.apache.logging.log4j:log4j-core:2.14.0")
 		implementation("org.apache.logging.log4j:log4j-slf4j-impl:2.14.0")
+
+		// Json Serialization
+		implementation("com.google.code.gson:gson:2.8.6")
+
 		// TODO: Do we want this so we can :irritater: instead of raw id for custom emotes?
 		//  https://github.com/vdurmont/emoji-java
 	}
