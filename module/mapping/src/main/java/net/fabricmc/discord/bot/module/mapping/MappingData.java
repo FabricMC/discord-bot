@@ -73,16 +73,7 @@ final class MappingData {
 				String imName = cls.getDstName(intermediaryNs);
 
 				if (imName != null) {
-					int outerEnd = imName.lastIndexOf('$');
-					int idStart;
-
-					if (outerEnd >= 0 && imName.startsWith(intermediaryClassPrefix, outerEnd + 1)) { // nested intermediary: bla$class_123
-						idStart = outerEnd + 1 + intermediaryClassPrefix.length();
-					} else if (outerEnd < 0 && imName.startsWith(intermediaryFullClassPrefix)) { // regular intermediary: net/minecraft/class_123
-						idStart = intermediaryFullClassPrefix.length();
-					} else {
-						idStart = -1;
-					}
+					int idStart = detectIntermediaryIdStart(imName, false);
 
 					if (idStart >= 0) {
 						try {
@@ -148,6 +139,18 @@ final class MappingData {
 		}
 	}
 
+	private static int detectIntermediaryIdStart(String name, boolean allowInner) {
+		int outerEnd = name.lastIndexOf('$');
+
+		if ((outerEnd >= 0 || allowInner) && name.startsWith(intermediaryClassPrefix, outerEnd + 1)) { // nested intermediary: bla$class_123 or just class_123 with allowInner=true
+			return outerEnd + 1 + intermediaryClassPrefix.length();
+		} else if (outerEnd < 0 && name.startsWith(intermediaryFullClassPrefix)) { // regular intermediary: net/minecraft/class_123
+			return  intermediaryFullClassPrefix.length();
+		} else {
+			return -1;
+		}
+	}
+
 	public Set<ClassMapping> findClasses(String name) {
 		Set<ClassMapping> ret = new HashSet<>();
 		name = name.replace('.', '/');
@@ -174,12 +177,11 @@ final class MappingData {
 			ClassMapping cls = mappingTree.getClass(name, namespace);
 			if (cls != null) out.add(cls);
 		} else if (namespace == intermediaryNs) {
-			if (name.startsWith(intermediaryClassPrefix)) {
-				name = name.substring(intermediaryClassPrefix.length());
-			}
+			int idStart = detectIntermediaryIdStart(name, true);
+			if (idStart < 0) idStart = 0; // allow just the intermediary number
 
 			try {
-				int id = Integer.parseUnsignedInt(name);
+				int id = Integer.parseUnsignedInt(name, idStart, name.length(), 10);
 				ClassMapping cls = classByIntermediaryId.get(id);
 				if (cls != null) out.add(cls);
 			} catch (NumberFormatException e) { }
