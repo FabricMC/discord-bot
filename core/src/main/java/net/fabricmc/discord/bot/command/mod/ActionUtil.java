@@ -118,10 +118,26 @@ public final class ActionUtil {
 			}
 		}
 
-		// determine duration
+		// determine duration, creation, expiration
 
 		long durationMs = FormatUtil.parseActionDurationMs(duration, type.hasDuration());
 		ActivateResult result;
+
+		long creationTime = System.currentTimeMillis();
+		long expirationTime;
+
+		if (type.hasDuration()) {
+			expirationTime = durationMs > 0 ? creationTime + durationMs : -1;
+		} else {
+			expirationTime = 0;
+		}
+
+		// message target user (done first since it may no longer be possible after applying the discord action)
+
+		if (type.getKind() == Kind.USER) {
+			// TODO: allocate action id first?
+			notifyTarget(type, false, null, extraBodyDesc, targetId, creationTime, expirationTime, reason, -1, context.bot(), context.server());
+		}
 
 		// apply discord action
 
@@ -146,7 +162,7 @@ public final class ActionUtil {
 		ActionEntry entry = ActionQueries.createAction(context.bot().getDatabase(),
 				type,
 				(data != 0 || result.resetData() != null ? new ActionData(data, resetData) : null),
-				targetId, context.userId(), durationMs, reason, prevId);
+				targetId, context.userId(), durationMs, creationTime, expirationTime, reason, prevId);
 
 		// apply discord action again in case the user rejoined quickly (race condition)
 
@@ -165,7 +181,8 @@ public final class ActionUtil {
 				entry.creationTime(), entry.expirationTime(), reason,
 				entry.id(),
 				context.channel(), context.author().asUser().get(),
-				context.bot(), context.server());
+				context.bot(), context.server(),
+				false);
 
 		// record action for expiration
 
@@ -217,7 +234,8 @@ public final class ActionUtil {
 				System.currentTimeMillis(), 0, reason,
 				actionId,
 				context.channel(), context.author().asUser().get(),
-				context.bot(), context.server());
+				context.bot(), context.server(),
+				true);
 	}
 
 	public static void expireAction(ExpiringActionEntry entry, DiscordBot bot, Server server) throws SQLException {
@@ -235,7 +253,8 @@ public final class ActionUtil {
 				System.currentTimeMillis(), 0, null,
 				entry.id(),
 				null, null,
-				bot, server);
+				bot, server,
+				true);
 	}
 
 	static void announceAction(ActionType type, boolean reversal, @Nullable String extraTitleDesc, @Nullable String extraBodyDesc,
@@ -243,7 +262,8 @@ public final class ActionUtil {
 			long creation, long expiration, String reason,
 			int actionId,
 			TextChannel actingChannel, User actor,
-			DiscordBot bot, Server server) {
+			DiscordBot bot, Server server,
+			boolean notifyTarget) {
 		if (extraTitleDesc == null || extraTitleDesc.isEmpty()) {
 			extraTitleDesc = "";
 		} else {
@@ -258,25 +278,6 @@ public final class ActionUtil {
 
 		// log to original channel
 
-		String expirationSuffix;
-
-		if (reversal || expiration == 0) {
-			expirationSuffix = "";
-		} else if (expiration < 0) {
-			expirationSuffix = " permanently";
-		} else {
-			expirationSuffix = " until ".concat(FormatUtil.dateTimeFormatter.format(Instant.ofEpochMilli(expiration)));
-		}
-
-		String reasonSuffix;
-
-		if (reason == null || reason.isEmpty()) {
-			reasonSuffix = "";
-		} else {
-			reasonSuffix = "\n\n**Reason:** %s".formatted(reason);
-		}
-
-		Instant creationTime = Instant.ofEpochMilli(creation);
 		List<Long> targetDiscordIds;
 		String targetType, targetName;
 		CharSequence targetListSuffix;
@@ -303,9 +304,9 @@ public final class ActionUtil {
 		String description = String.format("%s %s has been %s%s%s:%s%s", // e.g. 'User' '123' has been 'unbanned'' automatically' +exp/target/reason
 				targetType, targetName,
 				actionDesc, extraBodyDesc,
-				expirationSuffix,
+				formatExpirationSuffix(reversal, expiration),
 				targetListSuffix,
-				reasonSuffix);
+				formatReasonSuffix(reason));
 
 		String actionRef = actionId >= 0 ? "%s Action ID: %d".formatted(targetType, actionId) : "Unknown action";
 		TextChannel logChannel = bot.getLogHandler().getLogChannel();
@@ -314,7 +315,7 @@ public final class ActionUtil {
 				.setTitle(title)
 				.setDescription(description)
 				.setFooter(actionRef)
-				.setTimestamp(creationTime);
+				.setTimestamp(Instant.ofEpochMilli(creation));
 
 		if (actingChannel != null && actingChannel != logChannel) {
 			actingChannel.sendMessage(msg);
@@ -333,27 +334,72 @@ public final class ActionUtil {
 
 		// message target user
 
-		if (type.getKind() == Kind.USER) {
-			String appealSuffix = !reversal ? "\n\n%s".formatted(bot.getConfigEntry(APPEAL_MESSAGE)) : "";
+		if (type.getKind() == Kind.USER && notifyTarget) {
+			notifyTarget(type, reversal, extraTitleDesc, extraBodyDesc, actionId, creation, expiration, reason, actionId, bot, server);
+		}
+	}
 
-			title = String.format("%s%s!", // e.g. 'Unbanned'' (expiration)'!
-					actionDesc, extraTitleDesc);
-			description = String.format("You have been %s%s%s.%s%s", // e.g. You have been 'unbanned'' automatically' +exp/reason/appeal
-					actionDesc, extraBodyDesc,
-					expirationSuffix,
-					reasonSuffix,
-					appealSuffix);
+	static boolean notifyTarget(ActionType type, boolean reversal, @Nullable String extraTitleDesc, @Nullable String extraBodyDesc,
+			long targetId,
+			long creation, long expiration, String reason,
+			int actionId,
+			DiscordBot bot, Server server) {
+		if (type.getKind() != Kind.USER) return false;
 
-			EmbedBuilder userMsg = new EmbedBuilder()
-					.setTitle(title)
-					.setDescription(description)
-					.setFooter(actionRef)
-					.setTimestamp(creationTime);
+		List<Long> targetDiscordIds = bot.getUserHandler().getDiscordUserIds((int) targetId);
+		if (targetDiscordIds.isEmpty()) return false;
 
-			for (long targetDiscordId : targetDiscordIds) {
-				User user = server.getMemberById(targetDiscordId).orElse(null);
-				if (user != null) user.sendMessage(userMsg); // no get
+		String actionDesc = type.getDesc(reversal);
+		String appealSuffix = !reversal ? "\n\n%s".formatted(bot.getConfigEntry(APPEAL_MESSAGE)) : "";
+
+		EmbedBuilder userMsg = new EmbedBuilder()
+				.setTitle(String.format("%s%s!", // e.g. 'Unbanned'' (expiration)'!
+						actionDesc, extraTitleDesc))
+				.setDescription(String.format("You have been %s%s%s.%s%s", // e.g. You have been 'unbanned'' automatically' +exp/reason/appeal
+						actionDesc, extraBodyDesc,
+						formatExpirationSuffix(reversal, expiration),
+						formatReasonSuffix(reason),
+						appealSuffix))
+				.setFooter(formatActionRef(type.getKind(), actionId))
+				.setTimestamp(Instant.ofEpochMilli(creation));
+
+		boolean ret = false;
+
+		for (long targetDiscordId : targetDiscordIds) {
+			User user = server.getMemberById(targetDiscordId).orElse(null);
+
+			if (user != null) {
+				try {
+					DiscordUtil.join(user.sendMessage(userMsg));
+					ret = true;
+				} catch (DiscordException e) {
+					LOGGER.warn("Error notifying target {}/{}: {}", targetId, targetDiscordId, e.toString());
+				}
 			}
 		}
+
+		return ret;
+	}
+
+	private static String formatExpirationSuffix(boolean reversal, long expiration) {
+		if (reversal || expiration == 0) {
+			return "";
+		} else if (expiration < 0) {
+			return " permanently";
+		} else {
+			return " until ".concat(FormatUtil.dateTimeFormatter.format(Instant.ofEpochMilli(expiration)));
+		}
+	}
+
+	private static String formatReasonSuffix(String reason) {
+		if (reason == null || reason.isEmpty()) {
+			return "";
+		} else {
+			return "\n\n**Reason:** %s".formatted(reason);
+		}
+	}
+
+	private static String formatActionRef(ActionType.Kind kind, int actionId) {
+		return actionId >= 0 ? "%s Action ID: %d".formatted(kind.name(), actionId) : "Unknown action";
 	}
 }

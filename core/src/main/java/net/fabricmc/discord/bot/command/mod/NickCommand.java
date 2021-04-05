@@ -74,7 +74,9 @@ public final class NickCommand extends Command {
 		// create db record
 
 		int targetUserId = userHandler.getUserId(targetDiscordUserId);
-		ActionEntry entry = ActionQueries.createAction(context.bot().getDatabase(), UserActionType.RENAME, null, targetUserId, context.userId(), 0, arguments.get("reason"), 0);
+		ActionEntry entry = ActionQueries.createAction(context.bot().getDatabase(), UserActionType.RENAME, null,
+				targetUserId, context.userId(), 0, System.currentTimeMillis(), 0, arguments.get("reason"),
+				0);
 
 		// announce action
 
@@ -82,7 +84,7 @@ public final class NickCommand extends Command {
 				targetUserId, entry.creationTime(), entry.expirationTime(), entry.reason(),
 				entry.id(),
 				context.channel(), context.author().asUser().get(),
-				context.bot(), context.server());
+				context.bot(), context.server(), true);
 
 		// update nick lock entries
 

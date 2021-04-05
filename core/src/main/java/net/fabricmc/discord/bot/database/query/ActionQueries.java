@@ -123,7 +123,9 @@ public final class ActionQueries {
 		}
 	}
 
-	public static ActionEntry createAction(Database db, ActionType type, ActionData data, long targetId, int actorUserId, long durationMs, String reason, int prevId) throws SQLException {
+	public static ActionEntry createAction(Database db, ActionType type, ActionData data,
+			long targetId, int actorUserId, long durationMs, long creationTime, long expirationTime, String reason,
+			int prevId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 		if (type == null) throw new NullPointerException("null type");
 		if (targetId < 0) throw new IllegalArgumentException("invalid target id");
@@ -133,15 +135,6 @@ public final class ActionQueries {
 		long rawTargetId = IdArmor.decodeOrThrowCond(targetId, type.getKind().useEncodedTargetId, "target id");
 		int rawActorUserId = IdArmor.decodeOrThrow(actorUserId, "actor user id");
 		int rawPrevId = IdArmor.decodeOptionalOrThrow(prevId, "prev id");
-
-		long creationTime = System.currentTimeMillis();
-		long expirationTime;
-
-		if (type.hasDuration()) {
-			expirationTime = durationMs > 0 ? creationTime + durationMs : -1;
-		} else {
-			expirationTime = 0;
-		}
 
 		try (Connection conn = db.getConnection();
 				PreparedStatement ps = conn.prepareStatement("INSERT INTO `action` (targetkind, type, target_id, actor_user_id, creation, expiration, reason, prev_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS);
