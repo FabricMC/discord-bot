@@ -35,7 +35,9 @@ import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.DiscordBot;
+import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree;
 import net.fabricmc.discord.bot.module.mapping.mappinglib.MemoryMappingTree;
+import net.fabricmc.discord.bot.module.mapping.mappinglib.Tiny1Reader;
 import net.fabricmc.discord.bot.module.mapping.mappinglib.Tiny2Reader;
 import net.fabricmc.discord.bot.util.HttpUtil;
 
@@ -195,33 +197,44 @@ public final class MappingRepository {
 			if (yarnMavenId == null) return null;
 
 			String intermediaryMavenId = getMavenId(mcVersion, KIND_INTERMEDIARY);
-			MemoryMappingTree yarnMappingTree = null;
-
-			HttpResponse<InputStream> response = HttpUtil.makeRequest(mavenHost, getMavenPath(yarnMavenId, "mergedv2", "jar"));
-
-			if (response.statusCode() != 200) {
-				response.body().close();
-			} else {
-				try (ZipInputStream zis = new ZipInputStream(response.body())) {
-					ZipEntry entry;
-
-					while ((entry = zis.getNextEntry()) != null) {
-						if (entry.getName().equals("mappings/mappings.tiny")) {
-							InputStreamReader reader = new InputStreamReader(zis, StandardCharsets.UTF_8);
-							yarnMappingTree = new MemoryMappingTree(true);
-							Tiny2Reader.read(reader, yarnMappingTree);
-							break;
-						}
-					}
-				}
-			}
-
+			MappingTree yarnMappingTree = retrieveMappings(yarnMavenId, "mergedv2", true);
+			if (yarnMappingTree == null) yarnMappingTree = retrieveMappings(yarnMavenId, null, false);
 			if (yarnMappingTree == null) return null;
 
 			return new MappingData(mcVersion, intermediaryMavenId, yarnMavenId, yarnMappingTree);
 		} catch (IOException | InterruptedException | URISyntaxException e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	private static MappingTree retrieveMappings(String yarnMavenId, String classifier, boolean isTinyV2) throws URISyntaxException, IOException, InterruptedException {
+		HttpResponse<InputStream> response = HttpUtil.makeRequest(mavenHost, getMavenPath(yarnMavenId, classifier, "jar"));
+
+		if (response.statusCode() != 200) {
+			response.body().close();
+			return null;
+		}
+
+		try (ZipInputStream zis = new ZipInputStream(response.body())) {
+			ZipEntry entry;
+
+			while ((entry = zis.getNextEntry()) != null) {
+				if (entry.getName().equals("mappings/mappings.tiny")) {
+					InputStreamReader reader = new InputStreamReader(zis, StandardCharsets.UTF_8);
+					MemoryMappingTree ret = new MemoryMappingTree(true);
+
+					if (isTinyV2) {
+						Tiny2Reader.read(reader, ret);
+					} else {
+						Tiny1Reader.read(reader, ret);
+					}
+
+					return ret;
+				}
+			}
+		}
+
+		return null; // no mappings/mappings.tiny
 	}
 
 	private static String getMavenPath(String id, String classifier, String extension) {
