@@ -37,6 +37,7 @@ import java.util.Properties;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -78,6 +79,7 @@ public final class DiscordBot {
 	private final Map<String, ConfigKey<?>> configEntryByKey = new ConcurrentHashMap<>();
 	private final Map<ConfigKey<?>, Supplier<?>> configEntryRegistry = new ConcurrentHashMap<>();
 	private final Map<String, CommandRecord> commands = new ConcurrentHashMap<>();
+	private final List<CommandStringHandler> commandStringHandlers = new CopyOnWriteArrayList<>();
 	// COW for concurrent access
 	private volatile Map<ConfigKey<?>, Object> configValues;
 	private final BotConfig config;
@@ -232,6 +234,18 @@ public final class DiscordBot {
 				throw new IllegalArgumentException("Cannot register command with name %s / alias %s more than once".formatted(command.name(), alias));
 			}
 		}
+	}
+
+	public void registerCommandStringHandler(CommandStringHandler handler) {
+		commandStringHandlers.add(handler);
+	}
+
+	private boolean invokeCommandStringHandler(CommandContext context, String input, String name, String arguments) {
+		for (CommandStringHandler handler : commandStringHandlers) {
+			if (handler.tryHandle(context, input, name, arguments)) return true;
+		}
+
+		return false;
 	}
 
 	@Nullable
@@ -439,7 +453,9 @@ public final class DiscordBot {
 
 		final CommandRecord commandRecord = this.commands.get(name);
 
-		if (commandRecord == null
+		if (commandRecord == null && invokeCommandStringHandler(context, content, name, rawArguments)) {
+			return; // handled by command string handler
+		} else if (commandRecord == null
 				|| !checkAccess(context.author(), commandRecord.command())) {
 			context.channel().sendMessage("%s: Unknown command".formatted(Mentions.createUserMention(context.author())));
 			return;

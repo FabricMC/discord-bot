@@ -33,20 +33,18 @@ import org.eclipse.jgit.api.PullResult;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.javacord.api.DiscordApi;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.MessageAuthor;
-import org.javacord.api.event.message.MessageCreateEvent;
-import org.javacord.api.listener.message.MessageCreateListener;
 
+import net.fabricmc.discord.bot.CommandStringHandler;
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.Module;
+import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
 import net.fabricmc.discord.bot.message.Mentions;
 import net.fabricmc.tag.TagLoadResult;
 import net.fabricmc.tag.TagParser;
 
-public final class TagModule implements Module, MessageCreateListener {
+public final class TagModule implements Module, CommandStringHandler {
 	public static final ConfigKey<String> GIT_REPO = new ConfigKey<>("tags.gitRepo", ValueSerializers.STRING);
 	public static final ConfigKey<Integer> GIT_PULL_DELAY = new ConfigKey<>("tags.gitPullDelay", ValueSerializers.rangedInt(-1, Integer.MAX_VALUE));
 	private final ScheduledExecutorService asyncGitExecutor = Executors.newScheduledThreadPool(1, task -> {
@@ -96,7 +94,7 @@ public final class TagModule implements Module, MessageCreateListener {
 			return;
 		}
 
-		api.addMessageCreateListener(this);
+		bot.registerCommandStringHandler(this);
 
 		// Load tags
 		this.reloadTags();
@@ -146,36 +144,32 @@ public final class TagModule implements Module, MessageCreateListener {
 	}
 
 	@Override
-	public void onMessageCreate(MessageCreateEvent event) {
-		if (event.getMessageAuthor().isBotUser()) {
-			return; // Do not dispatch tags from bots
+	public boolean tryHandle(CommandContext context, String input, String name, String arguments) {
+		if (context.author().isBotUser()) {
+			return false; // Do not dispatch tags from bots
 		}
-
-		final String content = event.getMessageContent();
 
 		// Check for the ?? prefix in message
-		if (content.startsWith(this.bot.getCommandPrefix().repeat(2))) {
-			int nextSpace = content.indexOf(' ');
-
-			if (nextSpace == -1) {
-				nextSpace = content.length();
-			}
-
-			final String tagName = content.substring(2, nextSpace);
-			this.handleTag(event.getMessageAuthor(), event.getChannel(), tagName, content.substring(nextSpace));
+		if (!name.startsWith(this.bot.getCommandPrefix())) {
+			return false;
 		}
+
+		final String tagName = name.substring(1);
+		this.handleTag(context, tagName, arguments);
+
+		return true;
 	}
 
-	private void handleTag(MessageAuthor author, TextChannel channel, String tagName, String arguments) {
+	private void handleTag(CommandContext context, String tagName, String arguments) {
 		final TagInstance tag = this.tags.get(tagName);
 
 		if (tag == null) {
 			// TODO: Improve message
 			// TODO: Remove sender's message and this message after time to replicate current logic
-			channel.sendMessage("%s: Could not find tag of name %s".formatted(Mentions.createUserMention(author), tagName));
+			context.channel().sendMessage("%s: Unknown tag".formatted(Mentions.createUserMention(context.author()), tagName));
 			return;
 		}
 
-		tag.send(author, channel, arguments);
+		tag.send(context, arguments);
 	}
 }

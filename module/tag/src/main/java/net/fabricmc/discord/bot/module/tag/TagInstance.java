@@ -18,10 +18,10 @@ package net.fabricmc.discord.bot.module.tag;
 
 import java.util.concurrent.CompletableFuture;
 
-import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.MessageAuthor;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
+
+import net.fabricmc.discord.bot.command.CommandContext;
 
 public abstract class TagInstance {
 	private final String name;
@@ -34,7 +34,7 @@ public abstract class TagInstance {
 		return this.name;
 	}
 
-	public abstract CompletableFuture<Message> send(MessageAuthor author, TextChannel channel, String arguments);
+	public abstract CompletableFuture<Message> send(CommandContext context, String arguments);
 
 	public static final class Text extends TagInstance {
 		private final String text;
@@ -45,7 +45,7 @@ public abstract class TagInstance {
 		}
 
 		@Override
-		public CompletableFuture<Message> send(MessageAuthor author, TextChannel channel, String arguments) {
+		public CompletableFuture<Message> send(CommandContext context, String arguments) {
 			// TODO
 			return null;
 		}
@@ -65,7 +65,7 @@ public abstract class TagInstance {
 		}
 
 		@Override
-		public CompletableFuture<Message> send(MessageAuthor author, TextChannel channel, String arguments) {
+		public CompletableFuture<Message> send(CommandContext context, String arguments) {
 			// TODO
 			return null;
 		}
@@ -95,8 +95,8 @@ public abstract class TagInstance {
 		}
 
 		@Override
-		public CompletableFuture<Message> send(MessageAuthor author, TextChannel channel, String arguments) {
-			return this.delegate.send(author, channel, arguments);
+		public CompletableFuture<Message> send(CommandContext context, String arguments) {
+			return this.delegate.send(context, arguments);
 		}
 	}
 }
