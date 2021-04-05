@@ -160,7 +160,8 @@ public final class MappingRepository {
 	}
 
 	public static void main(String[] args) throws Exception {
-		MappingData data = createMappingData("21w12a");
+		//MappingData data = createMappingData("21w12a");
+		MappingData data = createMappingData("1.16.5");
 		if (data == null) throw new RuntimeException("no data");
 
 		System.out.println(data.findClasses("1337"));

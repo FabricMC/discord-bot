@@ -77,7 +77,7 @@ final class MappingData {
 					int idStart;
 
 					if (outerEnd >= 0 && imName.startsWith(intermediaryClassPrefix, outerEnd + 1)) { // nested intermediary: bla$class_123
-						idStart = outerEnd + intermediaryClassPrefix.length();
+						idStart = outerEnd + 1 + intermediaryClassPrefix.length();
 					} else if (outerEnd < 0 && imName.startsWith(intermediaryFullClassPrefix)) { // regular intermediary: net/minecraft/class_123
 						idStart = intermediaryFullClassPrefix.length();
 					} else {
