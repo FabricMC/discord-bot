@@ -274,7 +274,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		return val < 0 || val > Integer.MAX_VALUE; // a snowflake in 0..2^31-1 would required creation within the first 511 ms of its defined time span
 	}
 
-	public UserData getUserData(int userId, boolean fetchNameHistory, boolean fetchNickHistory) {
+	public @Nullable UserData getUserData(int userId, boolean fetchNameHistory, boolean fetchNickHistory) {
 		try {
 			return UserQueries.getUserData(bot.getDatabase(), userId, fetchNameHistory, fetchNickHistory);
 		} catch (SQLException e) {
@@ -282,7 +282,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		}
 	}
 
-	public DiscordUserData getDiscordUserData(long discordUserId, boolean fetchNameHistory, boolean fetchNickHistory) {
+	public @Nullable DiscordUserData getDiscordUserData(long discordUserId, boolean fetchNameHistory, boolean fetchNickHistory) {
 		try {
 			return UserQueries.getDiscordUserData(bot.getDatabase(), discordUserId, fetchNameHistory, fetchNickHistory);
 		} catch (SQLException e) {
@@ -304,11 +304,14 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 
 	public String formatDiscordUser(long discordUserId, Server server) {
 		User user = server.getMemberById(discordUserId).orElse(null);
+		DiscordUserData data;
 
 		if (user != null) {
 			return formatDiscordUser(user);
+		} else if ((data = getDiscordUserData(discordUserId, false, false)) != null) {
+			return formatDiscordUser(data);
 		} else {
-			return formatDiscordUser(discordUserId, null, null); // TODO: fetch extra data from db
+			return formatDiscordUser(discordUserId, null, null);
 		}
 	}
 

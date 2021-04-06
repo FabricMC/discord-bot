@@ -121,7 +121,9 @@ public final class Tiny1Reader {
 
 							if (isMethod && visitor.visitMethod(srcName, srcDesc)
 									|| !isMethod && visitor.visitField(srcName, srcDesc)) {
-								readDstNames(reader, isMethod ? MappedElementKind.METHOD : MappedElementKind.FIELD, dstNsCount, visitor);
+								MappedElementKind kind = isMethod ? MappedElementKind.METHOD : MappedElementKind.FIELD;
+								readDstNames(reader, kind, dstNsCount, visitor);
+								visitor.visitElementContent(kind);
 							}
 						}
 					}
