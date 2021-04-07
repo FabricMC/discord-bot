@@ -69,7 +69,7 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 			for (ActiveActionEntry action : activeActions) {
 				if (action.expirationTime() < 0 || action.expirationTime() > time) {
 					try {
-						action.type().activate(server, action.targetId(), true, action.data() != null ? action.data().data() : null, action.reason(), bot);
+						action.type().activate(server, action.targetId(), true, action.data() != null ? action.data().data() : 0, action.reason(), bot);
 					} catch (Exception e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
@@ -193,7 +193,7 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 				for (ActiveActionEntry action : actions) {
 					if (action.expirationTime() < 0 || action.expirationTime() > time) {
 						try {
-							action.type().activate(server, user.getId(), true, 0, action.reason(), bot);
+							action.type().activate(server, user.getId(), true, action.data() != null ? action.data().data() : 0, action.reason(), bot);
 						} catch (Exception e) {
 							// TODO Auto-generated catch block
 							e.printStackTrace();
