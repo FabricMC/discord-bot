@@ -10,7 +10,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree;
 import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.ClassMapping;
@@ -173,7 +175,23 @@ final class MappingData {
 	}
 
 	private void findClasses0(String name, int namespace, Collection<ClassMapping> out) {
-		if (name.indexOf('/') >= 0) { // package present
+		if (hasWildcard(name)) { // wildcard present
+			Pattern search = compileSearch(name);
+
+			if (name.indexOf('/') > 0) { // package present too
+				for (ClassMapping cls : mappingTree.getClasses()) {
+					if (search.matcher(cls.getDstName(namespace)).matches()) {
+						out.add(cls);
+					}
+				}
+			} else { // just a wildcard class name
+				for (Entry<String, List<ClassMapping>> entry : classByName[namespace - MIN_NAMESPACE_ID].entrySet()) {
+					if (search.matcher(entry.getKey()).matches()) {
+						out.addAll(entry.getValue());
+					}
+				}
+			}
+		} else if (name.indexOf('/') >= 0) { // package present
 			ClassMapping cls = mappingTree.getClass(name, namespace);
 			if (cls != null) out.add(cls);
 		} else if (namespace == intermediaryNs) {
@@ -189,6 +207,59 @@ final class MappingData {
 			List<ClassMapping> res = classByName[namespace - MIN_NAMESPACE_ID].get(name);
 			if (res != null) out.addAll(res);
 		}
+	}
+
+	public static boolean hasWildcard(String name) {
+		return name != null && (name.indexOf('?') >= 0 || name.indexOf('*') >= 0);
+	}
+
+	private static Pattern compileSearch(String search) {
+		int end = search.length();
+		StringBuilder filter = new StringBuilder(end);
+		int last = -1;
+
+		for (int i = 0; i < end; i++) {
+			char c = search.charAt(i);
+
+			switch (c) {
+			case '*':
+				if (last >= 0) {
+					filter.append(Pattern.quote(search.substring(last, i)));
+					last = -1;
+				}
+
+				// drain any immediately subsequent asterisks
+				while (i + 1 < end && search.charAt(i + 1) == '*') i++;
+				filter.append(".*");
+				break;
+
+			case '?':
+				if (last >= 0) {
+					filter.append(Pattern.quote(search.substring(last, i)));
+					last = -1;
+				}
+
+				filter.append('.');
+				break;
+
+			case '\\': // allow escaping with \
+				if (last >= 0) {
+					filter.append(Pattern.quote(search.substring(last, i)));
+				}
+
+				last = ++i;
+				break;
+
+			default:
+				if (last < 0) last = i;
+				break;
+			}
+		}
+
+		// make sure not to leave off anything from the end
+		if (last >= 0) filter.append(Pattern.quote(search.substring(last, end)));
+
+		return Pattern.compile(filter.toString());
 	}
 
 	public Set<FieldMapping> findFields(String name) {
@@ -217,15 +288,37 @@ final class MappingData {
 			Set<ClassMapping> owners = new HashSet<>();
 			findClasses0(ref.owner(), namespace, owners);
 
-			for (ClassMapping cls : owners) {
-				for (FieldMapping field : cls.getFields()) {
-					if (ref.name().equals(field.getName(namespace))) {
-						out.add(field);
+			if (!owners.isEmpty()) {
+				if (hasWildcard(ref.name())) {
+					Pattern search = compileSearch(ref.name());
+
+					for (ClassMapping cls : owners) {
+						for (FieldMapping field : cls.getFields()) {
+							if (search.matcher(field.getName(namespace)).matches()) {
+								out.add(field);
+							}
+						}
+					}
+				} else {
+					for (ClassMapping cls : owners) {
+						for (FieldMapping field : cls.getFields()) {
+							if (ref.name().equals(field.getName(namespace))) {
+								out.add(field);
+							}
+						}
 					}
 				}
-			}
 
-			owners.clear();
+				owners.clear();
+			}
+		} else if (hasWildcard(ref.name())) {
+			Pattern search = compileSearch(ref.name());
+
+			for (Entry<String, List<FieldMapping>> entry : fieldByName[namespace - MIN_NAMESPACE_ID].entrySet()) {
+				if (search.matcher(entry.getKey()).matches()) {
+					out.addAll(entry.getValue());
+				}
+			}
 		} else if (namespace == intermediaryNs) {
 			String name = ref.name();
 
@@ -270,15 +363,37 @@ final class MappingData {
 			Set<ClassMapping> owners = new HashSet<>();
 			findClasses0(ref.owner(), namespace, owners);
 
-			for (ClassMapping cls : owners) {
-				for (MethodMapping method : cls.getMethods()) {
-					if (ref.name().equals(method.getName(namespace))) {
-						out.add(method);
+			if (!owners.isEmpty()) {
+				if (hasWildcard(ref.name())) {
+					Pattern search = compileSearch(ref.name());
+
+					for (ClassMapping cls : owners) {
+						for (MethodMapping method : cls.getMethods()) {
+							if (search.matcher(method.getName(namespace)).matches()) {
+								out.add(method);
+							}
+						}
+					}
+				} else {
+					for (ClassMapping cls : owners) {
+						for (MethodMapping method : cls.getMethods()) {
+							if (ref.name().equals(method.getName(namespace))) {
+								out.add(method);
+							}
+						}
 					}
 				}
-			}
 
-			owners.clear();
+				owners.clear();
+			}
+		} else if (hasWildcard(ref.name())) {
+			Pattern search = compileSearch(ref.name());
+
+			for (Entry<String, List<MethodMapping>> entry : methodByName[namespace - MIN_NAMESPACE_ID].entrySet()) {
+				if (search.matcher(entry.getKey()).matches()) {
+					out.addAll(entry.getValue());
+				}
+			}
 		} else if (namespace == intermediaryNs) {
 			String name = ref.name();
 
