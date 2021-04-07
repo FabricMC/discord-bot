@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.ServiceLoader;
@@ -224,14 +225,17 @@ public final class DiscordBot {
 		}
 
 		CommandRecord cmdEntry = new CommandRecord(node, command);
+		String name = command.name().toLowerCase(Locale.ENGLISH);
 
-		if (commands.putIfAbsent(command.name(), cmdEntry) != null) {
-			throw new IllegalArgumentException("Cannot register command with name %s more than once".formatted(command.name()));
+		if (commands.putIfAbsent(name, cmdEntry) != null) {
+			throw new IllegalArgumentException("Cannot register command with name %s more than once".formatted(name));
 		}
 
 		for (String alias : command.aliases()) {
+			alias = alias.toLowerCase(Locale.ENGLISH);
+
 			if (commands.putIfAbsent(alias, cmdEntry) != null) {
-				throw new IllegalArgumentException("Cannot register command with name %s / alias %s more than once".formatted(command.name(), alias));
+				throw new IllegalArgumentException("Cannot register command with name %s / alias %s more than once".formatted(name, alias));
 			}
 		}
 	}
@@ -439,18 +443,19 @@ public final class DiscordBot {
 			return;
 		}
 
-		final int i = content.indexOf(" ");
+		final int nameEnd = content.indexOf(" ");
 		String name;
 		String rawArguments;
 
-		if (i == -1) {
+		if (nameEnd == -1) {
 			name = content.substring(1);
 			rawArguments = "";
 		} else {
-			name = content.substring(1, i);
-			rawArguments = content.substring(i + 1);
+			name = content.substring(1, nameEnd);
+			rawArguments = content.substring(nameEnd + 1);
 		}
 
+		name = name.toLowerCase(Locale.ENGLISH);
 		final CommandRecord commandRecord = this.commands.get(name);
 
 		if (commandRecord == null && invokeCommandStringHandler(context, content, name, rawArguments)) {
