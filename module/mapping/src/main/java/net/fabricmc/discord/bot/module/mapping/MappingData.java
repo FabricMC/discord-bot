@@ -180,7 +180,7 @@ final class MappingData {
 
 			if (name.indexOf('/') > 0) { // package present too
 				for (ClassMapping cls : mappingTree.getClasses()) {
-					if (search.matcher(cls.getDstName(namespace)).matches()) {
+					if (search.matcher(cls.getName(namespace)).matches()) {
 						out.add(cls);
 					}
 				}
