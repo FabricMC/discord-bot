@@ -41,6 +41,13 @@ public final class Database {
 		dataSource = new HikariDataSource(config);
 
 		DbMigration.run(this);
+
+		Runtime.getRuntime().addShutdownHook(new Thread() {
+			@Override
+			public void run() {
+				dataSource.close();
+			}
+		});
 	}
 
 	public Connection getConnection() throws SQLException {
