@@ -17,7 +17,8 @@
 package net.fabricmc.discord.bot;
 
 import net.fabricmc.discord.bot.command.CommandContext;
+import net.fabricmc.discord.bot.command.CommandException;
 
 public interface CommandStringHandler {
-	boolean tryHandle(CommandContext context, String input, String name, String arguments);
+	boolean tryHandle(CommandContext context, String input, String name, String arguments) throws CommandException;
 }

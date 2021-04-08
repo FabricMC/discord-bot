@@ -35,20 +35,37 @@ public final class ColorSerializer implements TypeSerializer<Color> {
 	public Color deserialize(Type type, ConfigurationNode node) throws SerializationException {
 		final int value = node.getInt(Integer.MIN_VALUE);
 
-		if (value != Integer.MIN_VALUE) {
+		if (value == Integer.MIN_VALUE) {
 			final String colorName = node.getString();
 
 			if (colorName == null) {
 				throw new SerializationException(node.path(), Color.class, "Failed to coerce color value to string!");
 			}
 
-			return switch (colorName.toLowerCase(Locale.ROOT)) {
-			case "blurple" -> BLURPLE;
-			case "fabric" -> FABRIC;
-			case "negative" -> NEGATIVE;
-			case "positive" -> POSITIVE;
-			default -> throw new SerializationException(node.path(), Color.class, "Unsupported string color %s".formatted(colorName));
-			};
+			try {
+				return switch (colorName.toLowerCase(Locale.ENGLISH).replace(" ", "").replace("-", "").replace("_", "")) {
+				case "blurple" -> BLURPLE;
+				case "fabric" -> FABRIC;
+				case "negative" -> NEGATIVE;
+				case "positive" -> POSITIVE;
+				case "white" -> Color.WHITE;
+				case "lightgray", "lightgrey" -> Color.LIGHT_GRAY;
+				case "gray", "grey" -> Color.GRAY;
+				case "darkgray", "darkgrey" -> Color.DARK_GRAY;
+				case "black" -> Color.BLACK;
+				case "red" -> Color.RED;
+				case "ping" -> Color.PINK;
+				case "orange" -> Color.ORANGE;
+				case "yellow" -> Color.YELLOW;
+				case "green" -> Color.GREEN;
+				case "magenta" -> Color.MAGENTA;
+				case "cyan" -> Color.CYAN;
+				case "blue" -> Color.BLUE;
+				default -> Color.decode(colorName);
+				};
+			} catch (NumberFormatException e) {
+				throw new SerializationException(node.path(), Color.class, "Unsupported color %s".formatted(colorName));
+			}
 		}
 
 		return new Color(value);

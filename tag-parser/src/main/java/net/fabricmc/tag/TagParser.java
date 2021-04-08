@@ -17,6 +17,7 @@
 package net.fabricmc.tag;
 
 import java.awt.Color;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -86,7 +87,15 @@ public final class TagParser {
 
 					final String rawFileName = file.getFileName().toString();
 					final int extensionStart = rawFileName.lastIndexOf(".");
-					final String tagName = rawFileName.substring(0, extensionStart);
+					final String simpleTagName = rawFileName.substring(0, extensionStart);
+					Path dir = tagsDir.relativize(file).getParent();
+					final String tagName;
+
+					if (dir == null) {
+						tagName = simpleTagName;
+					} else {
+						tagName = String.format("%s/%s", dir.toString().replace(File.separatorChar, '/'), simpleTagName);
+					}
 
 					// JDK impl autocloses the readString call
 					final String fileAsString = Files.readString(file, StandardCharsets.UTF_8);
@@ -106,7 +115,7 @@ public final class TagParser {
 					try {
 						// Read the tag's yml front matter
 						final TagFrontMatter frontMatter = YamlConfigurationLoader.builder()
-								.defaultOptions(options -> options.serializers(SERIALIZERS))
+								.defaultOptions(options -> options.serializers(SERIALIZERS).shouldCopyDefaults(false))
 								.buildAndLoadString(yamlContent)
 								.get(TagFrontMatter.class);
 

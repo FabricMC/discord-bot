@@ -244,7 +244,7 @@ public final class DiscordBot {
 		commandStringHandlers.add(handler);
 	}
 
-	private boolean invokeCommandStringHandler(CommandContext context, String input, String name, String arguments) {
+	private boolean invokeCommandStringHandler(CommandContext context, String input, String name, String arguments) throws CommandException {
 		for (CommandStringHandler handler : commandStringHandlers) {
 			if (handler.tryHandle(context, input, name, arguments)) return true;
 		}
@@ -443,38 +443,38 @@ public final class DiscordBot {
 			return;
 		}
 
-		final int nameEnd = content.indexOf(" ");
-		String name;
-		String rawArguments;
-
-		if (nameEnd == -1) {
-			name = content.substring(1);
-			rawArguments = "";
-		} else {
-			name = content.substring(1, nameEnd);
-			rawArguments = content.substring(nameEnd + 1);
-		}
-
-		name = name.toLowerCase(Locale.ENGLISH);
-		final CommandRecord commandRecord = this.commands.get(name);
-
-		if (commandRecord == null && invokeCommandStringHandler(context, content, name, rawArguments)) {
-			return; // handled by command string handler
-		} else if (commandRecord == null
-				|| !checkAccess(context.author(), commandRecord.command())) {
-			context.channel().sendMessage("%s: Unknown command".formatted(Mentions.createUserMention(context.author())));
-			return;
-		}
-
-		final CommandParser parser = new CommandParser();
-		final Map<String, String> arguments = new LinkedHashMap<>();
-
-		if (!parser.parse(rawArguments, commandRecord.node(), arguments)) {
-			context.channel().sendMessage("%s: Invalid command syntax, usage: %s".formatted(Mentions.createUserMention(context.author()), commandRecord.command.usage()));
-			return;
-		}
-
 		try {
+			final int nameEnd = content.indexOf(" ");
+			String name;
+			String rawArguments;
+
+			if (nameEnd == -1) {
+				name = content.substring(1);
+				rawArguments = "";
+			} else {
+				name = content.substring(1, nameEnd);
+				rawArguments = content.substring(nameEnd + 1);
+			}
+
+			name = name.toLowerCase(Locale.ENGLISH);
+			final CommandRecord commandRecord = this.commands.get(name);
+
+			if (commandRecord == null && invokeCommandStringHandler(context, content, name, rawArguments)) {
+				return; // handled by command string handler
+			} else if (commandRecord == null
+					|| !checkAccess(context.author(), commandRecord.command())) {
+				context.channel().sendMessage("%s: Unknown command".formatted(Mentions.createUserMention(context.author())));
+				return;
+			}
+
+			final CommandParser parser = new CommandParser();
+			final Map<String, String> arguments = new LinkedHashMap<>();
+
+			if (!parser.parse(rawArguments, commandRecord.node(), arguments)) {
+				context.channel().sendMessage("%s: Invalid command syntax, usage: %s".formatted(Mentions.createUserMention(context.author()), commandRecord.command.usage()));
+				return;
+			}
+
 			commandRecord.command().run(context, arguments);
 		} catch (CommandException e) {
 			context.channel().sendMessage(e.getMessage());

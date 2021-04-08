@@ -19,11 +19,19 @@ package net.fabricmc.discord.bot.module.tag;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.Logger;
 import org.eclipse.jgit.api.CloneCommand;
@@ -38,9 +46,11 @@ import net.fabricmc.discord.bot.CommandStringHandler;
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.Module;
 import net.fabricmc.discord.bot.command.CommandContext;
+import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
 import net.fabricmc.discord.bot.message.Mentions;
+import net.fabricmc.tag.TagFrontMatter;
 import net.fabricmc.tag.TagLoadResult;
 import net.fabricmc.tag.TagParser;
 
@@ -53,7 +63,7 @@ public final class TagModule implements Module, CommandStringHandler {
 
 		return ret;
 	});
-	private volatile Map<String, TagInstance> tags = new HashMap<>(); // Concurrent event access
+	private volatile Map<String, TagInstance> tags = Collections.emptyMap(); // Concurrent event access
 	private DiscordBot bot;
 	private Logger logger;
 	private Path gitDir;
@@ -100,7 +110,7 @@ public final class TagModule implements Module, CommandStringHandler {
 		this.reloadTags();
 	}
 
-	private void reloadTags() {
+	private synchronized void reloadTags() {
 		// Schedule the next task
 		this.asyncGitExecutor.schedule(this::reloadTags, bot.getConfigEntry(GIT_PULL_DELAY), TimeUnit.SECONDS);
 
@@ -121,9 +131,7 @@ public final class TagModule implements Module, CommandStringHandler {
 					return; // All up to date - no need to reload tags
 				}
 
-				synchronized (this) {
-					this.firstRun = false;
-				}
+				this.firstRun = false;
 			}
 		} catch (GitAPIException e) {
 			e.printStackTrace();
@@ -137,14 +145,96 @@ public final class TagModule implements Module, CommandStringHandler {
 		try {
 			final TagLoadResult result = TagParser.loadTags(this.logger, tagsDir);
 			this.logger.info("Loaded: {}, Malformed: {}", result.loadedTags().size(), result.malformedTags().size());
-			// TODO: Create tag instances
+
+			// instantiate tags
+
+			Map<String, TagInstance> tags = new HashMap<>(result.loadedTags().size() * 2);
+			List<TagParser.TagEntry> postponedEntries = new ArrayList<>();
+
+			for (TagParser.TagEntry entry : result.loadedTags()) {
+				TagInstance tag;
+
+				if (entry.frontMatter() == TagFrontMatter.TEXT) {
+					if (entry.messageContent() == null) {
+						logger.warn("Text tag {} doesn't have any content, skipping", entry.name());
+						continue;
+					} else if (entry.messageContent().contains("{{")) {
+						tag = new TagInstance.ParameterizedText(entry.name(), entry.messageContent());
+					} else {
+						tag = new TagInstance.PlainText(entry.name(), entry.messageContent());
+					}
+				} else if (entry.frontMatter() instanceof TagFrontMatter.Alias) {
+					postponedEntries.add(entry);
+					continue; // handle later since the referenced tag may not be loaded yet
+				} else if (entry.frontMatter() instanceof TagFrontMatter.Embed) {
+					TagFrontMatter.Embed embed = (TagFrontMatter.Embed) entry.frontMatter();
+					tag = new TagInstance.Embed(entry.name(), entry.messageContent(), embed.embed());
+				} else {
+					throw new IllegalStateException("unknown tag type: "+entry.frontMatter().getClass());
+				}
+
+				tags.put(entry.name().toLowerCase(Locale.ENGLISH), tag);
+			}
+
+			// repeatedly try to resolve aliases to also resolve aliases to aliases
+			int oldSize;
+
+			do {
+				oldSize = postponedEntries.size();
+
+				for (Iterator<TagParser.TagEntry> it = postponedEntries.iterator(); it.hasNext(); ) {
+					TagParser.TagEntry entry = it.next();
+					TagFrontMatter.Alias alias = (TagFrontMatter.Alias) entry.frontMatter(); // only aliases postpone
+					TagInstance target = tags.get(alias.target().toLowerCase(Locale.ENGLISH));
+					if (target == null) continue;
+
+					if (target instanceof TagInstance.Alias) {
+						target = ((TagInstance.Alias) target).getTarget();
+					}
+
+					TagInstance tag = new TagInstance.Alias(entry.name(), target);
+					tags.put(entry.name().toLowerCase(Locale.ENGLISH), tag);
+					it.remove();
+				}
+			} while (postponedEntries.size() < oldSize);
+
+			if (!postponedEntries.isEmpty()) {
+				logger.warn("Unable to resolve tag aliases: {}", postponedEntries.stream()
+						.map(entry -> String.format("%s to %s", entry.name(), ((TagFrontMatter.Alias) entry.frontMatter()).target()))
+						.collect(Collectors.joining(", ")));
+			}
+
+			// register unqualified names where non-conflicting
+
+			Map<String, TagInstance> simpleTags = new HashMap<>(result.loadedTags().size());
+			Set<String> knownSimpleTags = new HashSet<>();
+
+			for (TagInstance tag : tags.values()) {
+				int pos = tag.getName().lastIndexOf('/');
+				if (pos < 0) continue;
+
+				String simpleName = tag.getName().substring(pos + 1).toLowerCase(Locale.ENGLISH);
+				if (tags.containsKey(simpleName)) continue;
+
+				if (knownSimpleTags.add(simpleName)) { // simpleName is unique so far
+					simpleTags.put(simpleName, tag);
+				} else { // simpleName was already used by another tag, so neither is unique
+					simpleTags.remove(simpleName);
+				}
+			}
+
+			tags.putAll(simpleTags);
+
+			// update exposed tags
+
+			this.tags = tags;
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
 
 	@Override
-	public boolean tryHandle(CommandContext context, String input, String name, String arguments) {
+	public boolean tryHandle(CommandContext context, String input, String name, String arguments) throws CommandException {
 		if (context.author().isBotUser()) {
 			return false; // Do not dispatch tags from bots
 		}
@@ -154,13 +244,13 @@ public final class TagModule implements Module, CommandStringHandler {
 			return false;
 		}
 
-		final String tagName = name.substring(1);
+		final String tagName = name.substring(1).toLowerCase(Locale.ENGLISH);
 		this.handleTag(context, tagName, arguments);
 
 		return true;
 	}
 
-	private void handleTag(CommandContext context, String tagName, String arguments) {
+	private void handleTag(CommandContext context, String tagName, String arguments) throws CommandException {
 		final TagInstance tag = this.tags.get(tagName);
 
 		if (tag == null) {

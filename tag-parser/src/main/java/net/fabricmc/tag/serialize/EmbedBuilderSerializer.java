@@ -16,7 +16,6 @@
 
 package net.fabricmc.tag.serialize;
 
-import java.awt.Color;
 import java.lang.reflect.Type;
 import java.util.Map;
 
@@ -41,10 +40,6 @@ public final class EmbedBuilderSerializer implements TypeSerializer<EmbedBuilder
 
 			switch (key) {
 			case "title" -> builder.setTitle(value.getString());
-			case "description" -> builder.setDescription(value.getString());
-			case "url" -> builder.setUrl(value.getString());
-			// Current standard uses british spelling also, so support both
-			case "color", "colour" -> builder.setColor(value.get(Color.class));
 			case "footer" -> this.readFooter(builder, value);
 			case "image" -> this.readImage(builder, value);
 			case "author" -> this.readAuthor(builder, value);
@@ -63,12 +58,12 @@ public final class EmbedBuilderSerializer implements TypeSerializer<EmbedBuilder
 
 		for (Map.Entry<Object, ? extends ConfigurationNode> childEntry : node.childrenMap().entrySet()) {
 			final String key = childEntry.getKey().toString();
-			final ConfigurationNode value = childEntry.getValue();
+			final ConfigurationNode valueNode = childEntry.getValue();
 
 			switch (key) {
-			case "text" -> text = value.getString();
-			case "iconUrl", "icon-url" -> iconUrl = value.getString();
-			default -> throw new SerializationException(node.path(), EmbedBuilder.class, "Invalid field %s in embed footer".formatted(key));
+			case "text" -> text = valueNode.getString();
+			case "iconUrl", "icon-url" -> iconUrl = valueNode.getString();
+			default -> throw new SerializationException(valueNode.path(), EmbedBuilder.class, "Invalid field %s in embed footer".formatted(key));
 			}
 		}
 
@@ -79,44 +74,81 @@ public final class EmbedBuilderSerializer implements TypeSerializer<EmbedBuilder
 		}
 	}
 
-	private void readImage(EmbedBuilder builder, ConfigurationNode node) {
-		// TODO
+	private void readImage(EmbedBuilder builder, ConfigurationNode node) throws SerializationException {
+		for (Map.Entry<Object, ? extends ConfigurationNode> propertyEntry : node.childrenMap().entrySet()) {
+			final String key = propertyEntry.getKey().toString();
+			final ConfigurationNode valueNode = propertyEntry.getValue();
+
+			switch (key) {
+			case "url" -> builder.setImage(valueNode.getString());
+			default -> throw new SerializationException(node.path(), EmbedBuilder.class, "Invalid image key %s in embed".formatted(key));
+			}
+		}
 	}
 
-	private void readAuthor(EmbedBuilder builder, ConfigurationNode node) {
-		// TODO
+	private void readAuthor(EmbedBuilder builder, ConfigurationNode node) throws SerializationException {
+		String name = null;
+		String url = null;
+		String iconUrl = null;
+
+		for (Map.Entry<Object, ? extends ConfigurationNode> propertyEntry : node.childrenMap().entrySet()) {
+			final String key = propertyEntry.getKey().toString();
+			final ConfigurationNode valueNode = propertyEntry.getValue();
+
+			switch (key) {
+			case "name" -> name = valueNode.getString();
+			case "url" -> url = valueNode.getString();
+			case "iconUrl" -> iconUrl = valueNode.getString();
+			default -> throw new SerializationException(valueNode.path(), EmbedBuilder.class, "Invalid author key %s in embed".formatted(key));
+			}
+		}
+
+		if (name == null) {
+			throw new SerializationException(node.path(), String.class, "Embed author must have a name!");
+		}
+
+		builder.setAuthor(name, url, iconUrl);
 	}
 
-	private void readThumbnail(EmbedBuilder builder, ConfigurationNode node) {
-		// TODO
+	private void readThumbnail(EmbedBuilder builder, ConfigurationNode node) throws SerializationException {
+		for (Map.Entry<Object, ? extends ConfigurationNode> propertyEntry : node.childrenMap().entrySet()) {
+			final String key = propertyEntry.getKey().toString();
+			final ConfigurationNode valueNode = propertyEntry.getValue();
+
+			switch (key) {
+			case "url" -> builder.setThumbnail(valueNode.getString());
+			default -> throw new SerializationException(node.path(), EmbedBuilder.class, "Invalid thumbnail key %s in embed".formatted(key));
+			}
+		}
 	}
 
 	private void readFields(EmbedBuilder builder, ConfigurationNode node) throws SerializationException {
-		// Each field
-		for (Map.Entry<Object, ? extends ConfigurationNode> childEntry : node.childrenMap().entrySet()) {
-			final String key = childEntry.getKey().toString();
-			final ConfigurationNode value = childEntry.getValue();
+		for (ConfigurationNode itemEntry : node.childrenList()) {
+			String name = null;
+			String value = null;
+			boolean inline = false;
 
-			// Field value/inlining
-			for (Map.Entry<Object, ? extends ConfigurationNode> fieldEntry : value.childrenMap().entrySet()) {
-				final String fieldEntryKey = fieldEntry.getKey().toString();
-				final ConfigurationNode fieldEntryValue = fieldEntry.getValue();
+			for (Map.Entry<Object, ? extends ConfigurationNode> propertyEntry : itemEntry.childrenMap().entrySet()) {
+				final String key = propertyEntry.getKey().toString();
+				final ConfigurationNode valueNode = propertyEntry.getValue();
 
-				@Nullable String fieldValue = null;
-				boolean inline = false;
-
-				switch (fieldEntryKey) {
-				case "value" -> fieldValue = fieldEntryValue.getString();
-				case "inline" -> inline = fieldEntryValue.getBoolean();
-				default -> throw new SerializationException(fieldEntryValue.path(), EmbedBuilder.class, "Invalid key %s in field entry with key %s".formatted(fieldEntryKey, key));
+				switch (key) {
+				case "name" -> name = valueNode.getString();
+				case "value" -> value = valueNode.getString();
+				case "inline" -> inline = valueNode.getBoolean();
+				default -> throw new SerializationException(valueNode.path(), EmbedBuilder.class, "Invalid field key %s in embed".formatted(key));
 				}
-
-				if (fieldValue == null) {
-					throw new SerializationException(fieldEntryValue.path(), String.class, "Embed field %s must have a value!".formatted(key));
-				}
-
-				builder.addField(key, fieldValue, inline);
 			}
+
+			if (name == null) {
+				throw new SerializationException(itemEntry.path(), String.class, "Embed field must have a name!");
+			}
+
+			if (value == null) {
+				throw new SerializationException(itemEntry.path(), String.class, "Embed field must have a value!");
+			}
+
+			builder.addField(name, value, inline);
 		}
 	}
 
