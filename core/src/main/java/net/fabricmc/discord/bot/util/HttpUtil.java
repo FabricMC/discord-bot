@@ -43,6 +43,15 @@ public final class HttpUtil {
 				.timeout(timeout)
 				.build();
 
-		return client.send(request, BodyHandlers.ofInputStream());
+		try {
+			return client.send(request, BodyHandlers.ofInputStream());
+		} catch (IOException e) {
+			// retry once
+			try {
+				return client.send(request, BodyHandlers.ofInputStream());
+			} catch (IOException f) { }
+
+			throw e;
+		}
 	}
 }
