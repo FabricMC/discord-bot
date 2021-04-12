@@ -47,12 +47,19 @@ public final class HelpCommand extends Command {
 
 				if (pos % 10 == 0 && pos != 0) {
 					builder.page(currentPage);
-					currentPage.setLength(0);;
+					currentPage.setLength(0);
 				}
 
 				pos++;
-				currentPage.append(String.format("%s `%s`\n",
-						cmd.name(), cmd.usage()));
+				currentPage.append(cmd.name());
+
+				String usage = cmd.usage();
+
+				if (!usage.isEmpty()) {
+					currentPage.append(String.format(" `%s`", usage));
+				}
+
+				currentPage.append('\n');
 			}
 
 			if (currentPage.length() > 0) {

@@ -63,7 +63,7 @@ final class TagCommand extends Command {
 		for (TagInstance tag : tags) {
 			if (pos % 20 == 0 && pos != 0) {
 				builder.page(currentPage);
-				currentPage.setLength(0);;
+				currentPage.setLength(0);
 			}
 
 			pos++;

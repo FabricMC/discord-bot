@@ -62,7 +62,7 @@ public final class ConfigCommand extends Command {
 		for (ConfigKey<?> configEntry : context.bot().getConfigEntries()) {
 			if (pos % 10 == 0 && pos != 0) {
 				builder.page(currentPage);
-				currentPage.setLength(0);;
+				currentPage.setLength(0);
 			}
 
 			pos++;
