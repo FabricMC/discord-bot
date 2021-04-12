@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -50,6 +51,7 @@ import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
 import net.fabricmc.discord.bot.message.Mentions;
+import net.fabricmc.discord.bot.util.Collections2;
 import net.fabricmc.tag.TagFrontMatter;
 import net.fabricmc.tag.TagLoadResult;
 import net.fabricmc.tag.TagParser;
@@ -104,6 +106,7 @@ public final class TagModule implements Module, CommandStringHandler {
 			return;
 		}
 
+		bot.registerCommand(new TagCommand(this));
 		bot.registerCommandStringHandler(this);
 
 		// Load tags
@@ -261,5 +264,13 @@ public final class TagModule implements Module, CommandStringHandler {
 		}
 
 		tag.send(context, arguments);
+	}
+
+	DiscordBot getBot() {
+		return bot;
+	}
+
+	public Collection<TagInstance> getTags() {
+		return Collections2.newIdentityHashSet(tags.values());
 	}
 }

@@ -380,6 +380,8 @@ public final class UsageParser {
 
 			node.minTokens = min;
 			node.maxTokens = max;
+		} else if (node instanceof EmptyNode) {
+			// nothing
 		} else {
 			throw new IllegalStateException();
 		}

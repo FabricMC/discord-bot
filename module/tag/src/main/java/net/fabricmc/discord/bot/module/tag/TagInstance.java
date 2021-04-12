@@ -39,6 +39,8 @@ public abstract class TagInstance {
 		return this.name;
 	}
 
+	public abstract int getArgCount();
+
 	public abstract CompletableFuture<Message> send(CommandContext context, String arguments) throws CommandException;
 
 	public static final class PlainText extends TagInstance {
@@ -47,6 +49,11 @@ public abstract class TagInstance {
 		public PlainText(String name, String text) {
 			super(name);
 			this.text = text;
+		}
+
+		@Override
+		public int getArgCount() {
+			return 0;
 		}
 
 		@Override
@@ -122,6 +129,11 @@ public abstract class TagInstance {
 
 			this.literalParts = literalParts.toArray(new String[0]);
 			this.argCount = argCount;
+		}
+
+		@Override
+		public int getArgCount() {
+			return argCount;
 		}
 
 		@Override
@@ -207,6 +219,11 @@ public abstract class TagInstance {
 		}
 
 		@Override
+		public int getArgCount() {
+			return 0;
+		}
+
+		@Override
 		public CompletableFuture<Message> send(CommandContext context, String arguments) {
 			return context.channel().sendMessage(embed);
 		}
@@ -232,6 +249,11 @@ public abstract class TagInstance {
 
 		public TagInstance getTarget() {
 			return delegate;
+		}
+
+		@Override
+		public int getArgCount() {
+			return delegate.getArgCount();
 		}
 
 		@Override
