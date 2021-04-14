@@ -485,7 +485,7 @@ public final class DiscordBot {
 	}
 
 	public boolean checkAccess(MessageAuthor author, Command command) {
-		String permission = command.getPermission();
+		String permission = command.permission();
 		if (permission == null) return true;
 
 		User user = author.asUser().orElse(null);

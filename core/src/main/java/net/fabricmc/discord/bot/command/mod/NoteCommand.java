@@ -44,7 +44,7 @@ public final class NoteCommand extends Command {
 	}
 
 	@Override
-	public String getPermission() {
+	public String permission() {
 		return "note";
 	}
 

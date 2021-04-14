@@ -220,6 +220,8 @@ public enum UserActionType implements ActionType {
 	}
 
 	static boolean isMethodOverridden(Class<?> owner, String name, Class<?>... args) {
+		if (owner == UserActionType.class) return false;
+
 		try {
 			try {
 				owner.getDeclaredMethod(name, args); // throws if missing

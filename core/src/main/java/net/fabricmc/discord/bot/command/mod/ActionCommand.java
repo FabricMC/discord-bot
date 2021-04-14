@@ -42,7 +42,7 @@ public final class ActionCommand extends Command {
 	}
 
 	@Override
-	public String getPermission() {
+	public String permission() {
 		return "action";
 	}
 

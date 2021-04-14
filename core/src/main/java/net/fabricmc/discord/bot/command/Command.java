@@ -47,7 +47,15 @@ public abstract class Command {
 	 *
 	 * @return permission name or null if none required
 	 */
-	public String getPermission() {
+	public String permission() {
+		return null;
+	}
+
+	public String shortHelp() {
+		return null;
+	}
+
+	public String longHelp() {
 		return null;
 	}
 

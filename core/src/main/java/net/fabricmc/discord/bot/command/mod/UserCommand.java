@@ -59,7 +59,7 @@ public final class UserCommand extends Command {
 	}
 
 	@Override
-	public String getPermission() {
+	public String permission() {
 		return "user";
 	}
 

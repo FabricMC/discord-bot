@@ -40,7 +40,7 @@ public final class NickCommand extends Command {
 	}
 
 	@Override
-	public String getPermission() {
+	public String permission() {
 		return "nick";
 	}
 

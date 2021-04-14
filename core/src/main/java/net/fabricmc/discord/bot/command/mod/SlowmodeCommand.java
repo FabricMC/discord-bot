@@ -35,7 +35,7 @@ public final class SlowmodeCommand extends Command {
 	}
 
 	@Override
-	public String getPermission() {
+	public String permission() {
 		return "slowmode";
 	}
 

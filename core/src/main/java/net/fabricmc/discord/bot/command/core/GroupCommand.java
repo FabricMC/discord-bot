@@ -36,7 +36,7 @@ public final class GroupCommand extends Command {
 	}
 
 	@Override
-	public String getPermission() {
+	public String permission() {
 		return UserHandler.ADMIN_PERMISSION;
 	}
 

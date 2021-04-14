@@ -1,0 +1,160 @@
+{
+	"commands": {
+		"help": {
+			"short": "List all available commands and their usage",
+			"long": "The help command can be invoked without any argument to list all commands with a short description or with a specific command name to show the command's full description.\n\nThe usage string after every command name is an exact description of what arguments a particular command takes. The exact meaning is as follows:```
+   a b: a and b have to be supplied in this order
+   a|b: either a or b can be supplied, lowest precedence (a b|c is the same as (a b)|c)
+   [a]: a is optional
+  a...: a may be repeated, at least one instance, highest precedence
+ (a b): a and b act as a common element in the surrounding context
+     x: literal input \"x\" required
+   <x>: x is a variable capturing any input token
+<x...>: x is a multi-word variable capturing at least one input token
+   --x: position independent flag x
+ --x=a: position independent flag x with mandatory value a (value may still be empty if a is e.g. (|b) or [b])
+ --x[=a]: position independent flag x, optionally with value a
+```"
+		},
+		"config": {
+			"short": "Change DB-backed config settings"
+		},
+		"group": {
+			"short": "Manage user groups"
+		},
+		"permission": {
+			"short": "Configure user group permissions"
+		},
+		"ban": {
+			"short": "Ban a user"
+		},
+		"unban": {
+			"short": "Unban a user"
+		},
+		"kick": {
+			"short": "Kick a user"
+		},
+		"mute": {
+			"short": "Mute a user in all channels"
+		},
+		"unmute": {
+			"short": "Unmute a user in all channels"
+		},
+		"metaMute": {
+			"short": "Mute a user in the meta channels"
+		},
+		"unmetaMute": {
+			"short": "Unmute a user in the meta channels"
+		},
+		"reactionMute": {
+			"short": "Mute/deny a user's ability to use reactions (emotes)"
+		},
+		"unreactionMute": {
+			"short": "Unmute/allow a user's ability to use reactions (emotes)"
+		},
+		"requestsMute": {
+			"short": "Mute a user in the requests channels"
+		},
+		"unrequestsMute": {
+			"short": "Unute a user in the requests channels"
+		},
+		"supportMute": {
+			"short": "Mute a user in the player support channels"
+		},
+		"unsupportMute": {
+			"short": "Unute a user in the player support channels"
+		},
+		"nickLock": {
+			"short": "Lock a user's nick, preventing visible name/nick changes"
+		},
+		"unnickLock": {
+			"short": "Unlock a user's nick, allowing visible name/nick changes again"
+		},
+		"warn": {
+			"short": "Warn a user including the usual action logging/notification"
+		},
+		"nick": {
+			"short": "Rename a user by dropping or changing the nick name"
+		},
+		"note": {
+			"short": "Add a note about a user without notification"
+		},
+		"clean": {
+			"short": "Clean/delete recent messages by a user"
+		},
+		"lock": {
+			"short": "Lock a channel, preventing users from sending messages"
+		},
+		"unlock": {
+			"short": "Unlock a channel, allowing users to send messages again"
+		},
+		"slowmode": {
+			"short": "Set/change a channel's slowmode, limiting users' message rate"
+		},
+		"action": {
+			"short": "List and manage user moderation actions recorded in the database"
+		},
+		"user": {
+			"short": "Show information about a user"
+		},
+		"filter": {
+			"short": "Configure message filters"
+		},
+		"filtergroup": {
+			"short": "Configure message filter groups"
+		},
+		"filteraction": {
+			"short": "Configure message filter group actions"
+		},
+		"yarnclass": {
+			"short": "Show mappings for a specific class",
+			"long": "The command takes a class name and optionally a Minecraft version.
+
+%yarncommon%
+
+Examples:
+`!yc 1234`
+`!yc net.minecraft.world.World 1.16.4`
+`!yc a`"
+		},
+		"yarnfield": {
+			"short": "Show mappings for a specific field",
+			"long": "Fields can be specified standalone or following a class separated by `.` or `/`. Descriptors are currently unsupported.
+
+%yarncommon%
+
+Examples:
+`!yf 1234`
+`!yf net.minecraft.world.World.profiler 1.16.4`
+`!yf Entity.pos latest`
+`!yf jumping`"
+		},
+		"yarnmethod": {
+			"short": "Show mappings for a specific method",
+			"long": "Methods can be specified standalone or following a class separated by `.` or `/`. Descriptors are currently unsupported.
+
+%yarncommon%
+
+Examples:
+`!ym 1234`
+`!ym net.minecraft.world.World.getChunk 1.16.4`
+`!ym Entity.getPos`
+`!ym isDead`"
+		},
+		"tag": {
+			"short": "List all available tags (command triggered snippets)"
+		}
+	},
+	"substitutions": {
+		"%yarncommon%": "Classes can be specified in various forms:
+- with or without their package (`the/pkg/MyClass` or `MyClass`)
+- with `.` or `/` as the package separator (`the.pkg.MyClass` or `the/pkg/MyClass`)
+
+Anything can additionally
+- be specified by just the intermediary number (`1234`)
+- contain * wildcards or ? for single-character wildcards (`the/p*/MyClass`)
+- be in any supported namespace (official, named/yarn and intermediary)
+
+The Minecraft version can be given as any supported MC release such as `1.15.2` or `21w14a`, `latestStable` for the last supported stable release or `latest` for the latest supported release including snapshots etc. The selection defaults to `latestStable` if the argument is missing."
+	}
+}

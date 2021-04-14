@@ -112,7 +112,7 @@ public final class UsageParser {
 	 * {@literal <x...>}: x is a multi-word variable capturing at least one input token
 	 *   --x: position independent flag x
 	 * --x=a: position independent flag x with mandatory value a (value may still be empty if a is e.g. (|b) or [b])
-	 * --x[=a]: position independent flag x, optinally with value a
+	 * --x[=a]: position independent flag x, optionally with value a
 	 * </pre>
 	 *
 	 * @param usage usage string encoding the acceptable command parameters

@@ -45,7 +45,7 @@ public final class CleanCommand extends Command {
 	}
 
 	@Override
-	public String getPermission() {
+	public String permission() {
 		return "clean";
 	}
 

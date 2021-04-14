@@ -46,7 +46,7 @@ public final class GenericUserActionCommand extends Command {
 	}
 
 	@Override
-	public String getPermission() {
+	public String permission() {
 		return type.id;
 	}
 

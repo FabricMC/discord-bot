@@ -54,7 +54,7 @@ final class TagCommand extends Command {
 
 		Paginator.Builder builder = new Paginator.Builder(context.author()).title("Tag list");
 		StringBuilder currentPage = new StringBuilder();
-		String cmdPrefix = handler.getBot().getCommandPrefix();
+		String cmdPrefix = context.bot().getCommandPrefix();
 		currentPage.append(String.format("Post a tag with `%s%s<tagName>` and arguments as required.\nSpecifying the base name is enough when unique.\n\n",
 				cmdPrefix, cmdPrefix));
 

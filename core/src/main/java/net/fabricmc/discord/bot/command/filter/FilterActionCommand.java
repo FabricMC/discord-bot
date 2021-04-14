@@ -38,7 +38,7 @@ public final class FilterActionCommand extends Command {
 	}
 
 	@Override
-	public String getPermission() {
+	public String permission() {
 		return "filter";
 	}
 

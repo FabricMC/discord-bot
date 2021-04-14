@@ -33,7 +33,7 @@ public final class UnlockCommand extends Command {
 	}
 
 	@Override
-	public String getPermission() {
+	public String permission() {
 		return "lock";
 	}
 

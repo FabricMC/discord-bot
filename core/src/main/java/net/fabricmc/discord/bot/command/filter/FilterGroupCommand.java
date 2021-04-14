@@ -37,7 +37,7 @@ public final class FilterGroupCommand extends Command {
 	}
 
 	@Override
-	public String getPermission() {
+	public String permission() {
 		return "filter";
 	}
 
