@@ -60,7 +60,7 @@ import net.fabricmc.discord.bot.util.HttpUtil;
 public final class McVersionModule implements Module {
 	private static final int UPDATE_DELAY = 30; // in s
 	private static final String MC_VERSION_HOST = "launchermeta.mojang.com";
-	private static final String MC_VERSION_PATH = "/mc/game/version_manifest.json";
+	private static final String MC_VERSION_PATH = "/mc/game/version_manifest_v2.json";
 	private static final String FABRIC_VERSION_HOST = "meta.fabricmc.net";
 	private static final String FABRIC_VERSION_PATH = "/v2/versions/intermediary/%s";
 	private static final String NESSAGE = "A new Minecraft %s is out: %s"; // args: kind, version
