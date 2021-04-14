@@ -264,18 +264,6 @@ public final class ActionUtil {
 			TextChannel actingChannel, User actor,
 			DiscordBot bot, Server server,
 			boolean notifyTarget) {
-		if (extraTitleDesc == null || extraTitleDesc.isEmpty()) {
-			extraTitleDesc = "";
-		} else {
-			extraTitleDesc = " "+extraTitleDesc;
-		}
-
-		if (extraBodyDesc == null || extraBodyDesc.isEmpty()) {
-			extraBodyDesc = "";
-		} else {
-			extraBodyDesc = " "+extraBodyDesc;
-		}
-
 		// log to original channel
 
 		List<Long> targetDiscordIds;
@@ -300,10 +288,10 @@ public final class ActionUtil {
 
 		String actionDesc = type.getDesc(reversal);
 		String title = String.format("%s %s%s", // e.g. 'User' 'unbanned'' (expiration)'
-				targetType, actionDesc, extraTitleDesc);
+				targetType, actionDesc, formatOptionalSuffix(extraTitleDesc));
 		String description = String.format("%s %s has been %s%s%s:%s%s", // e.g. 'User' '123' has been 'unbanned'' automatically' +exp/target/reason
 				targetType, targetName,
-				actionDesc, extraBodyDesc,
+				actionDesc, formatOptionalSuffix(extraBodyDesc),
 				formatExpirationSuffix(reversal, expiration),
 				targetListSuffix,
 				formatReasonSuffix(reason));
@@ -354,9 +342,9 @@ public final class ActionUtil {
 
 		EmbedBuilder userMsg = new EmbedBuilder()
 				.setTitle(String.format("%s%s!", // e.g. 'Unbanned'' (expiration)'!
-						actionDesc, extraTitleDesc))
+						actionDesc, formatOptionalSuffix(extraTitleDesc)))
 				.setDescription(String.format("You have been %s%s%s.%s%s", // e.g. You have been 'unbanned'' automatically' +exp/reason/appeal
-						actionDesc, extraBodyDesc,
+						actionDesc, formatOptionalSuffix(extraBodyDesc),
 						formatExpirationSuffix(reversal, expiration),
 						formatReasonSuffix(reason),
 						appealSuffix))
@@ -379,6 +367,16 @@ public final class ActionUtil {
 		}
 
 		return ret;
+	}
+
+	private static String formatOptionalSuffix(@Nullable String content) {
+		if (content == null || content.isEmpty()) {
+			return "";
+		} else if (content.startsWith(" ")) {
+			return content;
+		} else {
+			return " "+content;
+		}
 	}
 
 	private static String formatExpirationSuffix(boolean reversal, long expiration) {
