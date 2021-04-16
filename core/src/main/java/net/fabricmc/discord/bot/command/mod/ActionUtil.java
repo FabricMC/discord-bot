@@ -323,7 +323,7 @@ public final class ActionUtil {
 		// message target user
 
 		if (type.getKind() == Kind.USER && notifyTarget) {
-			notifyTarget(type, reversal, extraTitleDesc, extraBodyDesc, actionId, creation, expiration, reason, actionId, bot, server);
+			notifyTarget(type, reversal, extraTitleDesc, extraBodyDesc, targetId, creation, expiration, reason, actionId, bot, server);
 		}
 	}
 
