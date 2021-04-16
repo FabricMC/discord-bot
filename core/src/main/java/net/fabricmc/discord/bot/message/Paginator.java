@@ -25,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.javacord.api.entity.channel.ChannelType;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.emoji.Emoji;
 import org.javacord.api.entity.message.Message;
@@ -256,10 +257,17 @@ public final class Paginator {
 			}
 		}
 
-		event.removeReaction().exceptionally(e -> {
-			this.logger.error("Failed to remove reaction from paginator event", e);
-			return null;
-		});
+		TextChannel channel = event.getChannel();
+		ChannelType type = channel.getType();
+
+		if (channel.canYouRemoveReactionsOfOthers()
+				&& type != ChannelType.PRIVATE_CHANNEL
+				&& type != ChannelType.GROUP_CHANNEL) { // no permissions in DMs, requires the user to remove reactions manually (double click to advance)
+			event.removeReaction().exceptionally(e -> {
+				this.logger.error("Failed to remove reaction from paginator event", e);
+				return null;
+			});
+		}
 	}
 
 	private EmbedBuilder getEmbed() {
