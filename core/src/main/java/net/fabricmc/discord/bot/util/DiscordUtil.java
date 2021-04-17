@@ -19,6 +19,8 @@ package net.fabricmc.discord.bot.util;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
+import org.javacord.api.entity.channel.ChannelType;
+import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.exception.DiscordException;
 
 public final class DiscordUtil {
@@ -36,5 +38,13 @@ public final class DiscordUtil {
 				throw e;
 			}
 		}
+	}
+
+	public static boolean canRemoveReactions(TextChannel channel) {
+		ChannelType type = channel.getType();
+
+		return channel.canYouRemoveReactionsOfOthers()
+				&& type != ChannelType.PRIVATE_CHANNEL
+				&& type != ChannelType.GROUP_CHANNEL; // no permissions in DMs
 	}
 }

@@ -25,7 +25,6 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.entity.channel.ChannelType;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.emoji.Emoji;
 import org.javacord.api.entity.message.Message;
@@ -56,6 +55,7 @@ public final class Paginator {
 	private final List<Page> pages;
 	private final int timeout; // in s
 	private final long owner;
+	private final boolean deleteOnFinish;
 	/**
 	 * The current page.
 	 * Like all things in java, this is zero indexed
@@ -66,7 +66,7 @@ public final class Paginator {
 	 * The message the paginator is bound to.
 	 */
 	@Nullable
-	private Message message;
+	private volatile Message message;
 
 	/**
 	 * Creates a new paginator.
@@ -76,7 +76,7 @@ public final class Paginator {
 	 * @param timeout the timeout in which the paginator will automatically be destroyed
 	 * @param ownerSnowflake the snowflake of the user who is allowed to interface with the paginator
 	 */
-	private Paginator(Logger logger, String title, String footer, List<Page> pages, int timeout, long ownerSnowflake) {
+	private Paginator(Logger logger, String title, String footer, List<Page> pages, int timeout, long ownerSnowflake, boolean deleteOnFinish) {
 		this.logger = logger;
 
 		if (pages.isEmpty()) {
@@ -92,6 +92,7 @@ public final class Paginator {
 		this.pages = pages;
 		this.owner = ownerSnowflake;
 		this.timeout = timeout;
+		this.deleteOnFinish = deleteOnFinish;
 	}
 
 	/**
@@ -137,7 +138,9 @@ public final class Paginator {
 			return CompletableFuture.failedFuture(new UnsupportedOperationException("Cannot move unsent paginator to the next page"));
 		}
 
-		if (this.message != null) {
+		Message message = this.message;
+
+		if (message != null) {
 			if (this.getCurrentPage() + 1 >= pages.size()) {
 				return CompletableFuture.completedFuture(false);
 			}
@@ -145,7 +148,7 @@ public final class Paginator {
 			this.currentPage++;
 
 			// TODO: Test?
-			return this.message.edit(this.getEmbed())
+			return message.edit(this.getEmbed())
 					.thenApply(ignored -> true);
 		}
 
@@ -162,12 +165,14 @@ public final class Paginator {
 			return CompletableFuture.failedFuture(new UnsupportedOperationException("Cannot move unsent paginator to the previous page"));
 		}
 
-		if (this.message != null) {
+		Message message = this.message;
+
+		if (message != null) {
 			if (this.getCurrentPage() > 0) {
 				this.currentPage--;
 
 				// TODO: Test?
-				return this.message.edit(this.getEmbed())
+				return message.edit(this.getEmbed())
 						.thenApply(ignored -> true);
 			}
 		}
@@ -187,8 +192,20 @@ public final class Paginator {
 			return CompletableFuture.failedFuture(new UnsupportedOperationException("Cannot destroy unsent paginator"));
 		}
 
-		if (this.message != null) {
-			return this.message.removeAllReactions().thenApply(_v -> {
+		Message message = this.message;
+
+		if (message != null) {
+			CompletableFuture<Void> ret;
+
+			if (deleteOnFinish) {
+				ret = message.delete("paginator destroyed");
+			} else if (DiscordUtil.canRemoveReactions(message.getChannel())) {
+				ret = message.removeAllReactions();
+			} else {
+				ret = CompletableFuture.completedFuture(null);
+			}
+
+			return ret.thenApply(_v -> {
 				this.message = null;
 				return null;
 			});
@@ -212,12 +229,20 @@ public final class Paginator {
 			ret = ret.thenCompose(message -> {
 				this.message = message;
 
-				// Add the control emotes and then setup the listeners for said emotes
-				return CompletableFuture.allOf(
-						message.addReaction(ARROW_BACKWARDS_EMOTE),
-						message.addReaction(X_EMOTE),
-						message.addReaction(ARROW_FORWARDS_EMOTE)
-						).thenApply(_v -> {
+				List<CompletableFuture<Void>> futures = new ArrayList<>(3);
+
+				// add control emotes
+				futures.add(message.addReaction(ARROW_BACKWARDS_EMOTE));
+
+				if (deleteOnFinish || DiscordUtil.canRemoveReactions(message.getChannel())) {
+					futures.add(message.addReaction(X_EMOTE));
+				}
+
+				futures.add(message.addReaction(ARROW_FORWARDS_EMOTE));
+
+				// setup the listeners for said emotes
+				return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+						.thenApply(_v -> {
 							message.addReactionAddListener(this::reactionAdded).removeAfter(this.timeout, TimeUnit.SECONDS).addRemoveHandler(this::destroy);
 							return message;
 						});
@@ -257,12 +282,7 @@ public final class Paginator {
 			}
 		}
 
-		TextChannel channel = event.getChannel();
-		ChannelType type = channel.getType();
-
-		if (channel.canYouRemoveReactionsOfOthers()
-				&& type != ChannelType.PRIVATE_CHANNEL
-				&& type != ChannelType.GROUP_CHANNEL) { // no permissions in DMs, requires the user to remove reactions manually (double click to advance)
+		if (DiscordUtil.canRemoveReactions(event.getChannel())) { // requires the user to remove reactions manually (double click to advance)
 			event.removeReaction().exceptionally(e -> {
 				this.logger.error("Failed to remove reaction from paginator event", e);
 				return null;
@@ -290,6 +310,7 @@ public final class Paginator {
 		private final List<Page> pages = new ArrayList<>();
 		private int timeout = 200; // in s
 		private final long ownerId;
+		private boolean deleteOnFinish;
 
 		public Builder(User owner) {
 			this.ownerId = owner.getId();
@@ -373,8 +394,14 @@ public final class Paginator {
 			return this;
 		}
 
+		public Builder deleteOnFinish(boolean value) {
+			this.deleteOnFinish = value;
+
+			return this;
+		}
+
 		public Paginator build() {
-			return new Paginator(logger, title, footer, pages, timeout, ownerId);
+			return new Paginator(logger, title, footer, pages, timeout, ownerId, deleteOnFinish);
 		}
 
 		public void buildAndSend(TextChannel channel) throws DiscordException {
