@@ -26,9 +26,11 @@ import net.fabricmc.discord.bot.config.ConfigKey;
 public interface Module {
 	String getName();
 
-	boolean shouldLoad();
+	default boolean shouldLoad() {
+		return true;
+	}
 
-	void registerConfigEntries(DiscordBot bot);
+	default void registerConfigEntries(DiscordBot bot) { }
 
 	/**
 	 * When called a module should setup.
@@ -40,12 +42,13 @@ public interface Module {
 	 */
 	void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir);
 
+	default void onAllSetup(DiscordBot bot, DiscordApi api) { }
+
 	/**
 	 * Called when a config entry has changed.
 	 *
 	 * @param key the key of the config entry
 	 * @param value the value the config entry was set to
 	 */
-	default void onConfigValueChanged(ConfigKey<?> key, Object value) {
-	}
+	default void onConfigValueChanged(ConfigKey<?> key, Object value) { }
 }

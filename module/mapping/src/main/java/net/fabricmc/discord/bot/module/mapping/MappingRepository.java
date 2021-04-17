@@ -39,6 +39,7 @@ import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree;
 import net.fabricmc.discord.bot.module.mapping.mappinglib.MemoryMappingTree;
 import net.fabricmc.discord.bot.module.mapping.mappinglib.Tiny1Reader;
 import net.fabricmc.discord.bot.module.mapping.mappinglib.Tiny2Reader;
+import net.fabricmc.discord.bot.module.mcversion.McVersionRepo;
 import net.fabricmc.discord.bot.util.HttpUtil;
 
 public final class MappingRepository {
@@ -52,8 +53,6 @@ public final class MappingRepository {
 
 	private final DiscordBot bot;
 
-	private volatile String latestMcVersion;
-	private volatile String latestStableMcVersion;
 	private final Map<String, MappingData> mcVersionToMappingMap = new ConcurrentHashMap<>();
 
 	MappingRepository(DiscordBot bot) {
@@ -64,8 +63,6 @@ public final class MappingRepository {
 
 	private void updateVersion() {
 		try {
-			updateLatestMcVersions();
-
 			// remove outdated mapping data
 			mcVersionToMappingMap.entrySet().removeIf(entry -> {
 				try {
@@ -79,58 +76,6 @@ public final class MappingRepository {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-	}
-
-	private void updateLatestMcVersions() throws IOException, InterruptedException, URISyntaxException {
-		HttpResponse<InputStream> response = HttpUtil.makeRequest(metaHost, "/v2/versions/game");
-		if (response.statusCode() != 200) throw new IOException("request failed with code "+response.statusCode());
-
-		String latestMcVersion = null;
-		String latestStableMcVersion = null;
-
-		try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
-			boolean detectedLatest = false;
-
-			reader.beginArray();
-
-			while (reader.hasNext()) {
-				Boolean stable = null;
-				String version = null;
-
-				reader.beginObject();
-
-				while (reader.hasNext()) {
-					switch (reader.nextName()) {
-					case "version" -> version = reader.nextString();
-					case "stable" -> stable = reader.nextBoolean();
-					default -> reader.skipValue();
-					}
-				}
-
-				reader.endObject();
-
-				if (stable == null || version == null) {
-					throw new IOException("malformed version entry, missing version or stable attribute");
-				}
-
-				if (!detectedLatest) {
-					latestMcVersion = version;
-					detectedLatest = true;
-				}
-
-				if (stable) {
-					latestStableMcVersion = version;
-					break;
-				}
-			}
-		}
-
-		if (latestMcVersion == null || latestStableMcVersion == null) {
-			throw new IOException("no mc version entries");
-		}
-
-		this.latestMcVersion = latestMcVersion;
-		this.latestStableMcVersion = latestStableMcVersion;
 	}
 
 	private static @Nullable String getMavenId(String mcVersion, String kind) throws IOException, InterruptedException, URISyntaxException {
@@ -173,21 +118,10 @@ public final class MappingRepository {
 		System.out.println(data.findFields("class_1338/field_6393"));
 	}
 
-	public MappingData getLatestMcMappingData() {
-		String mcVersion = latestMcVersion;
-		if (mcVersion == null) throw new IllegalStateException("latest mc version is unknown");
-
-		return getMappingData(mcVersion);
-	}
-
-	public MappingData getLatestStableMcMappingData() {
-		String mcVersion = latestStableMcVersion;
-		if (mcVersion == null) throw new IllegalStateException("latest stable mc version is unknown");
-
-		return getMappingData(mcVersion);
-	}
-
 	public MappingData getMappingData(String mcVersion) {
+		mcVersion = McVersionRepo.get(bot).resolve(mcVersion);
+		if (mcVersion == null) throw new IllegalStateException("latest version data is unavailable");
+
 		return mcVersionToMappingMap.computeIfAbsent(mcVersion, MappingRepository::createMappingData);
 	}
 

@@ -171,6 +171,14 @@ public final class DiscordBot {
 		return filterHandler;
 	}
 
+	public @Nullable Module getModule(String name) {
+		for (Module module : modules) {
+			if (module.getName().equals(name)) return module;
+		}
+
+		return null;
+	}
+
 	public Collection<Module> getModules() {
 		return Collections.unmodifiableCollection(this.modules);
 	}
@@ -367,6 +375,10 @@ public final class DiscordBot {
 		// Must only iterate accepted modules
 		for (Module module : this.getModules()) {
 			module.setup(this, api, LogManager.getLogger(module.getName()), dataDir);
+		}
+
+		for (Module module : this.getModules()) {
+			module.onAllSetup(this, api);
 		}
 
 		final StringBuilder moduleList = new StringBuilder();

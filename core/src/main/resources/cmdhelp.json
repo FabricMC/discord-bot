@@ -141,6 +141,9 @@ Examples:
 `!ym Entity.getPos`
 `!ym isDead`"
 		},
+		"fabricVersion": {
+			"short": "Show the latest Fabric versions for a mod build script"
+		},
 		"tag": {
 			"short": "List all available tags (command triggered snippets)"
 		}

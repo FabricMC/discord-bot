@@ -14,15 +14,24 @@
  * limitations under the License.
  */
 
-package net.fabricmc.discord.bot.module.mapping;
+package net.fabricmc.discord.bot.module.fabricversion;
 
-import net.fabricmc.discord.bot.command.CommandException;
+import java.nio.file.Path;
 
-final class YarnCommandUtil {
-	public static MappingData getMappingData(MappingRepository repo, String mcVersion) throws CommandException {
-		MappingData data = repo.getMappingData(mcVersion);
-		if (data == null) throw new CommandException("Invalid/unavailable MC version");
+import org.apache.logging.log4j.Logger;
+import org.javacord.api.DiscordApi;
 
-		return data;
+import net.fabricmc.discord.bot.DiscordBot;
+import net.fabricmc.discord.bot.Module;
+
+public final class FabricVersionModule implements Module {
+	@Override
+	public String getName() {
+		return "fabricversion";
+	}
+
+	@Override
+	public void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
+		bot.registerCommand(new FabricVersionCommand());
 	}
 }

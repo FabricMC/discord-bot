@@ -73,6 +73,7 @@ public final class McVersionModule implements Module {
 	private static final ConfigKey<String> ANNOUNCED_SNAPSHOT_VERSION = new ConfigKey<>("mcversion.announcedSnapshotVersion", ValueSerializers.STRING);
 
 	private DiscordBot bot;
+	private McVersionRepo repo;
 	private Future<?> future;
 	private volatile TextChannel channel;
 	private final Set<String> announcedVersions = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -80,11 +81,6 @@ public final class McVersionModule implements Module {
 	@Override
 	public String getName() {
 		return "mcversion";
-	}
-
-	@Override
-	public boolean shouldLoad() {
-		return true;
 	}
 
 	@Override
@@ -99,9 +95,14 @@ public final class McVersionModule implements Module {
 	@Override
 	public void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
 		this.bot = bot;
+		this.repo = new McVersionRepo(bot);
 
 		bot.getActiveHandler().registerReadyHandler(this::onReady);
 		bot.getActiveHandler().registerGoneHandler(this::onGone);
+	}
+
+	McVersionRepo getRepo() {
+		return repo;
 	}
 
 	private void onReady(Server server, long prevActive) {

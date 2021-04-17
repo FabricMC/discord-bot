@@ -42,7 +42,7 @@ public final class HelpCommand extends Command {
 
 	@Override
 	public String usage() {
-		return "|<command>";
+		return "[<command>]";
 	}
 
 	@Override
