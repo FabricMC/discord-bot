@@ -70,7 +70,7 @@ public final class FabricVersionCommand extends Command {
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
 		String mcVersion = arguments.get("mcVersion");
-		if (mcVersion == null) mcVersion = arguments.get("unnamed_1");
+		if (mcVersion == null) mcVersion = arguments.get("unnamed_0");
 		mcVersion = McVersionRepo.get(context.bot()).resolve(mcVersion);
 
 		VersionData data = getData(mcVersion);
