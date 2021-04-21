@@ -53,10 +53,11 @@ public final class YarnFieldCommand extends Command {
 		if (mcVersion == null) mcVersion = arguments.get("unnamed_1");
 
 		MappingData data = YarnCommandUtil.getMappingData(repo, mcVersion);
-		Collection<FieldMapping> results = data.findFields(arguments.get("fieldName"));
+		String name = arguments.get("fieldName");
+		Collection<FieldMapping> results = data.findFields(name);
 
 		if (results.isEmpty()) {
-			context.channel().sendMessage("no matches");
+			context.channel().sendMessage("no matches for the given field name and MC version");
 			return true;
 		}
 

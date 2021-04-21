@@ -53,10 +53,11 @@ public final class YarnMethodCommand extends Command {
 		if (mcVersion == null) mcVersion = arguments.get("unnamed_1");
 
 		MappingData data = YarnCommandUtil.getMappingData(repo, mcVersion);
-		Collection<MethodMapping> results = data.findMethods(arguments.get("methodName"));
+		String name = arguments.get("methodName");
+		Collection<MethodMapping> results = data.findMethods(name);
 
 		if (results.isEmpty()) {
-			context.channel().sendMessage("no matches");
+			context.channel().sendMessage("no matches for the given method name and MC version");
 			return true;
 		}
 

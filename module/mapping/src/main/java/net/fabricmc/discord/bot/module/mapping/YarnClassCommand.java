@@ -53,10 +53,11 @@ public final class YarnClassCommand extends Command {
 		if (mcVersion == null) mcVersion = arguments.get("unnamed_1");
 
 		MappingData data = YarnCommandUtil.getMappingData(repo, mcVersion);
-		Collection<ClassMapping> results = data.findClasses(arguments.get("className"));
+		String name = arguments.get("className");
+		Collection<ClassMapping> results = data.findClasses(name);
 
 		if (results.isEmpty()) {
-			context.channel().sendMessage("no matches");
+			context.channel().sendMessage("no matches for the given class name and MC version");
 			return true;
 		}
 

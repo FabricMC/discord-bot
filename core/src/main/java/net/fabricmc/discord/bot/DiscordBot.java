@@ -208,6 +208,14 @@ public final class DiscordBot {
 		return ret != null ? ret.command : null;
 	}
 
+	public @Nullable Command getCommand(Class<? extends Command> cls) {
+		for (CommandRecord cmdRecord : commands.values()) {
+			if (cls.isInstance(cmdRecord.command())) return cmdRecord.command();
+		}
+
+		return null;
+	}
+
 	public Collection<Command> getCommands() {
 		List<Command> ret = new ArrayList<>(commands.size());
 
@@ -483,7 +491,16 @@ public final class DiscordBot {
 			final Map<String, String> arguments = new LinkedHashMap<>();
 
 			if (!parser.parse(rawArguments, commandRecord.node(), arguments)) {
-				context.channel().sendMessage("%s: Invalid command syntax, usage: %s".formatted(Mentions.createUserMention(context.author()), commandRecord.command.usage()));
+				String usage = commandRecord.command.usage();
+				String reason;
+
+				if (usage.isEmpty()) {
+					reason = "The command doesn't accept any parameters";
+				} else {
+					reason = "Missing or invalid parameters, usage: `%s`".formatted(usage);
+				}
+
+				context.channel().sendMessage("%s: Invalid command syntax: %s".formatted(Mentions.createUserMention(context.author()), reason));
 				return;
 			}
 

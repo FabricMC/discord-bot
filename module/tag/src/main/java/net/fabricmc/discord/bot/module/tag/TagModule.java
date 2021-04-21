@@ -259,7 +259,10 @@ public final class TagModule implements Module, CommandStringHandler {
 		if (tag == null) {
 			// TODO: Improve message
 			// TODO: Remove sender's message and this message after time to replicate current logic
-			context.channel().sendMessage("%s: Unknown tag".formatted(Mentions.createUserMention(context.author()), tagName));
+			context.channel().sendMessage(String.format("%s: Unknown tag, use `%s%s` to see all available tags",
+					Mentions.createUserMention(context.author()),
+					context.bot().getCommandPrefix(),
+					context.bot().getCommand(TagCommand.class).name()));
 			return;
 		}
 
