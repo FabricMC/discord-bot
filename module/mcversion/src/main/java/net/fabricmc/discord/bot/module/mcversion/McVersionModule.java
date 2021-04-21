@@ -23,11 +23,15 @@ import java.net.URISyntaxException;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.Collections;
+import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import com.google.gson.stream.JsonReader;
 import org.apache.logging.log4j.LogManager;
@@ -61,6 +65,12 @@ public final class McVersionModule implements Module {
 	private static final int UPDATE_DELAY = 30; // in s
 	private static final String MC_VERSION_HOST = "launchermeta.mojang.com";
 	private static final String MC_VERSION_PATH = "/mc/game/version_manifest_v2.json";
+	private static final String MC_NEWS_HOST = "www.minecraft.net";
+	private static final String MC_NEWS_PATH = "/content/minecraft-net/_jcr_content.articles.grid";
+	private static final String MC_NEWS_QUERY = "tileselection=auto&tagsPath=minecraft:article/news,minecraft:stockholm/news,minecraft:stockholm/minecraft-build&offset=0&count=4&pageSize=4&locale=en-us&lang=/content/minecraft-net/language-masters/en-us";
+	private static final DateTimeFormatter MC_NEWS_DATE_FORMATTER = DateTimeFormatter.ofPattern("dd MMMM y HH:mm:ss zzz", Locale.ENGLISH);
+	private static final Pattern MC_NEWS_SNAPSHOT_PATTERN = Pattern.compile(" \\d{2}w\\d{1,2}[a-z] ");
+	private static final Pattern MC_NEWS_RELEASE_PATTERN = Pattern.compile(" 1\\.\\d{2}[ \\.]");
 	private static final String FABRIC_VERSION_HOST = "meta.fabricmc.net";
 	private static final String FABRIC_VERSION_PATH = "/v2/versions/intermediary/%s";
 	private static final String NESSAGE = "A new Minecraft %s is out: %s"; // args: kind, version
@@ -69,14 +79,18 @@ public final class McVersionModule implements Module {
 
 	private static final Logger LOGGER = LogManager.getLogger(McVersionModule.class);
 	private static final ConfigKey<Long> ANNOUNCE_CHANNEL = new ConfigKey<>("mcversion.announceChannel", ValueSerializers.LONG);
+	private static final ConfigKey<Long> UPDATE_CHANNEL = new ConfigKey<>("mcversion.updateChannel", ValueSerializers.LONG);
 	private static final ConfigKey<String> ANNOUNCED_RELEASE_VERSION = new ConfigKey<>("mcversion.announcedReleaseVersion", ValueSerializers.STRING);
 	private static final ConfigKey<String> ANNOUNCED_SNAPSHOT_VERSION = new ConfigKey<>("mcversion.announcedSnapshotVersion", ValueSerializers.STRING);
+	private static final ConfigKey<Long> ANNOUNCED_NEWS_DATE = new ConfigKey<>("mcversion.announcedNewsDate", ValueSerializers.LONG);
 
 	private DiscordBot bot;
 	private McVersionRepo repo;
 	private Future<?> future;
-	private volatile TextChannel channel;
+	private volatile TextChannel announceChannel;
+	private volatile TextChannel updateChannel;
 	private final Set<String> announcedVersions = Collections.newSetFromMap(new ConcurrentHashMap<>());
+	private final Set<String> announcedNews = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
 	@Override
 	public String getName() {
@@ -86,10 +100,12 @@ public final class McVersionModule implements Module {
 	@Override
 	public void registerConfigEntries(DiscordBot bot) {
 		bot.registerConfigEntry(ANNOUNCE_CHANNEL, () -> -1L);
+		bot.registerConfigEntry(UPDATE_CHANNEL, () -> -1L);
 		// TODO: subscribe to config changes
 
 		bot.registerConfigEntry(ANNOUNCED_RELEASE_VERSION, () -> "0");
 		bot.registerConfigEntry(ANNOUNCED_SNAPSHOT_VERSION, () -> "0");
+		bot.registerConfigEntry(ANNOUNCED_NEWS_DATE, () -> System.currentTimeMillis());
 	}
 
 	@Override
@@ -106,22 +122,40 @@ public final class McVersionModule implements Module {
 	}
 
 	private void onReady(Server server, long prevActive) {
-		long channelId = bot.getConfigEntry(ANNOUNCE_CHANNEL);
-		if (channelId < 0) return;
+		long announceChannelId = bot.getConfigEntry(ANNOUNCE_CHANNEL);
 
-		TextChannel channel = server.getTextChannelById(channelId).orElse(null);
+		if (announceChannelId > 0) {
+			TextChannel channel = server.getTextChannelById(announceChannelId).orElse(null);
 
-		if (channel == null) {
-			LOGGER.warn("invalid announce channel: {}", channelId);
-			return;
+			if (channel == null) {
+				LOGGER.warn("invalid announce channel: {}", announceChannelId);
+				return;
+			}
+
+			this.announceChannel = channel;
 		}
 
-		this.channel = channel;
-		future = bot.getScheduledExecutor().scheduleWithFixedDelay(this::update, 0, UPDATE_DELAY, TimeUnit.SECONDS);
+		long updateChannelId = bot.getConfigEntry(UPDATE_CHANNEL);
+
+		if (updateChannelId > 0) {
+			TextChannel channel = server.getTextChannelById(updateChannelId).orElse(null);
+
+			if (channel == null) {
+				LOGGER.warn("invalid update channel: {}", updateChannelId);
+				return;
+			}
+
+			this.updateChannel = channel;
+		}
+
+		if (announceChannel != null || updateChannel != null) {
+			future = bot.getScheduledExecutor().scheduleWithFixedDelay(this::update, 0, UPDATE_DELAY, TimeUnit.SECONDS);
+		}
 	}
 
 	private void onGone(Server server) {
-		channel = null;
+		announceChannel = null;
+		updateChannel = null;
 
 		if (future != null) {
 			future.cancel(false);
@@ -131,13 +165,14 @@ public final class McVersionModule implements Module {
 
 	private void update() {
 		try {
-			update0();
+			if (announceChannel != null || updateChannel != null) updateLauncherMeta();
+			if (updateChannel != null) updateNews();
 		} catch (Throwable t) {
 			LOGGER.warn("mc version check failed", t);
 		}
 	}
 
-	private void update0() throws IOException, URISyntaxException, InterruptedException {
+	private void updateLauncherMeta() throws IOException, URISyntaxException, InterruptedException {
 		HttpResponse<InputStream> response = HttpUtil.makeRequest(MC_VERSION_HOST, MC_VERSION_PATH);
 		if (response.statusCode() != 200) throw new IOException("request failed with code "+response.statusCode());
 
@@ -174,22 +209,96 @@ public final class McVersionModule implements Module {
 	private void updateSpecific(String kind, String latestVersion, ConfigKey<String> announcedVersionKey) throws IOException, URISyntaxException, InterruptedException {
 		if (latestVersion == null // no version specified
 				|| latestVersion.equals(bot.getConfigEntry(announcedVersionKey)) // same as last announced
-				|| isOldVersion(latestVersion)) { // already known to Fabric, mcmeta glitch
+				|| isOldVersion(latestVersion) // already known to Fabric, mcmeta glitch
+				|| announcedVersions.contains(latestVersion)) { // already posted by this instance
 			return;
 		}
 
-		TextChannel channel = this.channel;
-		if (channel == null) return;
+		String msgText = NESSAGE.formatted(kind, latestVersion);
 
-		if (announcedVersions.add(latestVersion)) { // already posted by this bot process, e.g. as a different kind or due to a mcmeta glitch
-			Message message = channel.sendMessage(NESSAGE.formatted(kind, latestVersion)).join();
+		if (sendAnnouncement(announceChannel, msgText)
+				| sendAnnouncement(updateChannel, msgText)) { // deliberate | to force eval both
+			announcedVersions.add(latestVersion);
+			bot.setConfigEntry(announcedVersionKey, latestVersion);
+		}
+	}
 
-			//if (channel.getType() == ChannelType.SERVER_NEWS_CHANNEL) { TODO: check once javacord exposes this properly
-			message.crossPost();
-			//}
+	private void updateNews() throws IOException, URISyntaxException, InterruptedException {
+		long announcedNewsDate = bot.getConfigEntry(ANNOUNCED_NEWS_DATE);
+
+		HttpResponse<InputStream> response = HttpUtil.makeRequest(MC_NEWS_HOST, MC_NEWS_PATH, MC_NEWS_QUERY);
+		if (response.statusCode() != 200) throw new IOException("request failed with code "+response.statusCode());
+
+		long firstDateMs = 0;
+
+		try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+			reader.beginObject();
+
+			readLoop: while (reader.hasNext()) {
+				if (!reader.nextName().equals("article_grid")) {
+					reader.skipValue();
+				}
+
+				reader.beginArray();
+
+				while (reader.hasNext()) {
+					reader.beginObject();
+
+					String title = null;
+					String subTitle = "";
+					String path = null;
+					Instant date = null;
+
+					while (reader.hasNext()) {
+						switch (reader.nextName()) {
+						case "default_tile" -> {
+							reader.beginObject();
+
+							while (reader.hasNext()) {
+								switch (reader.nextName()) {
+								case "title" -> title = reader.nextString();
+								case "sub_header" -> subTitle = reader.nextString();
+								default -> reader.skipValue();
+								}
+							}
+
+							reader.endObject();
+						}
+						case "article_url" -> path = reader.nextString();
+						case "publish_date" -> date = Instant.from(MC_NEWS_DATE_FORMATTER.parse(reader.nextString()));
+						default -> reader.skipValue();
+						}
+					}
+
+					reader.endObject();
+
+					if (title == null || path == null || date == null) {
+						LOGGER.warn("Missing title/path/date in mc news output");
+						continue;
+					}
+
+					long dateMs = date.toEpochMilli();
+					if (announcedNewsDate >= dateMs) break readLoop;
+					if (firstDateMs == 0) firstDateMs = dateMs;
+
+					String content = String.format(" %s %s %s ", title, subTitle, path).toLowerCase(Locale.ENGLISH);
+
+					if ((content.contains("snapshot") && MC_NEWS_SNAPSHOT_PATTERN.matcher(content).find()
+							|| content.contains("java") && MC_NEWS_RELEASE_PATTERN.matcher(content).find())
+							&& !content.contains("bedrock")
+							&& !announcedNews.contains(path)) {
+						if (!sendAnnouncement(updateChannel, "https://"+MC_NEWS_HOST+path)) {
+							return; // avoid updating ANNOUNCED_NEWS_DATE
+						}
+
+						announcedNews.add(path);
+						break readLoop;
+					}
+				}
+			}
 		}
 
-		bot.setConfigEntry(announcedVersionKey, latestVersion);
+		if (firstDateMs > announcedNewsDate) bot.setConfigEntry(ANNOUNCED_NEWS_DATE, firstDateMs);
 	}
 
 	private static boolean isOldVersion(String version) throws IOException, URISyntaxException, InterruptedException {
@@ -202,5 +311,28 @@ public final class McVersionModule implements Module {
 			reader.beginArray();
 			return reader.hasNext();
 		}
+	}
+
+	private static boolean sendAnnouncement(TextChannel channel, String msg) {
+		if (channel == null) return false;
+
+		Message message;
+
+		try {
+			message = channel.sendMessage(msg).join();
+		} catch (Throwable t) {
+			LOGGER.warn("Announcement failed", t);
+			return false;
+		}
+
+		//if (channel.getType() == ChannelType.SERVER_NEWS_CHANNEL) { TODO: check once javacord exposes this properly
+		message.crossPost()
+		.exceptionally(exc -> {
+			LOGGER.warn("Message crossposting failed: "+exc); // fails with MissingPermissionsException for non-news channel
+			return null;
+		});
+		//}
+
+		return true;
 	}
 }
