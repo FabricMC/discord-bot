@@ -289,12 +289,14 @@ public final class ActionUtil {
 		String actionDesc = type.getDesc(reversal);
 		String title = String.format("%s %s%s", // e.g. 'User' 'unbanned'' (expiration)'
 				targetType, actionDesc, formatOptionalSuffix(extraTitleDesc));
-		String description = String.format("%s %s has been %s%s%s:%s%s", // e.g. 'User' '123' has been 'unbanned'' automatically' +exp/target/reason
+		String description = String.format("%s %s has been %s%s%s:%s\n%s%s", // e.g. 'User' '123' has been 'unbanned'' automatically' +exp/target/reason
 				targetType, targetName,
 				actionDesc, formatOptionalSuffix(extraBodyDesc),
 				formatExpirationSuffix(reversal, expiration),
 				targetListSuffix,
-				formatReasonSuffix(reason));
+				formatDurationSuffix(type, reversal, creation, expiration),
+				formatReasonSuffix(reason))
+				.trim(); // to remove trailing \n if there's neither duration nor reason
 
 		String actionRef = actionId >= 0 ? "%s Action ID: %d".formatted(targetType, actionId) : "Unknown action";
 		TextChannel logChannel = bot.getLogHandler().getLogChannel();
@@ -389,11 +391,20 @@ public final class ActionUtil {
 		}
 	}
 
+	private static String formatDurationSuffix(ActionType type, boolean reversal, long creation, long expiration) {
+		if (reversal || !type.hasDuration()) {
+			return "";
+		} else {
+			return String.format("\n**Duration:** %s",
+					(expiration < 0 ? "permanent" : FormatUtil.formatDuration(expiration - creation)));
+		}
+	}
+
 	private static String formatReasonSuffix(String reason) {
 		if (reason == null || reason.isEmpty()) {
 			return "";
 		} else {
-			return "\n\n**Reason:** %s".formatted(reason);
+			return "\n**Reason:** %s".formatted(reason);
 		}
 	}
 
