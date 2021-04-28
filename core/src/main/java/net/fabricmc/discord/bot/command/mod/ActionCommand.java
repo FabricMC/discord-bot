@@ -28,9 +28,13 @@ import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.database.query.ActionQueries;
 import net.fabricmc.discord.bot.database.query.ActionQueries.ActionEntry;
+import net.fabricmc.discord.bot.message.Paginator;
 import net.fabricmc.discord.bot.util.FormatUtil;
 
 public final class ActionCommand extends Command {
+	private static final int SUMMARY_PAGE_ENTRIES = 20;
+	private static final int REASON_PREVIEW_MAXLEN = 40;
+
 	@Override
 	public String name() {
 		return "action";
@@ -56,9 +60,17 @@ public final class ActionCommand extends Command {
 			if (actions.isEmpty()) {
 				context.channel().sendMessage(String.format("No actions for user %d", userId));
 			} else {
-				StringBuilder sb = new StringBuilder(String.format("Actions for user %d:", userId));
+				Paginator.Builder builder = new Paginator.Builder(context.author()).title("User %d Actions".formatted(userId));
+				StringBuilder sb = new StringBuilder();
+				int count = 0;
 
 				for (ActionEntry action : actions) {
+					if (count % SUMMARY_PAGE_ENTRIES == 0 && count > 0) {
+						builder.page(sb);
+						sb.setLength(0);
+					}
+
+					count++;
 					String duration, reason;
 
 					if (action.expirationTime() < 0) {
@@ -68,18 +80,23 @@ public final class ActionCommand extends Command {
 					} else {
 						long durationMs = action.expirationTime() - action.creationTime();
 
-						duration = " "+FormatUtil.formatDuration(durationMs);
+						duration = " "+FormatUtil.formatDuration(durationMs, 2);
 					}
 
 					if (action.reason() == null || action.reason().isEmpty()) {
 						reason = "";
-					} else if (action.reason().length() < 20) {
-						reason = ": "+action.reason();
 					} else {
-						reason = ": "+action.reason().substring(0, 18)+"…";
+						reason = action.reason().replaceAll("\\s+", " ").trim();
+
+						if (reason.length() > REASON_PREVIEW_MAXLEN) {
+							reason = reason.substring(0, REASON_PREVIEW_MAXLEN - 2).concat("…");
+						}
+
+						reason = ": ".concat(reason);
 					}
 
-					sb.append(String.format("\n%d %s: %s%s%s",
+					if (sb.length() > 0) sb.append('\n');
+					sb.append(String.format("`%d` %s: **%s%s**%s",
 							action.id(),
 							FormatUtil.dateFormatter.format(Instant.ofEpochMilli(action.creationTime())),
 							action.type().getId(),
@@ -87,7 +104,11 @@ public final class ActionCommand extends Command {
 							reason));
 				}
 
-				context.channel().sendMessage(sb.toString());
+				if (sb.length() > 0) {
+					builder.page(sb);
+				}
+
+				builder.buildAndSend(context.channel());
 			}
 
 			return true;

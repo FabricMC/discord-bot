@@ -85,7 +85,8 @@ public final class ActionQueries {
 						+ "FROM `action` a "
 						+ "LEFT JOIN `actiondata` d ON d.action_id = a.id "
 						+ "LEFT JOIN `actionsuspension` s ON s.action_id = a.id "
-						+ "WHERE a.target_id = ? AND a.targetkind = ?")) {
+						+ "WHERE a.target_id = ? AND a.targetkind = ? "
+						+ "ORDER BY a.creation ASC")) {
 			ps.setLong(1, rawTargetId);
 			ps.setString(2, kind.id);
 
