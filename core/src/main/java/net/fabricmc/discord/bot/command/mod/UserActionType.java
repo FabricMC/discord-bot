@@ -26,17 +26,18 @@ import org.javacord.api.exception.NotFoundException;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.database.query.ActionQueries;
+import net.fabricmc.discord.bot.util.DiscordUtil;
 
 public enum UserActionType implements ActionType {
 	BAN("ban", true, "banned", "unbanned") {
 		@Override
-		protected void activate(Server server, User target, String reason, DiscordBot bot) {
-			if (!NOP_MODE) server.banUser(target, 0, reason).join();
+		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
+			if (!NOP_MODE) DiscordUtil.join(server.banUser(target, 0, reason));
 		}
 
 		@Override
-		protected void deactivate(Server server, long targetDiscordUserId, String reason, DiscordBot bot) {
-			if (!NOP_MODE) server.unbanUser(targetDiscordUserId, reason).join();
+		protected void deactivate(Server server, long targetDiscordUserId, String reason, DiscordBot bot) throws DiscordException {
+			if (!NOP_MODE) DiscordUtil.join(server.unbanUser(targetDiscordUserId, reason));
 		}
 
 		@Override
@@ -46,8 +47,8 @@ public enum UserActionType implements ActionType {
 	},
 	KICK("kick", false, "kicked", null) {
 		@Override
-		protected void activate(Server server, User target, String reason, DiscordBot bot) {
-			if (!NOP_MODE) server.kickUser(target, reason).join();
+		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
+			if (!NOP_MODE) DiscordUtil.join(server.kickUser(target, reason));
 		}
 	},
 	MUTE("mute", true, "muted", "unmuted") {
