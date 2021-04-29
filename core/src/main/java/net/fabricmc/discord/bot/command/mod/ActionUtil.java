@@ -113,8 +113,8 @@ public final class ActionUtil {
 					prevId = existingAction.id();
 					prevResetData = existingAction.data().resetData();
 				}
-			} else if (type.isActive(context.server(), targetId, data, context.bot())) { // channel already set to a higher level outside the bot
-				throw new CommandException("The channel is already %s", type.getDesc(false));
+			} else if (type.getKind() == Kind.CHANNEL && type.isActive(context.server(), targetId, data, context.bot())) { // channel already set to a higher level outside the bot
+				throw new CommandException("The %s is already %s", type.getKind().id, type.getDesc(false));
 			}
 		}
 
