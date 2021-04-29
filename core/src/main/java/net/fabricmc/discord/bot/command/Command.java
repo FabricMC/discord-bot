@@ -23,6 +23,8 @@ import java.util.Optional;
 import org.javacord.api.entity.channel.ServerChannel;
 import org.javacord.api.entity.channel.ServerTextChannel;
 
+import net.fabricmc.discord.bot.MessageIndex.CachedMessage;
+
 public abstract class Command {
 	/**
 	 * @return the name of the command
@@ -122,6 +124,13 @@ public abstract class Command {
 		} else {
 			throw new CommandException("Not a text channel");
 		}
+	}
+
+	public static CachedMessage getMessage(CommandContext context, String message) throws CommandException {
+		CachedMessage ret = context.bot().getMessageIndex().get(message, context.server());
+		if (ret == null) throw new CommandException("Unknown message");
+
+		return ret;
 	}
 
 	public static void checkSelfTarget(CommandContext context, int targetUserId) throws CommandException {

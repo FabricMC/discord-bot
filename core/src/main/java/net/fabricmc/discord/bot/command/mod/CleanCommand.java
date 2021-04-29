@@ -80,9 +80,11 @@ public final class CleanCommand extends Command {
 				pendingActions.put(id, actions);
 				context.bot().getScheduledExecutor().schedule(() -> pendingActions.remove(id), 5, TimeUnit.MINUTES);
 
-				context.channel().sendMessage(String.format("You are about to delete %d messages by %s, use confirm %d to continue",
+				context.channel().sendMessage(String.format("You are about to delete %d messages by %s, use `%s%s confirm %d` to continue",
 						count,
 						context.bot().getUserHandler().formatDiscordUser(targetDiscordUserId, context.server()),
+						context.bot().getCommandPrefix(),
+						name(),
 						id)); // TODO: suppress mentions once https://github.com/Javacord/Javacord/pull/587 is released
 			}
 		} else {

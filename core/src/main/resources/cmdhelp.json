@@ -79,8 +79,11 @@
 		"note": {
 			"short": "Add a note about a user without notification"
 		},
+		"deleterange" : {
+			"short": "Bulk-delete a range of messages"
+		},
 		"clean": {
-			"short": "Clean/delete recent messages by a user"
+			"short": "Clean/bulk-delete recent messages by a user"
 		},
 		"lock": {
 			"short": "Lock a channel, preventing users from sending messages"

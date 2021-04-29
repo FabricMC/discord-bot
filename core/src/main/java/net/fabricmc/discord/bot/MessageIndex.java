@@ -23,10 +23,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.javacord.api.entity.channel.Channel;
 import org.javacord.api.entity.channel.ServerChannel;
 import org.javacord.api.entity.channel.ServerTextChannel;
+import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.message.MessageAuthor;
 import org.javacord.api.entity.server.Server;
@@ -35,12 +38,17 @@ import org.javacord.api.event.channel.server.ServerChannelCreateEvent;
 import org.javacord.api.event.channel.server.ServerChannelDeleteEvent;
 import org.javacord.api.event.message.MessageCreateEvent;
 import org.javacord.api.event.message.MessageDeleteEvent;
+import org.javacord.api.exception.DiscordException;
+import org.javacord.api.exception.NotFoundException;
 import org.javacord.api.listener.ChainableGloballyAttachableListenerManager;
 import org.javacord.api.listener.channel.server.ServerChannelChangeOverwrittenPermissionsListener;
 import org.javacord.api.listener.channel.server.ServerChannelCreateListener;
 import org.javacord.api.listener.channel.server.ServerChannelDeleteListener;
 import org.javacord.api.listener.message.MessageCreateListener;
 import org.javacord.api.listener.message.MessageDeleteListener;
+import org.jetbrains.annotations.Nullable;
+
+import net.fabricmc.discord.bot.util.DiscordUtil;
 
 public final class MessageIndex implements MessageCreateListener, MessageDeleteListener,
 ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOverwrittenPermissionsListener {
@@ -48,6 +56,7 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 	private static final int MESSAGE_LIMIT = 10000;
 
 	private static final CachedMessage DELETED_MESSAGE = new CachedMessage();
+	private static final Pattern MESSAGE_LINK_PATTERN = Pattern.compile("https://discord.com/channels/(@me|\\d+)/(\\d+)/(\\d+)");
 
 	private final DiscordBot bot;
 	private final Map<ServerTextChannel, ChannelMessageCache> channelCaches = new ConcurrentHashMap<>();
@@ -60,11 +69,11 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		bot.getActiveHandler().registerGoneHandler(this::reset);
 	}
 
-	public CachedMessage get(long id) {
+	public @Nullable CachedMessage get(long id) {
 		return globalIndex.get(id);
 	}
 
-	public CachedMessage get(ServerTextChannel channel, long id) {
+	public @Nullable CachedMessage get(ServerTextChannel channel, long id) {
 		ChannelMessageCache cache = channelCaches.get(channel);
 		if (cache == null) return null;
 
@@ -105,6 +114,28 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		accept(channel, visitor);
 
 		return Arrays.copyOf(visitor.res, visitor.idx);
+	}
+
+	public @Nullable CachedMessage get(String desc, @Nullable Server server) {
+		Matcher matcher = MESSAGE_LINK_PATTERN.matcher(desc);
+
+		if (matcher.matches()) {
+			String guild = matcher.group(1);
+
+			if (!guild.equals("@me") && server != null && server.getId() == Long.parseUnsignedLong(guild)) {
+				ServerTextChannel channel = server.getTextChannelById(Long.parseUnsignedLong(matcher.group(2))).orElse(null);
+
+				return channel != null ? get(channel, Long.parseUnsignedLong(matcher.group(3))) : null;
+			} else {
+				desc = matcher.group(3);
+			}
+		}
+
+		try {
+			return get(Long.parseUnsignedLong(desc));
+		} catch (NumberFormatException e) { }
+
+		return null;
 	}
 
 	public void accept(ServerTextChannel channel, Visitor visitor) {
@@ -315,6 +346,17 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 
 		public long getAuthorId() {
 			return authorId;
+		}
+
+		public @Nullable Message toMessage(Server server) throws DiscordException {
+			TextChannel channel = server.getTextChannelById(channelId).orElse(null);
+			if (channel == null) return null;
+
+			try {
+				return DiscordUtil.join(channel.getMessageById(id));
+			} catch (NotFoundException e) {
+				return null;
+			}
 		}
 
 		final long id;
