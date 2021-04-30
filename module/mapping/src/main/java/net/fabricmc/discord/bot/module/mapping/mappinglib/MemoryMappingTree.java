@@ -247,6 +247,7 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 
 	@Override
 	public boolean visitField(String srcName, String srcDesc) {
+		if (currentClass == null) throw new UnsupportedOperationException("Tried to visit field before owning class");
 		currentMethod = null;
 
 		FieldEntry field = new FieldEntry(currentClass, srcName, srcDesc);
@@ -258,6 +259,8 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 
 	@Override
 	public boolean visitMethod(String srcName, String srcDesc) {
+		if (currentClass == null) throw new UnsupportedOperationException("Tried to visit method before owning class");
+
 		currentEntry = currentMethod = new MethodEntry(currentClass, srcName, srcDesc);
 		currentClass.addMethod(currentMethod);
 
@@ -266,6 +269,8 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 
 	@Override
 	public boolean visitMethodArg(int argPosition, int lvIndex, String srcName) {
+		if (currentMethod == null) throw new UnsupportedOperationException("Tried to visit method argument before owning method");
+
 		MethodArgEntry arg = new MethodArgEntry(currentMethod, argPosition, lvIndex, srcName);
 		currentEntry = arg;
 		currentMethod.addArg(arg);
@@ -275,6 +280,8 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 
 	@Override
 	public boolean visitMethodVar(int lvtRowIndex, int lvIndex, int startOpIdx, String srcName) {
+		if (currentMethod == null) throw new UnsupportedOperationException("Tried to visit method variable before owning method");
+
 		MethodVarEntry var = new MethodVarEntry(currentMethod, lvtRowIndex, lvIndex, startOpIdx, srcName);
 		currentEntry = var;
 		currentMethod.addVar(var);
@@ -293,6 +300,7 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 
 	@Override
 	public void visitDstName(MappedElementKind targetKind, int namespace, String name) {
+		if (currentEntry == null) throw new UnsupportedOperationException("Tried to visit mapped name before owner");
 		currentEntry.setDstName(namespace, name);
 
 		if (indexByDstNames) {
@@ -317,6 +325,7 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 			entry = currentEntry;
 		}
 
+		if (entry == null) throw new UnsupportedOperationException("Tried to visit comment before owning target");
 		entry.setComment(comment);
 	}
 
