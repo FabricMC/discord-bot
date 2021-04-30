@@ -241,7 +241,7 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 		ClassEntry cls = getClass(srcName);
 
 		if (cls == null) {
-			cls = new ClassEntry(this, srcName)
+			cls = new ClassEntry(this, srcName);
 			classesBySrcName.put(srcName, cls);
 		}
 
