@@ -238,9 +238,14 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 	public boolean visitClass(String srcName) {
 		currentMethod = null;
 
-		ClassEntry existing = getClass(srcName);
-		currentEntry = currentClass = existing != null ? existing : new ClassEntry(this, srcName);
-		classesBySrcName.put(srcName, currentClass);
+		ClassEntry cls = getClass(srcName);
+
+		if (cls == null) {
+			cls = new ClassEntry(this, srcName)
+			classesBySrcName.put(srcName, cls);
+		}
+
+		currentEntry = currentClass = cls;
 
 		return true;
 	}
