@@ -155,7 +155,7 @@ final class MappingData {
 
 	public Set<ClassMapping> findClasses(String name) {
 		Set<ClassMapping> ret = new HashSet<>();
-		name = name.replace('.', '/');
+		name = parseClassName(name);
 
 		for (int ns = MIN_NAMESPACE_ID; ns < maxNsId; ns++) {
 			findClasses0(name, ns, ret);
@@ -169,7 +169,7 @@ final class MappingData {
 		if (ns == NULL_NAMESPACE_ID) return Collections.emptySet();
 
 		Set<ClassMapping> ret = new HashSet<>();
-		findClasses0(name.replace('.', '/'), ns, ret);
+		findClasses0(parseClassName(name), ns, ret);
 
 		return ret;
 	}
@@ -382,6 +382,18 @@ final class MappingData {
 							}
 						}
 					}
+
+					// try to resolve constructor in Java name form ([pkg/]ClsName/ClsName) as <init>
+					if (ref.owner().endsWith(ref.name())
+							&& (ref.owner().length() == ref.name().length() || ref.owner().charAt(ref.owner().length() - ref.name().length() - 1) == '/')) {
+						for (ClassMapping cls : owners) {
+							for (MethodMapping method : cls.getMethods()) {
+								if ("<init>".equals(method.getName(namespace))) {
+									out.add(method);
+								}
+							}
+						}
+					}
 				}
 
 				owners.clear();
@@ -412,20 +424,64 @@ final class MappingData {
 		}
 	}
 
-	private static MemberRef parseMemberName(String name) {
+	private static String parseClassName(String name) {
 		name = name.replace('.', '/');
-		int ownerEnd = name.lastIndexOf('/');
-		String owner;
+
+		if (name.startsWith("L") && name.endsWith(";")) { // mixin-like owner (descriptor instead of name): Lbla;
+			name = name.substring(1, name.length() - 1);
+		}
+
+		return name;
+	}
+
+	private static MemberRef parseMemberName(String name) {
+		name = name.replace('.', '/').replace('#', '/');
+
+		// adjacent method desc: name(Lbla;)V
+		int nameEnd = name.lastIndexOf('(');
+		int descStart = nameEnd;
+
+		// matcher-style field desc: name;;Lbla;
+		if (nameEnd < 0) {
+			nameEnd = name.lastIndexOf(";;");
+			if (nameEnd >= 0) descStart = nameEnd + 2;
+		}
+
+		// mixin-style field desc: name:Lbla;
+		if (nameEnd < 0) {
+			nameEnd = name.lastIndexOf(":");
+			if (nameEnd >= 0) descStart = nameEnd + 1;
+		}
+
+		// no desc
+		if (nameEnd < 0) nameEnd = name.length();
+
+		int ownerStart = 0;
+		int ownerEnd = name.lastIndexOf('/', nameEnd - 1);
+
+		if (name.startsWith("L")) { // potentially mixin-like owner (descriptor instead of name): Lbla;getX
+			int altOwnerEnd = name.lastIndexOf(';', nameEnd - 1);
+
+			if (altOwnerEnd > 0) {
+				ownerStart = 1;
+				ownerEnd = altOwnerEnd;
+			}
+		}
+
+		String owner, mname;
 
 		if (ownerEnd < 0) {
 			owner = null;
+			mname = name.substring(0, nameEnd);
 		} else {
-			owner = name.substring(0, ownerEnd);
-			name = name.substring(ownerEnd + 1);
+			owner = name.substring(ownerStart, ownerEnd);
+			mname = name.substring(ownerEnd + 1, nameEnd);
 		}
 
-		return new MemberRef(owner, name);
+		String desc = descStart >= 0 ? name.substring(descStart) : null; // TODO: translate java signature to asm desc as needed, make use of desc
+
+		return new MemberRef(owner, mname, desc);
 	}
 
-	private record MemberRef(String owner, String name) { }
+	private record MemberRef(String owner, String name, String desc) { }
 }
