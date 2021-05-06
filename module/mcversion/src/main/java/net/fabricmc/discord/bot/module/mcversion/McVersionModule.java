@@ -16,6 +16,7 @@
 
 package net.fabricmc.discord.bot.module.mcversion;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -24,13 +25,19 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoField;
+import java.time.temporal.IsoFields;
+import java.time.temporal.TemporalAccessor;
 import java.util.Collections;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.google.gson.stream.JsonReader;
@@ -65,14 +72,21 @@ public final class McVersionModule implements Module {
 	private static final int UPDATE_DELAY = 30; // in s
 	private static final String MC_VERSION_HOST = "launchermeta.mojang.com";
 	private static final String MC_VERSION_PATH = "/mc/game/version_manifest_v2.json";
+
 	private static final String MC_NEWS_HOST = "www.minecraft.net";
 	private static final String MC_NEWS_PATH = "/content/minecraft-net/_jcr_content.articles.grid";
 	private static final String MC_NEWS_QUERY = "tileselection=auto&tagsPath=minecraft:article/news,minecraft:stockholm/news,minecraft:stockholm/minecraft-build&offset=0&count=4&pageSize=4&locale=en-us&lang=/content/minecraft-net/language-masters/en-us";
 	private static final DateTimeFormatter MC_NEWS_DATE_FORMATTER = DateTimeFormatter.ofPattern("dd MMMM y HH:mm:ss zzz", Locale.ENGLISH);
-	private static final Pattern MC_NEWS_SNAPSHOT_PATTERN = Pattern.compile(" \\d{2}w\\d{1,2}[a-z] ");
+	private static final Pattern MC_NEWS_SNAPSHOT_PATTERN = Pattern.compile(" (\\d{2})w(\\d{1,2})[a-z] ");
 	private static final Pattern MC_NEWS_RELEASE_PATTERN = Pattern.compile(" 1\\.\\d{2}[ \\.]");
+
+	private static final String MC_NEWS_ARTICLE_PATH = "/en-us/article/minecraft-snapshot-%dw%02da";
+	private static final Pattern MC_NEWS_ARTICLE_DATE_PATTERN = Pattern.compile("<meta\\s+property\\s*=\\s*\"article:published_time\"\\s+content\\s*=\\s*\"(.+?)\"");
+	private static final Pattern SNAPSHOT_PATTERN = Pattern.compile("(\\d{2})w(\\d{1,2})[a-z]");
+
 	private static final String FABRIC_VERSION_HOST = "meta.fabricmc.net";
 	private static final String FABRIC_VERSION_PATH = "/v2/versions/intermediary/%s";
+
 	private static final String NESSAGE = "A new Minecraft %s is out: %s"; // args: kind, version
 	private static final String KIND_RELEASE = "release";
 	private static final String KIND_SNAPSHOT = "snapshot";
@@ -91,6 +105,8 @@ public final class McVersionModule implements Module {
 	private volatile TextChannel updateChannel;
 	private final Set<String> announcedVersions = Collections.newSetFromMap(new ConcurrentHashMap<>());
 	private final Set<String> announcedNews = Collections.newSetFromMap(new ConcurrentHashMap<>());
+	private int announcedSnapshotYear; // 2 digit, e.g. 21
+	private int announcedSnapshotWeek; // e.g. 18
 
 	@Override
 	public String getName() {
@@ -148,9 +164,35 @@ public final class McVersionModule implements Module {
 			this.updateChannel = channel;
 		}
 
+		Matcher matcher = SNAPSHOT_PATTERN.matcher(bot.getConfigEntry(ANNOUNCED_SNAPSHOT_VERSION));
+
+		if (matcher.find()) {
+			setAnnouncedSnapshotDate(matcher);
+		} else {
+			setAnnouncedSnapshotDate(getCurrentSnapshotVersion());
+		}
+
 		if (announceChannel != null || updateChannel != null) {
 			future = bot.getScheduledExecutor().scheduleWithFixedDelay(this::update, 0, UPDATE_DELAY, TimeUnit.SECONDS);
 		}
+	}
+
+	private SnapshotVersion getCurrentSnapshotVersion() {
+		TemporalAccessor now = ZonedDateTime.now(ZoneOffset.UTC);
+
+		return new SnapshotVersion(now.get(ChronoField.YEAR) % 100, now.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR), 3 - now.get(ChronoField.DAY_OF_WEEK));
+	}
+
+	private record SnapshotVersion(int year, int week, int daysDue) { }
+
+	private void setAnnouncedSnapshotDate(Matcher matcher) {
+		announcedSnapshotYear = Integer.parseUnsignedInt(matcher.group(1));
+		announcedSnapshotWeek = Integer.parseUnsignedInt(matcher.group(2));
+	}
+
+	private void setAnnouncedSnapshotDate(SnapshotVersion version) {
+		announcedSnapshotYear = version.year;
+		announcedSnapshotWeek = version.week;
 	}
 
 	private void onGone(Server server) {
@@ -165,8 +207,20 @@ public final class McVersionModule implements Module {
 
 	private void update() {
 		try {
-			if (announceChannel != null || updateChannel != null) updateLauncherMeta();
-			if (updateChannel != null) updateNews();
+			if (announceChannel != null || updateChannel != null) {
+				updateLauncherMeta();
+			}
+
+			if (updateChannel != null) {
+				updateNewsByQuery();
+
+				SnapshotVersion version = getCurrentSnapshotVersion();
+
+				if ((version.year > announcedSnapshotYear || version.year == announcedSnapshotYear && version.week > announcedSnapshotWeek)
+						&& version.daysDue <= 0) {
+					updateNewsByArticlePoll(version);
+				}
+			}
 		} catch (Throwable t) {
 			LOGGER.warn("mc version check failed", t);
 		}
@@ -223,7 +277,7 @@ public final class McVersionModule implements Module {
 		}
 	}
 
-	private void updateNews() throws IOException, URISyntaxException, InterruptedException {
+	private void updateNewsByQuery() throws IOException, URISyntaxException, InterruptedException {
 		long announcedNewsDate = bot.getConfigEntry(ANNOUNCED_NEWS_DATE);
 
 		HttpResponse<InputStream> response = HttpUtil.makeRequest(MC_NEWS_HOST, MC_NEWS_PATH, MC_NEWS_QUERY);
@@ -282,8 +336,9 @@ public final class McVersionModule implements Module {
 					if (firstDateMs == 0) firstDateMs = dateMs;
 
 					String content = String.format(" %s %s %s ", title, subTitle, path).toLowerCase(Locale.ENGLISH);
+					Matcher snapshotMatcher = null;
 
-					if ((content.contains("snapshot") && MC_NEWS_SNAPSHOT_PATTERN.matcher(content).find()
+					if ((content.contains("snapshot") && (snapshotMatcher = MC_NEWS_SNAPSHOT_PATTERN.matcher(content)).find()
 							|| content.contains("java") && MC_NEWS_RELEASE_PATTERN.matcher(content).find())
 							&& !content.contains("bedrock")
 							&& !announcedNews.contains(path)) {
@@ -292,13 +347,55 @@ public final class McVersionModule implements Module {
 						}
 
 						announcedNews.add(path);
-						break readLoop;
+
+						if (snapshotMatcher != null) {
+							setAnnouncedSnapshotDate(snapshotMatcher);
+						}
 					}
 				}
 			}
 		}
 
 		if (firstDateMs > announcedNewsDate) bot.setConfigEntry(ANNOUNCED_NEWS_DATE, firstDateMs);
+	}
+
+	private void updateNewsByArticlePoll(SnapshotVersion version) throws IOException, URISyntaxException, InterruptedException {
+		String path = MC_NEWS_ARTICLE_PATH.formatted(version.year, version.week);
+		HttpResponse<InputStream> response = HttpUtil.makeRequest(MC_NEWS_HOST, path);
+		if (response.statusCode() != 200) return;
+
+		Instant date = null;
+
+		try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+			String line;
+
+			while ((line = reader.readLine()) != null) {
+				Matcher matcher = MC_NEWS_ARTICLE_DATE_PATTERN.matcher(line);
+
+				if (matcher.find()) {
+					date = Instant.from(DateTimeFormatter.ISO_INSTANT.parse(matcher.group(1)));
+					break;
+				}
+			}
+		}
+
+		if (date == null) throw new IOException("no parseable date");
+
+		long dateMs = date.toEpochMilli();
+		long announcedNewsDate = bot.getConfigEntry(ANNOUNCED_NEWS_DATE);
+
+		if (dateMs <= announcedNewsDate
+				|| announcedNews.contains(path)
+				|| isOldVersion("%dw%02da".formatted(version.year, version.week))) {
+			setAnnouncedSnapshotDate(version);
+			return;
+		}
+
+		if (sendAnnouncement(updateChannel, "https://"+MC_NEWS_HOST+path)) {
+			announcedNews.add(path);
+			setAnnouncedSnapshotDate(version);
+			bot.setConfigEntry(ANNOUNCED_NEWS_DATE, dateMs + 20_000); // add 20s in case the time stamp isn't accurate
+		}
 	}
 
 	private static boolean isOldVersion(String version) throws IOException, URISyntaxException, InterruptedException {
