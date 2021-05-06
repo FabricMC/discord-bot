@@ -16,6 +16,7 @@
 
 package net.fabricmc.discord.bot;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -23,9 +24,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.javacord.api.entity.DiscordEntity;
 import org.javacord.api.entity.channel.Channel;
 import org.javacord.api.entity.channel.ServerChannel;
 import org.javacord.api.entity.channel.ServerTextChannel;
@@ -55,10 +58,11 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 	private static final int INIT_LIMIT = 1000;
 	private static final int MESSAGE_LIMIT = 10000;
 
-	private static final CachedMessage DELETED_MESSAGE = new CachedMessage();
 	private static final Pattern MESSAGE_LINK_PATTERN = Pattern.compile("https://discord.com/channels/(@me|\\d+)/(\\d+)/(\\d+)");
 
 	private final DiscordBot bot;
+	private final List<MessageCreateHandler> createHandlers = new CopyOnWriteArrayList<>();
+	private final List<MessageDeleteHandler> deleteHandlers = new CopyOnWriteArrayList<>();
 	private final Map<ServerTextChannel, ChannelMessageCache> channelCaches = new ConcurrentHashMap<>();
 	private final Map<Long, CachedMessage> globalIndex = new ConcurrentHashMap<>();
 
@@ -67,6 +71,14 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 
 		bot.getActiveHandler().registerReadyHandler(this::init);
 		bot.getActiveHandler().registerGoneHandler(this::reset);
+	}
+
+	public void registerCreateHandler(MessageCreateHandler handler) {
+		createHandlers.add(handler);
+	}
+
+	public void registerDeleteHandler(MessageDeleteHandler handler) {
+		deleteHandlers.add(handler);
 	}
 
 	public @Nullable CachedMessage get(long id) {
@@ -82,11 +94,11 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		}
 	}
 
-	public Collection<CachedMessage> getAllByAuthor(long authorId) {
+	public Collection<CachedMessage> getAllByAuthor(long authorId, boolean includeDeleted) {
 		List<CachedMessage> ret = new ArrayList<>();
 
 		for (CachedMessage message : globalIndex.values()) {
-			if (message.authorId == authorId) {
+			if (message.authorId == authorId && (includeDeleted || !message.isDeleted())) {
 				ret.add(message);
 			}
 		}
@@ -94,7 +106,7 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		return ret;
 	}
 
-	public long[] getAllIdsByAuthor(ServerTextChannel channel, long authorId) {
+	public long[] getAllIdsByAuthor(ServerTextChannel channel, long authorId, boolean includeDeleted) {
 		class IdGatherVisitor implements Visitor {
 			@Override
 			public boolean visit(CachedMessage message) {
@@ -111,7 +123,7 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		}
 
 		IdGatherVisitor visitor = new IdGatherVisitor();
-		accept(channel, visitor);
+		accept(channel, visitor, includeDeleted);
 
 		return Arrays.copyOf(visitor.res, visitor.idx);
 	}
@@ -138,12 +150,12 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		return null;
 	}
 
-	public void accept(ServerTextChannel channel, Visitor visitor) {
+	public void accept(ServerTextChannel channel, Visitor visitor, boolean includeDeleted) {
 		ChannelMessageCache cache = channelCaches.get(channel);
 		if (cache == null) return;
 
 		synchronized (cache) {
-			cache.accept(visitor);
+			cache.accept(visitor, includeDeleted);
 		}
 	}
 
@@ -229,22 +241,46 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 
 	@Override
 	public void onMessageCreate(MessageCreateEvent event) {
+		Server server = event.getServer().orElse(null);
+		if (server == null) return;
+
 		ChannelMessageCache cache = channelCaches.get(event.getChannel());
 		if (cache == null) return;
 
+		CachedMessage msg = new CachedMessage(event.getMessage());
+
 		synchronized (cache) {
-			cache.add(new CachedMessage(event.getMessage()));
+			cache.add(msg);
 		}
+
+		createHandlers.forEach(h -> h.onMessageCreated(server, msg));
 	}
 
 	@Override
 	public void onMessageDelete(MessageDeleteEvent event) {
+		Server server = event.getServer().orElse(null);
+		if (server == null) return;
+
 		ChannelMessageCache cache = channelCaches.get(event.getChannel());
 		if (cache == null) return;
 
+		CachedMessage msg;
+
 		synchronized (cache) {
-			cache.remove(event.getMessageId());
+			msg = cache.get(event.getMessageId());
 		}
+
+		if (msg == null) {
+			Message message = event.getMessage().orElse(null);
+			if (message == null) return;
+
+			msg = new CachedMessage(message);
+		}
+
+		msg.setDeleted();
+
+		CachedMessage finalMsg = msg;
+		deleteHandlers.forEach(h -> h.onMessageDeleted(server, finalMsg));
 	}
 
 	private final class ChannelMessageCache {
@@ -278,16 +314,6 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 			return true;
 		}
 
-		boolean remove(long id) {
-			Integer pos = index.remove(id);
-			if (pos == null) return false;
-
-			globalIndex.remove(id);
-			messages[pos] = DELETED_MESSAGE;
-
-			return true;
-		}
-
 		void clear() {
 			for (Long key : index.keySet()) {
 				globalIndex.remove(key);
@@ -298,7 +324,7 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 			Arrays.fill(messages, null);
 		}
 
-		void accept(Visitor visitor) {
+		void accept(Visitor visitor, boolean includeDeleted) {
 			int idx = writeIdx;
 
 			do {
@@ -306,7 +332,7 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 				CachedMessage message = messages[idx];
 				if (message == null) break;
 
-				if (message != DELETED_MESSAGE) {
+				if (includeDeleted || !message.isDeleted()) {
 					if (!visitor.visit(message)) break;
 				}
 			} while (idx != writeIdx);
@@ -326,6 +352,8 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 			this.id = -1;
 			this.channelId = -1;
 			this.authorId = -1;
+			this.userMentions = null;
+			this.roleMentions = null;
 		}
 
 		CachedMessage(Message message) {
@@ -334,18 +362,54 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 
 			MessageAuthor author = message.getAuthor();
 			this.authorId = author.isWebhook() ? -1 : author.getId();
+
+			userMentions = serializeMentions(message.getMentionedUsers());
+			roleMentions = serializeMentions(message.getMentionedRoles());
+		}
+
+		private static long[] serializeMentions(List<? extends DiscordEntity> list) {
+			int size = list.size();
+			if (size == 0) return emptyMentions;
+
+			long[] ret = new long[size];
+
+			for (int i = 0; i < size; i++) {
+				ret[i] = list.get(i).getId();
+			}
+
+			return ret;
 		}
 
 		public long getId() {
 			return id;
 		}
 
+		public Instant getCreationTime() {
+			return DiscordEntity.getCreationTimestamp(id);
+		}
+
 		public long getChannelId() {
 			return channelId;
 		}
 
-		public long getAuthorId() {
+		public long getAuthorDiscordId() {
 			return authorId;
+		}
+
+		public long[] getUserMentions() {
+			return userMentions;
+		}
+
+		public long[] getRoleMentions() {
+			return roleMentions;
+		}
+
+		public boolean isDeleted() {
+			return deleted;
+		}
+
+		void setDeleted() {
+			deleted = true;
 		}
 
 		public @Nullable Message toMessage(Server server) throws DiscordException {
@@ -359,12 +423,25 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 			}
 		}
 
+		private static final long[] emptyMentions = new long[0];
+
 		final long id;
 		final long channelId;
 		final long authorId;
+		private final long[] userMentions;
+		private final long[] roleMentions;
+		private volatile boolean deleted;
 	}
 
 	public interface Visitor {
 		boolean visit(CachedMessage message);
+	}
+
+	public interface MessageCreateHandler {
+		void onMessageCreated(Server server, CachedMessage message);
+	}
+
+	public interface MessageDeleteHandler {
+		void onMessageDeleted(Server server, CachedMessage message);
 	}
 }

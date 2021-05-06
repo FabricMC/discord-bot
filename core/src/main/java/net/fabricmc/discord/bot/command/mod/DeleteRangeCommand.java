@@ -64,9 +64,9 @@ public final class DeleteRangeCommand extends Command {
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
 		if (!"confirm".equals(arguments.get("unnamed_0"))) {
-			CachedMessage firstCachedMessage = getMessage(context, arguments.get("firstMessage"));
+			CachedMessage firstCachedMessage = getMessage(context, arguments.get("firstMessage"), false);
 			if (firstCachedMessage == null) throw new CommandException("can't find firstMessage");
-			CachedMessage lastCachedMessage = getMessage(context, arguments.get("lastMessage"));
+			CachedMessage lastCachedMessage = getMessage(context, arguments.get("lastMessage"), false);
 			if (lastCachedMessage == null) throw new CommandException("can't find lastMessage");
 
 			Message firstMessage = firstCachedMessage.toMessage(context.server());

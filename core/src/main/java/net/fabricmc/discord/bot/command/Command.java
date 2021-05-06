@@ -126,9 +126,9 @@ public abstract class Command {
 		}
 	}
 
-	public static CachedMessage getMessage(CommandContext context, String message) throws CommandException {
+	public static CachedMessage getMessage(CommandContext context, String message, boolean includeDeleted) throws CommandException {
 		CachedMessage ret = context.bot().getMessageIndex().get(message, context.server());
-		if (ret == null) throw new CommandException("Unknown message");
+		if (ret == null || !includeDeleted && ret.isDeleted()) throw new CommandException("Unknown message");
 
 		return ret;
 	}

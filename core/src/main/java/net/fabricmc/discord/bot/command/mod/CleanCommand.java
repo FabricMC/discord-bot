@@ -65,7 +65,7 @@ public final class CleanCommand extends Command {
 				if (!channel.canYouSee() || !channel.canYouReadMessageHistory() || !channel.canYouManageMessages()) continue;
 				if (!channel.canSee(context.author().asUser().get())) continue;
 
-				long[] messageIds = context.bot().getMessageIndex().getAllIdsByAuthor(channel, targetDiscordUserId);
+				long[] messageIds = context.bot().getMessageIndex().getAllIdsByAuthor(channel, targetDiscordUserId, false);
 
 				if (messageIds.length > 0) {
 					actions.add(new ChannelEntry(channel, messageIds));
