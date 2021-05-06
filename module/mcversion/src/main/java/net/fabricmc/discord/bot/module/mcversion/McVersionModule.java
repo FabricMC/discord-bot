@@ -77,7 +77,7 @@ public final class McVersionModule implements Module {
 	private static final String MC_NEWS_PATH = "/content/minecraft-net/_jcr_content.articles.grid";
 	private static final String MC_NEWS_QUERY = "tileselection=auto&tagsPath=minecraft:article/news,minecraft:stockholm/news,minecraft:stockholm/minecraft-build&offset=0&count=4&pageSize=4&locale=en-us&lang=/content/minecraft-net/language-masters/en-us";
 	private static final DateTimeFormatter MC_NEWS_DATE_FORMATTER = DateTimeFormatter.ofPattern("dd MMMM y HH:mm:ss zzz", Locale.ENGLISH);
-	private static final Pattern MC_NEWS_SNAPSHOT_PATTERN = Pattern.compile(" (\\d{2})w(\\d{1,2})[a-z] ");
+	private static final Pattern MC_NEWS_SNAPSHOT_PATTERN = Pattern.compile(" (\\d{2})w(\\d{1,2})([a-z]) ");
 	private static final Pattern MC_NEWS_RELEASE_PATTERN = Pattern.compile(" 1\\.\\d{2}[ \\.]");
 
 	private static final String MC_NEWS_ARTICLE_PATH = "/en-us/article/minecraft-snapshot-%dw%02da";
@@ -165,32 +165,36 @@ public final class McVersionModule implements Module {
 		}
 
 		Matcher matcher = SNAPSHOT_PATTERN.matcher(bot.getConfigEntry(ANNOUNCED_SNAPSHOT_VERSION));
-
-		if (matcher.find()) {
-			setAnnouncedSnapshotDate(matcher);
-		} else {
-			setAnnouncedSnapshotDate(getCurrentSnapshotVersion());
-		}
+		SnapshotVersion version = matcher.find() ? SnapshotVersion.get(matcher) : SnapshotVersion.getCurrent();
+		setAnnouncedSnapshot(version);
 
 		if (announceChannel != null || updateChannel != null) {
 			future = bot.getScheduledExecutor().scheduleWithFixedDelay(this::update, 0, UPDATE_DELAY, TimeUnit.SECONDS);
 		}
 	}
 
-	private SnapshotVersion getCurrentSnapshotVersion() {
-		TemporalAccessor now = ZonedDateTime.now(ZoneOffset.UTC);
+	private record SnapshotVersion(int year, int week, int daysDue) {
+		public static SnapshotVersion getCurrent() {
+			TemporalAccessor now = ZonedDateTime.now(ZoneOffset.UTC);
 
-		return new SnapshotVersion(now.get(ChronoField.YEAR) % 100, now.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR), 3 - now.get(ChronoField.DAY_OF_WEEK));
+			return new SnapshotVersion(now.get(ChronoField.YEAR) % 100, now.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR), 3 - now.get(ChronoField.DAY_OF_WEEK));
+		}
+
+		public static SnapshotVersion get(Matcher matcher) {
+			return new SnapshotVersion(Integer.parseUnsignedInt(matcher.group(1)), Integer.parseUnsignedInt(matcher.group(2)), 0);
+		}
+
+		@Override
+		public String toString() {
+			return "%dw%02da".formatted(year, week);
+		}
 	}
 
-	private record SnapshotVersion(int year, int week, int daysDue) { }
-
-	private void setAnnouncedSnapshotDate(Matcher matcher) {
-		announcedSnapshotYear = Integer.parseUnsignedInt(matcher.group(1));
-		announcedSnapshotWeek = Integer.parseUnsignedInt(matcher.group(2));
+	private boolean hasAnnouncedSnapshot(SnapshotVersion version) {
+		return version.year < announcedSnapshotYear || version.year == announcedSnapshotYear && version.week <= announcedSnapshotWeek;
 	}
 
-	private void setAnnouncedSnapshotDate(SnapshotVersion version) {
+	private void setAnnouncedSnapshot(SnapshotVersion version) {
 		announcedSnapshotYear = version.year;
 		announcedSnapshotWeek = version.week;
 	}
@@ -214,10 +218,9 @@ public final class McVersionModule implements Module {
 			if (updateChannel != null) {
 				updateNewsByQuery();
 
-				SnapshotVersion version = getCurrentSnapshotVersion();
+				SnapshotVersion version = SnapshotVersion.getCurrent();
 
-				if ((version.year > announcedSnapshotYear || version.year == announcedSnapshotYear && version.week > announcedSnapshotWeek)
-						&& version.daysDue <= 0) {
+				if (!hasAnnouncedSnapshot(version) && version.daysDue <= 0) {
 					updateNewsByArticlePoll(version);
 				}
 			}
@@ -332,7 +335,7 @@ public final class McVersionModule implements Module {
 					}
 
 					long dateMs = date.toEpochMilli();
-					if (announcedNewsDate >= dateMs) break readLoop;
+					if (dateMs <= announcedNewsDate) break readLoop;
 					if (firstDateMs == 0) firstDateMs = dateMs;
 
 					String content = String.format(" %s %s %s ", title, subTitle, path).toLowerCase(Locale.ENGLISH);
@@ -342,14 +345,19 @@ public final class McVersionModule implements Module {
 							|| content.contains("java") && MC_NEWS_RELEASE_PATTERN.matcher(content).find())
 							&& !content.contains("bedrock")
 							&& !announcedNews.contains(path)) {
-						if (!sendAnnouncement(updateChannel, "https://"+MC_NEWS_HOST+path)) {
-							return; // avoid updating ANNOUNCED_NEWS_DATE
+						SnapshotVersion version = snapshotMatcher != null ? SnapshotVersion.get(snapshotMatcher) : null;
+
+						if (version == null
+								|| !hasAnnouncedSnapshot(version) && !isOldVersion(version.toString())) {
+							if (!sendAnnouncement(updateChannel, "https://"+MC_NEWS_HOST+path)) {
+								return; // avoid updating ANNOUNCED_NEWS_DATE
+							}
 						}
 
 						announcedNews.add(path);
 
-						if (snapshotMatcher != null) {
-							setAnnouncedSnapshotDate(snapshotMatcher);
+						if (version != null) {
+							setAnnouncedSnapshot(version);
 						}
 					}
 				}
@@ -384,18 +392,17 @@ public final class McVersionModule implements Module {
 		long dateMs = date.toEpochMilli();
 		long announcedNewsDate = bot.getConfigEntry(ANNOUNCED_NEWS_DATE);
 
-		if (dateMs <= announcedNewsDate
-				|| announcedNews.contains(path)
-				|| isOldVersion("%dw%02da".formatted(version.year, version.week))) {
-			setAnnouncedSnapshotDate(version);
-			return;
+		if (dateMs > announcedNewsDate
+				&& !announcedNews.contains(path)
+				&& !isOldVersion(version.toString())) {
+			if (!sendAnnouncement(updateChannel, "https://"+MC_NEWS_HOST+path)) {
+				return;
+			}
 		}
 
-		if (sendAnnouncement(updateChannel, "https://"+MC_NEWS_HOST+path)) {
-			announcedNews.add(path);
-			setAnnouncedSnapshotDate(version);
-			bot.setConfigEntry(ANNOUNCED_NEWS_DATE, dateMs + 20_000); // add 20s in case the time stamp isn't accurate
-		}
+		announcedNews.add(path);
+		setAnnouncedSnapshot(version);
+		bot.setConfigEntry(ANNOUNCED_NEWS_DATE, dateMs + 20_000); // add 20s in case the time stamp isn't accurate
 	}
 
 	private static boolean isOldVersion(String version) throws IOException, URISyntaxException, InterruptedException {
