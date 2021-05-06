@@ -207,4 +207,98 @@ public final class FormatUtil {
 
 		return ret;
 	}
+
+	private static final String TO_ESCAPE = "*_~|<>`:@[]\\";
+	private static final char ZERO_WIDTH_SPACE = '\u200b';
+
+	public static String escape(String s, OutputType outputType, boolean emitBlock) {
+		int len = s.length();
+
+		switch (outputType) {
+		case PLAIN -> {
+			StringBuilder ret = null;
+			int startPos = 0;
+
+			for (int i = 0; i < len; i++) {
+				char c = s.charAt(i);
+
+				if (TO_ESCAPE.indexOf(c) >= 0) {
+					if (ret == null) ret = new StringBuilder();
+					ret.append(s, startPos, i);
+					ret.append('\\');
+					startPos = i;
+				}
+			}
+
+			if (ret != null) {
+				ret.append(s, startPos, len);
+
+				return ret.toString();
+			} else {
+				return s;
+			}
+		}
+		case INLINE_CODE -> {
+			if (len == 0) return emitBlock ? "`"+ZERO_WIDTH_SPACE+"`" : ""+ZERO_WIDTH_SPACE;
+			if (!s.contains("`")) return emitBlock ? "`%s`".formatted(s) : s;
+
+			StringBuilder ret = new StringBuilder(len + 10);
+			if (emitBlock) ret.append("``");
+
+			if (s.charAt(0) == '`') {
+				ret.append(ZERO_WIDTH_SPACE);
+			}
+
+			int startPos = 0;
+			int pos;
+
+			while ((pos = s.indexOf('`', startPos)) >= 0) {
+				ret.append(s, startPos, pos);
+				ret.append('`');
+
+				if (++pos == len || s.charAt(pos) == '`') {
+					ret.append(ZERO_WIDTH_SPACE);
+				}
+
+				startPos = pos;
+			}
+
+			ret.append(s, startPos, len);
+			if (emitBlock) ret.append("``");
+
+			return ret.toString();
+		}
+		case CODE -> {
+			if (len == 0) return emitBlock ? "```"+ZERO_WIDTH_SPACE+"```" : ""+ZERO_WIDTH_SPACE;
+			if (!s.contains("```") && !s.endsWith("`")) return emitBlock ? "```%s```".formatted(s) : s;
+
+			StringBuilder ret = new StringBuilder(len + 10);
+			if (emitBlock) ret.append("```");
+
+			int startPos = 0;
+			int pos;
+
+			while ((pos = s.indexOf("```", startPos)) >= 0) {
+				ret.append(s, startPos, pos);
+				ret.append("``"+ZERO_WIDTH_SPACE);
+				startPos = pos + 2;
+			}
+
+			ret.append(s, startPos, len);
+
+			if (s.charAt(len - 1) == '`') {
+				ret.append(ZERO_WIDTH_SPACE);
+			}
+
+			if (emitBlock) ret.append("```");
+
+			return ret.toString();
+		}
+		default -> throw new IllegalArgumentException(outputType.toString());
+		}
+	}
+
+	public enum OutputType {
+		PLAIN, INLINE_CODE, CODE;
+	}
 }
