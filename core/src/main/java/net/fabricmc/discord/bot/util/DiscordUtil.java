@@ -21,6 +21,11 @@ import java.util.concurrent.CompletionException;
 
 import org.javacord.api.entity.channel.ChannelType;
 import org.javacord.api.entity.channel.TextChannel;
+import org.javacord.api.entity.message.Message;
+import org.javacord.api.entity.message.MessageBuilder;
+import org.javacord.api.entity.message.Messageable;
+import org.javacord.api.entity.message.mention.AllowedMentions;
+import org.javacord.api.entity.message.mention.AllowedMentionsBuilder;
 import org.javacord.api.exception.DiscordException;
 
 public final class DiscordUtil {
@@ -38,6 +43,12 @@ public final class DiscordUtil {
 				throw e;
 			}
 		}
+	}
+
+	public static final AllowedMentions NO_MENTIONS = new AllowedMentionsBuilder().build();
+
+	public static CompletableFuture<Message> sendMentionlessMessage(Messageable target, CharSequence message) {
+		return new MessageBuilder().append(message).setAllowedMentions(NO_MENTIONS).send(target);
 	}
 
 	public static boolean canRemoveReactions(TextChannel channel) {

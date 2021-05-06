@@ -27,6 +27,7 @@ import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
+import net.fabricmc.discord.bot.util.DiscordUtil;
 
 public abstract class TagInstance {
 	private final String name;
@@ -58,7 +59,7 @@ public abstract class TagInstance {
 
 		@Override
 		public CompletableFuture<Message> send(CommandContext context, String arguments) {
-			return context.channel().sendMessage(text);
+			return DiscordUtil.sendMentionlessMessage(context.channel(), text);
 		}
 
 		@Override
@@ -181,7 +182,7 @@ public abstract class TagInstance {
 
 			format(args, sb);
 
-			return context.channel().sendMessage(sb.toString());
+			return DiscordUtil.sendMentionlessMessage(context.channel(), sb);
 		}
 
 		private void format(List<String> args, StringBuilder out) {
