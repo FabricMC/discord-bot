@@ -87,6 +87,7 @@ public final class DiscordBot {
 	private final long serverId;
 	private final Database database;
 	private final ActiveHandler activeHandler;
+	private final ActivityHandler activityHandler;
 	private final UserHandler userHandler;
 	private final LogHandler logHandler;
 	private final MessageIndex messageIndex;
@@ -107,6 +108,7 @@ public final class DiscordBot {
 		this.serverId = Long.parseUnsignedLong(config.getGuildId());
 		this.database = new Database(config.getDatabaseUrl());
 		this.activeHandler = new ActiveHandler(this);
+		this.activityHandler = new ActivityHandler(this);
 		this.userHandler = new UserHandler(this);
 		this.logHandler = new LogHandler(this);
 		this.messageIndex = new MessageIndex(this);
@@ -321,6 +323,9 @@ public final class DiscordBot {
 		} catch (SQLException throwables) {
 			throwables.printStackTrace();
 		}
+
+		// Notify handlers of the change
+		activityHandler.onConfigValueChanged(key, value);
 
 		// Notify modules of the change
 		for (Module module : this.getModules()) {
