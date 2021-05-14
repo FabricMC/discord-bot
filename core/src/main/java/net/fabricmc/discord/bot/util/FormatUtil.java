@@ -301,4 +301,10 @@ public final class FormatUtil {
 	public enum OutputType {
 		PLAIN, INLINE_CODE, CODE;
 	}
+
+	public static String capitalize(String s) {
+		if (s.isEmpty()) return s;
+
+		return Character.toUpperCase(s.charAt(0))+s.substring(1);
+	}
 }

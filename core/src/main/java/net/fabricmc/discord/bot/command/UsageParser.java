@@ -30,6 +30,7 @@ import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
@@ -51,7 +52,8 @@ public final class UsageParser {
 		//Node node = parser.parse("<dim-id>");
 		//Node node = parser.parse("<user> <msg...>");
 		System.out.printf("result: %s%n", node.toStringFull());
-		GraphNode graph = toGraph(node, true, null);
+		List<FloatingArgNode> flagNodes = new ArrayList<>();
+		GraphNode graph = toGraph(node, true, flagNodes);
 		//System.out.println(graph);
 
 		Set<GraphNode> queued = Collections2.newIdentityHashSet();
@@ -612,6 +614,7 @@ public final class UsageParser {
 	public static final class FloatingArgNode extends Node {
 		FloatingArgNode(String key, Node value) {
 			this.key = key;
+			this.lcKey = key.toLowerCase(Locale.ENGLISH);
 			this.value = value;
 		}
 
@@ -632,6 +635,7 @@ public final class UsageParser {
 		}
 
 		public final String key;
+		public final String lcKey; // lowercase key
 		public final Node value;
 	}
 
@@ -660,10 +664,15 @@ public final class UsageParser {
 			Node n = child;
 
 			do {
+				assert n != getNext();
 				if (n.isPositionDependent()) return true;
-			} while ((n = n.next) != null && n != getNext());
+			} while ((n = n.next) != null);
 
 			return false;
+		}
+
+		public Node getChild() {
+			return child;
 		}
 
 		@Override
@@ -689,7 +698,10 @@ public final class UsageParser {
 		@Override
 		boolean isPositionDependent() {
 			for (Node option : options) {
-				if (option.isPositionDependent()) return true;
+				do {
+					assert option != getNext();
+					if (option.isPositionDependent()) return true;
+				} while ((option = option.next) != null);
 			}
 
 			return false;
@@ -803,7 +815,7 @@ public final class UsageParser {
 	 * @param flagNodesOut collection accepting all encountered position independent nodes or null to ignore
 	 * @return root graph node
 	 */
-	public static GraphNode toGraph(Node rootNode, boolean expandFlags, Collection<Node> flagNodesOut) {
+	public static GraphNode toGraph(Node rootNode, boolean expandFlags, Collection<? super FloatingArgNode> flagNodesOut) {
 		Map<GraphNode, List<Node>> floatingNodeMap = new IdentityHashMap<>();
 		Queue<GraphNode> queue = new ArrayDeque<>();
 		Set<GraphNode> queued = Collections2.newIdentityHashSet();
@@ -826,7 +838,7 @@ public final class UsageParser {
 			}
 
 			if (flagNodesOut != null) {
-				flagNodesOut.addAll(floatingNodes);
+				extractFlagNodes(floatingNodeMap.values(), flagNodesOut);
 			}
 
 			List<GraphNode> connections = new ArrayList<>();
@@ -1012,7 +1024,7 @@ public final class UsageParser {
 			}
 
 			if (prev == null) {
-				if (optional) {
+				if (optional && !ignoreOptional) {
 					ret = prev = new GraphNode(null);
 					prev.next.add(gn);
 				} else {
@@ -1034,11 +1046,6 @@ public final class UsageParser {
 				}
 			}
 		} while (!ignoreNext && (node = node.getNext()) != null);
-
-		if (ignoreOptional) {
-			ret.next.remove(END_NODE);
-			assert !ret.next.contains(END_NODE);
-		}
 
 		return ret;
 	}
@@ -1158,6 +1165,36 @@ public final class UsageParser {
 
 		public final Node node;
 		public final List<GraphNode> next = new ArrayList<>();
+	}
+
+	private static void extractFlagNodes(Collection<? extends Collection<Node>> nodes, Collection<? super FloatingArgNode> out) {
+		for (Collection<Node> nodeList : nodes) {
+			for (Node node : nodeList) {
+				extractFlagNodes(node, out);
+			}
+		}
+	}
+
+	private static void extractFlagNodes(Node node, Collection<? super FloatingArgNode> out) {
+		if (node instanceof FloatingArgNode) {
+			out.add((FloatingArgNode) node);
+		} else if (node instanceof GroupNode) {
+			Node n = ((GroupNode) node).getChild();
+
+			do {
+				extractFlagNodes(n, out);
+			} while ((n = n.getNext()) != null);
+		} else if (node instanceof OrNode) {
+			for (Node option : ((OrNode) node)) {
+				do {
+					extractFlagNodes(option, out);
+				} while ((option = option.getNext()) != null);
+			}
+		} else if (node instanceof EmptyNode) {
+			// ignore
+		} else {
+			throw new IllegalArgumentException(node.getClass().getName());
+		}
 	}
 
 	private static final boolean DEBUG = false;

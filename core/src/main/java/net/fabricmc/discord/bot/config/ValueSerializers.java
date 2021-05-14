@@ -16,6 +16,10 @@
 
 package net.fabricmc.discord.bot.config;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * Builtin value serializers that may be used to store configuration values.
  */
@@ -23,7 +27,8 @@ public final class ValueSerializers {
 	/**
 	 * A value serializer which parses integers
 	 */
-	public static final ValueSerializer<Integer> INT = new Int();
+	public static final ValueSerializer<Integer> INT = new IntSerializer();
+	public static final ValueSerializer<List<Integer>> INT_LIST = new ListSerializer<>(INT);
 
 	/**
 	 * A value serializer which parses integers, while validating the integer is within a specific range.
@@ -40,6 +45,7 @@ public final class ValueSerializers {
 	 * A value serializer which parses strings.
 	 */
 	public static final ValueSerializer<String> STRING = new StringSerializer();
+	public static final ValueSerializer<List<String>> STRING_LIST = new ListSerializer<>(STRING);
 
 	/**
 	 * A value serializer which parses longs.
@@ -48,11 +54,12 @@ public final class ValueSerializers {
 	 * @see net.fabricmc.discord.bot.util.Snowflakes
 	 */
 	public static final ValueSerializer<Long> LONG = new LongSerializer();
+	public static final ValueSerializer<List<Long>> LONG_LIST = new ListSerializer<>(LONG);
 
 	private ValueSerializers() {
 	}
 
-	private static final class Int implements ValueSerializer<Integer> {
+	private static final class IntSerializer implements ValueSerializer<Integer> {
 		@Override
 		public Integer deserialize(String serialized) throws IllegalArgumentException {
 			try {
@@ -136,5 +143,51 @@ public final class ValueSerializers {
 		public String serialize(Long value) throws IllegalArgumentException {
 			return Long.toString(value);
 		}
+	}
+
+	private static final class ListSerializer<V> implements ValueSerializer<List<V>> {
+		public ListSerializer(ValueSerializer<V> elementSerializer) {
+			this.elementSerializer = elementSerializer;
+		}
+
+		@Override
+		public List<V> deserialize(String serialized) throws IllegalArgumentException {
+			if (serialized.isEmpty()) return Collections.emptyList();
+
+			List<V> ret = new ArrayList<>();
+			int startPos = 0;
+			int pos;
+
+			while ((pos = serialized.indexOf(',', startPos)) >= 0) {
+				ret.add(elementSerializer.deserialize(serialized.substring(startPos, pos)));
+				startPos = pos + 1;
+			}
+
+			ret.add(elementSerializer.deserialize(serialized.substring(startPos)));
+
+			return ret;
+		}
+
+		@Override
+		public String serialize(List<V> value) throws IllegalArgumentException {
+			if (value.isEmpty()) return "";
+
+			StringBuilder ret = new StringBuilder();
+			boolean first = true;
+
+			for (V v : value) {
+				if (first) {
+					first = false;
+				} else {
+					ret.append(',');
+				}
+
+				ret.append(elementSerializer.serialize(v));
+			}
+
+			return ret.toString();
+		}
+
+		private final ValueSerializer<V> elementSerializer;
 	}
 }

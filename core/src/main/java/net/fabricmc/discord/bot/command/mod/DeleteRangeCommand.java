@@ -34,7 +34,7 @@ import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.message.MessageSet;
 
-import net.fabricmc.discord.bot.MessageIndex.CachedMessage;
+import net.fabricmc.discord.bot.CachedMessage;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;

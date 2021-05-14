@@ -71,7 +71,8 @@ public final class FabricVersionCommand extends Command {
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
 		String mcVersion = arguments.get("mcVersion");
 		if (mcVersion == null) mcVersion = arguments.get("unnamed_0");
-		mcVersion = McVersionRepo.get(context.bot()).resolve(mcVersion);
+		mcVersion = McVersionRepo.get(context.bot()).resolve(context, mcVersion);
+		if (mcVersion == null) throw new CommandException("invalid version or latest version data is unavailable");
 
 		VersionData data = getData(mcVersion);
 		if (data == null) throw new CommandException("Invalid/unavailable MC version");

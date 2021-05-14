@@ -14,15 +14,11 @@
  * limitations under the License.
  */
 
-package net.fabricmc.discord.bot.module.mapping;
+package net.fabricmc.discord.bot.util;
 
-import net.fabricmc.discord.bot.command.CommandException;
-
-final class YarnCommandUtil {
-	public static MappingData getMappingData(MappingRepository repo, String mcVersion) throws CommandException {
-		MappingData data = repo.getMappingData(mcVersion);
-		if (data == null) throw new CommandException("Invalid/unavailable MC version");
-
-		return data;
-	}
+public final class CommonEmotes {
+	public static final String ARROW_FORWARDS = "\u25b6";
+	public static final String ARROW_BACKWARDS = "\u25c0";
+	public static final String X = "\u274c";
+	public static final String[] DIGITS = { "0\u20E3", "1\u20E3", "2\u20E3", "3\u20E3", "4\u20E3", "5\u20E3", "6\u20E3", "7\u20E3", "8\u20E3", "9\u20E3", "\uD83D\uDD1F" };
 }

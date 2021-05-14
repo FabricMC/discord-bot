@@ -37,5 +37,8 @@ public record CommandContext(
 		int userId,
 		TextChannel channel,
 		String content,
-		long messageId
-		) {}
+		long messageId) {
+	public boolean isPrivateMessage() {
+		return server == null;
+	}
+}

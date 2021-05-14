@@ -92,11 +92,16 @@ public final class McVersionModule implements Module {
 	private static final String KIND_SNAPSHOT = "snapshot";
 
 	private static final Logger LOGGER = LogManager.getLogger(McVersionModule.class);
+
+	// global properties
 	private static final ConfigKey<Long> ANNOUNCE_CHANNEL = new ConfigKey<>("mcversion.announceChannel", ValueSerializers.LONG);
 	private static final ConfigKey<Long> UPDATE_CHANNEL = new ConfigKey<>("mcversion.updateChannel", ValueSerializers.LONG);
 	private static final ConfigKey<String> ANNOUNCED_RELEASE_VERSION = new ConfigKey<>("mcversion.announcedReleaseVersion", ValueSerializers.STRING);
 	private static final ConfigKey<String> ANNOUNCED_SNAPSHOT_VERSION = new ConfigKey<>("mcversion.announcedSnapshotVersion", ValueSerializers.STRING);
 	private static final ConfigKey<Long> ANNOUNCED_NEWS_DATE = new ConfigKey<>("mcversion.announcedNewsDate", ValueSerializers.LONG);
+
+	// user properties
+	static final ConfigKey<String> DEFAULT_VERSION = new ConfigKey<>("mcVersion.defaultVersion", ValueSerializers.STRING);
 
 	private DiscordBot bot;
 	private McVersionRepo repo;
@@ -131,6 +136,8 @@ public final class McVersionModule implements Module {
 
 		bot.getActiveHandler().registerReadyHandler(this::onReady);
 		bot.getActiveHandler().registerGoneHandler(this::onGone);
+
+		bot.registerCommand(new SetMcVersionCommand(repo));
 	}
 
 	McVersionRepo getRepo() {

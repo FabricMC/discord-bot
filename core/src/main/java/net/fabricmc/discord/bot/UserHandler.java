@@ -115,6 +115,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 	private boolean canUsePermissionFallback(@Nullable Server server, String permission) throws SQLException {
 		return permission.equals(ADMIN_PERMISSION)
 				&& server != null
+				&& server.getId() == bot.getServerId()
 				&& !UserQueries.hasAnyPermittedUser(bot.getDatabase(), permission);
 	}
 

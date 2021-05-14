@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2021 FabricMC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package net.fabricmc.discord.bot.module.mapping.mappinglib;
 
 import java.util.Collection;
@@ -170,11 +186,41 @@ public interface MappingTree {
 	public interface ClassMapping extends ElementMapping {
 		Collection<? extends FieldMapping> getFields();
 		FieldMapping getField(String srcName, String srcDesc);
+
+		default FieldMapping getField(String name, String desc, int namespace) {
+			if (namespace < 0) return getField(name, desc);
+
+			for (FieldMapping field : getFields()) {
+				if (!name.equals(field.getDstName(namespace))) continue;
+				String mDesc;
+				if (desc != null && (mDesc = field.getDesc(namespace)) != null && !desc.equals(mDesc)) continue;
+
+				return field;
+			}
+
+			return null;
+		}
+
 		FieldMapping addField(FieldMapping field);
 		FieldMapping removeField(String srcName, String srcDesc);
 
 		Collection<? extends MethodMapping> getMethods();
 		MethodMapping getMethod(String srcName, String srcDesc);
+
+		default MethodMapping getMethod(String name, String desc, int namespace) {
+			if (namespace < 0) return getMethod(name, desc);
+
+			for (MethodMapping method : getMethods()) {
+				if (!name.equals(method.getDstName(namespace))) continue;
+				String mDesc;
+				if (desc != null && (mDesc = method.getDesc(namespace)) != null && !desc.equals(mDesc)) continue;
+
+				return method;
+			}
+
+			return null;
+		}
+
 		MethodMapping addMethod(MethodMapping method);
 		MethodMapping removeMethod(String srcName, String srcDesc);
 	}

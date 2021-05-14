@@ -19,16 +19,20 @@ package net.fabricmc.discord.bot.module.mapping;
 import static net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.MIN_NAMESPACE_ID;
 import static net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.NULL_NAMESPACE_ID;
 
-import java.util.ArrayList;
+import java.lang.reflect.Array;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
+
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 
 import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree;
 import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.ClassMapping;
@@ -47,12 +51,12 @@ final class MappingData {
 	private final MappingTree mappingTree;
 	private final int maxNsId;
 	private final int intermediaryNs;
-	private final Map<Integer, ClassMapping> classByIntermediaryId;
-	private final Map<Integer, FieldMapping> fieldByIntermediaryId = new HashMap<>(5000);
-	private final Map<Integer, MethodMapping> methodByIntermediaryId = new HashMap<>(5000);
-	private final Map<String, List<ClassMapping>>[] classByName;
-	private final Map<String, List<FieldMapping>>[] fieldByName;
-	private final Map<String, List<MethodMapping>>[] methodByName;
+	private final Int2ObjectMap<ClassMapping> classByIntermediaryId;
+	private final Int2ObjectMap<FieldMapping> fieldByIntermediaryId = new Int2ObjectOpenHashMap<>(5000);
+	private final Int2ObjectMap<MethodMapping> methodByIntermediaryId = new Int2ObjectOpenHashMap<>(5000);
+	private final Map<String, Object>[] classByName;
+	private final Map<String, Object>[] fieldByName;
+	private final Map<String, Object>[] methodByName;
 
 	@SuppressWarnings("unchecked")
 	public MappingData(String mcVersion, String intermediaryMavenId, String yarnMavenId, MappingTree mappingTree) {
@@ -61,7 +65,7 @@ final class MappingData {
 		this.yarnMavenId = yarnMavenId;
 		this.mappingTree = mappingTree;
 
-		this.classByIntermediaryId = new HashMap<>(mappingTree.getClasses().size());
+		this.classByIntermediaryId = new Int2ObjectOpenHashMap<>(mappingTree.getClasses().size());
 		intermediaryNs = mappingTree.getNamespaceId("intermediary");
 
 		maxNsId = mappingTree.getMaxNamespaceId();
@@ -80,9 +84,9 @@ final class MappingData {
 				fieldByName[i] = Collections.emptyMap();
 				methodByName[i] = Collections.emptyMap();
 			} else {
-				classByName[i] = new HashMap<>(mappingTree.getClasses().size());
-				fieldByName[i] = new HashMap<>(5000);
-				methodByName[i] = new HashMap<>(5000);
+				classByName[i] = new Object2ObjectOpenHashMap<>(mappingTree.getClasses().size());
+				fieldByName[i] = new Object2ObjectOpenHashMap<>(5000);
+				methodByName[i] = new Object2ObjectOpenHashMap<>(5000);
 			}
 		}
 
@@ -110,7 +114,7 @@ final class MappingData {
 				int pkgEnd = name.lastIndexOf('/');
 				if (pkgEnd >= 0) name = name.substring(pkgEnd + 1);
 
-				classByName[ns - MIN_NAMESPACE_ID].computeIfAbsent(name, ignore -> new ArrayList<>()).add(cls);
+				writeNameEntry(name, cls, classByName[ns - MIN_NAMESPACE_ID]);
 			}
 
 			for (FieldMapping field : cls.getFields()) {
@@ -130,7 +134,7 @@ final class MappingData {
 					String name = field.getName(ns);
 					if (name == null) continue;
 
-					fieldByName[ns - MIN_NAMESPACE_ID].computeIfAbsent(name, ignore -> new ArrayList<>()).add(field);
+					writeNameEntry(name, field, fieldByName[ns - MIN_NAMESPACE_ID]);
 				}
 			}
 
@@ -151,7 +155,7 @@ final class MappingData {
 					String name = method.getName(ns);
 					if (name == null) continue;
 
-					methodByName[ns - MIN_NAMESPACE_ID].computeIfAbsent(name, ignore -> new ArrayList<>()).add(method);
+					writeNameEntry(name, method, methodByName[ns - MIN_NAMESPACE_ID]);
 				}
 			}
 		}
@@ -169,11 +173,43 @@ final class MappingData {
 		}
 	}
 
-	public Set<ClassMapping> findClasses(String name) {
-		Set<ClassMapping> ret = new HashSet<>();
+	public int[] resolveNamespaces(List<String> namespaces, boolean require) {
+		int[] ret = new int[namespaces.size()];
+		int writeIdx = 0;
+
+		for (String name : namespaces) {
+			int id = mappingTree.getNamespaceId(name);
+
+			if (id == MappingTree.NULL_NAMESPACE_ID) {
+				if (require) {
+					throw new IllegalArgumentException("unknown namespace: "+name);
+				} else {
+					continue;
+				}
+			}
+
+			ret[writeIdx++] = id;
+		}
+
+		return writeIdx == ret.length ? ret : Arrays.copyOf(ret, writeIdx);
+	}
+
+	public int[] getAllNamespaces() {
+		int maxId = mappingTree.getMaxNamespaceId();
+		int[] ret = new int[maxId - MappingTree.MIN_NAMESPACE_ID];
+
+		for (int i = 0; i < ret.length; i++) {
+			ret[i] = i + MappingTree.MIN_NAMESPACE_ID;
+		}
+
+		return ret;
+	}
+
+	public Set<ClassMapping> findClasses(String name, int[] namespaces) {
+		Set<ClassMapping> ret = new ObjectOpenHashSet<>();
 		name = parseClassName(name);
 
-		for (int ns = MIN_NAMESPACE_ID; ns < maxNsId; ns++) {
+		for (int ns : namespaces) {
 			findClasses0(name, ns, ret);
 		}
 
@@ -184,7 +220,7 @@ final class MappingData {
 		int ns = mappingTree.getNamespaceId(namespace);
 		if (ns == NULL_NAMESPACE_ID) return Collections.emptySet();
 
-		Set<ClassMapping> ret = new HashSet<>();
+		Set<ClassMapping> ret = new ObjectOpenHashSet<>();
 		findClasses0(parseClassName(name), ns, ret);
 
 		return ret;
@@ -201,11 +237,7 @@ final class MappingData {
 					}
 				}
 			} else { // just a wildcard class name
-				for (Entry<String, List<ClassMapping>> entry : classByName[namespace - MIN_NAMESPACE_ID].entrySet()) {
-					if (search.matcher(entry.getKey()).matches()) {
-						out.addAll(entry.getValue());
-					}
-				}
+				findNameEntries(classByName[namespace - MIN_NAMESPACE_ID], search, out);
 			}
 		} else if (name.indexOf('/') >= 0) { // package present
 			ClassMapping cls = mappingTree.getClass(name, namespace);
@@ -220,8 +252,7 @@ final class MappingData {
 				if (cls != null) out.add(cls);
 			} catch (NumberFormatException e) { }
 		} else {
-			List<ClassMapping> res = classByName[namespace - MIN_NAMESPACE_ID].get(name);
-			if (res != null) out.addAll(res);
+			readNameEntry(classByName[namespace - MIN_NAMESPACE_ID].get(name), out);
 		}
 	}
 
@@ -278,11 +309,11 @@ final class MappingData {
 		return Pattern.compile(filter.toString());
 	}
 
-	public Set<FieldMapping> findFields(String name) {
-		Set<FieldMapping> ret = new HashSet<>();
+	public Set<FieldMapping> findFields(String name, int[] namespaces) {
+		Set<FieldMapping> ret = new ObjectOpenHashSet<>();
 		MemberRef ref = parseMemberName(name);
 
-		for (int ns = MIN_NAMESPACE_ID; ns < maxNsId; ns++) {
+		for (int ns : namespaces) {
 			findFields0(ref, ns, ret);
 		}
 
@@ -293,7 +324,7 @@ final class MappingData {
 		int ns = mappingTree.getNamespaceId(namespace);
 		if (ns == NULL_NAMESPACE_ID) return Collections.emptySet();
 
-		Set<FieldMapping> ret = new HashSet<>();
+		Set<FieldMapping> ret = new ObjectOpenHashSet<>();
 		findFields0(parseMemberName(name), ns, ret);
 
 		return ret;
@@ -301,7 +332,7 @@ final class MappingData {
 
 	private void findFields0(MemberRef ref, int namespace, Collection<FieldMapping> out) {
 		if (ref.owner() != null) { // owner/package present
-			Set<ClassMapping> owners = new HashSet<>();
+			Set<ClassMapping> owners = new ObjectOpenHashSet<>();
 			findClasses0(ref.owner(), namespace, owners);
 
 			if (!owners.isEmpty()) {
@@ -329,12 +360,7 @@ final class MappingData {
 			}
 		} else if (hasWildcard(ref.name())) {
 			Pattern search = compileSearch(ref.name());
-
-			for (Entry<String, List<FieldMapping>> entry : fieldByName[namespace - MIN_NAMESPACE_ID].entrySet()) {
-				if (search.matcher(entry.getKey()).matches()) {
-					out.addAll(entry.getValue());
-				}
-			}
+			findNameEntries(fieldByName[namespace - MIN_NAMESPACE_ID], search, out);
 		} else if (namespace == intermediaryNs) {
 			String name = ref.name();
 
@@ -348,16 +374,15 @@ final class MappingData {
 				if (field != null) out.add(field);
 			} catch (NumberFormatException e) { }
 		} else {
-			List<FieldMapping> res = fieldByName[namespace - MIN_NAMESPACE_ID].get(ref.name());
-			if (res != null) out.addAll(res);
+			readNameEntry(fieldByName[namespace - MIN_NAMESPACE_ID].get(ref.name()), out);
 		}
 	}
 
-	public Set<MethodMapping> findMethods(String name) {
-		Set<MethodMapping> ret = new HashSet<>();
+	public Set<MethodMapping> findMethods(String name, int[] namespaces) {
+		Set<MethodMapping> ret = new ObjectOpenHashSet<>();
 		MemberRef ref = parseMemberName(name);
 
-		for (int ns = MIN_NAMESPACE_ID; ns < maxNsId; ns++) {
+		for (int ns : namespaces) {
 			findMethods0(ref, ns, ret);
 		}
 
@@ -368,7 +393,7 @@ final class MappingData {
 		int ns = mappingTree.getNamespaceId(namespace);
 		if (ns == NULL_NAMESPACE_ID) return Collections.emptySet();
 
-		Set<MethodMapping> ret = new HashSet<>();
+		Set<MethodMapping> ret = new ObjectOpenHashSet<>();
 		findMethods0(parseMemberName(name), ns, ret);
 
 		return ret;
@@ -376,7 +401,7 @@ final class MappingData {
 
 	private void findMethods0(MemberRef ref, int namespace, Collection<MethodMapping> out) {
 		if (ref.owner() != null) { // owner/package present
-			Set<ClassMapping> owners = new HashSet<>();
+			Set<ClassMapping> owners = new ObjectOpenHashSet<>();
 			findClasses0(ref.owner(), namespace, owners);
 
 			if (!owners.isEmpty()) {
@@ -416,12 +441,7 @@ final class MappingData {
 			}
 		} else if (hasWildcard(ref.name())) {
 			Pattern search = compileSearch(ref.name());
-
-			for (Entry<String, List<MethodMapping>> entry : methodByName[namespace - MIN_NAMESPACE_ID].entrySet()) {
-				if (search.matcher(entry.getKey()).matches()) {
-					out.addAll(entry.getValue());
-				}
-			}
+			findNameEntries(methodByName[namespace - MIN_NAMESPACE_ID], search, out);
 		} else if (namespace == intermediaryNs) {
 			String name = ref.name();
 
@@ -435,9 +455,53 @@ final class MappingData {
 				if (method != null) out.add(method);
 			} catch (NumberFormatException e) { }
 		} else {
-			List<MethodMapping> res = methodByName[namespace - MIN_NAMESPACE_ID].get(ref.name());
-			if (res != null) out.addAll(res);
+			readNameEntry(methodByName[namespace - MIN_NAMESPACE_ID].get(ref.name()), out);
 		}
+	}
+
+	private static <T> void findNameEntries(Map<String, Object> map, Pattern search, Collection<? super T> out) {
+		for (String cName : map.keySet()) {
+			if (search.matcher(cName).matches()) {
+				readNameEntry(map.get(cName), out);
+			}
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	private static <T> void readNameEntry(Object elements, Collection<? super T> out) {
+		if (elements == null) return;
+
+		if (elements.getClass().isArray()) {
+			for (T element : (T[]) elements) {
+				out.add(element);
+			}
+		} else {
+			out.add((T) elements);
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	private static <T> void writeNameEntry(String key, T value, Map<String, Object> out) {
+		Objects.requireNonNull(value);
+
+		Object prevEntry = out.get(key);
+		Object newEntry;
+
+		if (prevEntry == null) {
+			newEntry = value;
+		} else if (prevEntry.getClass().isArray()) {
+			T[] prevArray = (T[]) prevEntry;
+			T[] newArray = Arrays.copyOf(prevArray, prevArray.length + 1);
+			newArray[prevArray.length] = value;
+			newEntry = newArray;
+		} else {
+			T[] newArray = (T[]) Array.newInstance(value.getClass(), 2);
+			newArray[0] = (T) prevEntry;
+			newArray[1] = value;
+			newEntry = newArray;
+		}
+
+		out.put(key, newEntry);
 	}
 
 	private static String parseClassName(String name) {

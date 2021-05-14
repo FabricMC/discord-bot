@@ -16,11 +16,9 @@
 
 package net.fabricmc.discord.bot;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,13 +26,15 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.javacord.api.entity.DiscordEntity;
+import it.unimi.dsi.fastutil.longs.Long2IntMap;
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongIterator;
 import org.javacord.api.entity.channel.Channel;
 import org.javacord.api.entity.channel.ServerChannel;
 import org.javacord.api.entity.channel.ServerTextChannel;
-import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.MessageAuthor;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.event.channel.server.ServerChannelChangeOverwrittenPermissionsEvent;
 import org.javacord.api.event.channel.server.ServerChannelCreateEvent;
@@ -42,7 +42,6 @@ import org.javacord.api.event.channel.server.ServerChannelDeleteEvent;
 import org.javacord.api.event.message.MessageCreateEvent;
 import org.javacord.api.event.message.MessageDeleteEvent;
 import org.javacord.api.exception.DiscordException;
-import org.javacord.api.exception.NotFoundException;
 import org.javacord.api.listener.ChainableGloballyAttachableListenerManager;
 import org.javacord.api.listener.channel.server.ServerChannelChangeOverwrittenPermissionsListener;
 import org.javacord.api.listener.channel.server.ServerChannelCreateListener;
@@ -64,7 +63,7 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 	private final List<MessageCreateHandler> createHandlers = new CopyOnWriteArrayList<>();
 	private final List<MessageDeleteHandler> deleteHandlers = new CopyOnWriteArrayList<>();
 	private final Map<ServerTextChannel, ChannelMessageCache> channelCaches = new ConcurrentHashMap<>();
-	private final Map<Long, CachedMessage> globalIndex = new ConcurrentHashMap<>();
+	private final Long2ObjectMap<CachedMessage> globalIndex = new Long2ObjectOpenHashMap<>();
 
 	public MessageIndex(DiscordBot bot) {
 		this.bot = bot;
@@ -82,7 +81,9 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 	}
 
 	public @Nullable CachedMessage get(long id) {
-		return globalIndex.get(id);
+		synchronized (globalIndex) {
+			return globalIndex.get(id);
+		}
 	}
 
 	public @Nullable CachedMessage get(ServerTextChannel channel, long id) {
@@ -97,9 +98,11 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 	public Collection<CachedMessage> getAllByAuthor(long authorId, boolean includeDeleted) {
 		List<CachedMessage> ret = new ArrayList<>();
 
-		for (CachedMessage message : globalIndex.values()) {
-			if (message.authorId == authorId && (includeDeleted || !message.isDeleted())) {
-				ret.add(message);
+		synchronized (globalIndex) {
+			for (CachedMessage message : globalIndex.values()) {
+				if (message.authorId == authorId && (includeDeleted || !message.isDeleted())) {
+					ret.add(message);
+				}
 			}
 		}
 
@@ -176,7 +179,10 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 	}
 
 	private void reset(Server server) {
-		globalIndex.clear();
+		synchronized (globalIndex) {
+			globalIndex.clear();
+		}
+
 		channelCaches.clear();
 	}
 
@@ -194,8 +200,13 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		synchronized (cache) {
 			if (channelCaches.putIfAbsent(channel, cache) != null) return;
 
-			for (Message message : channel.getMessages(Math.min(INIT_LIMIT, MESSAGE_LIMIT)).join()) {
-				cache.add(new CachedMessage(message));
+			try {
+				for (Message message : DiscordUtil.join(channel.getMessages(Math.min(INIT_LIMIT, MESSAGE_LIMIT)))) {
+					cache.add(new CachedMessage(message));
+				}
+			} catch (DiscordException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
 			}
 		}
 	}
@@ -286,28 +297,35 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 	private final class ChannelMessageCache {
 		final CachedMessage[] messages = new CachedMessage[MESSAGE_LIMIT];
 		private int writeIdx;
-		final Map<Long, Integer> index = new HashMap<>();
+		final Long2IntMap index = new Long2IntOpenHashMap();
+
+		public ChannelMessageCache() {
+			index.defaultReturnValue(-1);
+		}
 
 		CachedMessage get(long id) {
-			Integer pos = index.get(id);
-			if (pos == null) return null;
+			int pos = index.get(id);
+			if (pos < 0) return null;
 
 			return messages[pos];
 		}
 
 		boolean add(CachedMessage message) {
-			Long key = message.id;
-			if (index.putIfAbsent(key, writeIdx) != null) return false;
+			long key = message.id;
+			if (index.putIfAbsent(key, writeIdx) >= 0) return false;
 
 			CachedMessage prev = messages[writeIdx];
 
-			if (prev != null) {
-				Long prevKey = prev.id;
-				index.remove(prevKey);
-				globalIndex.remove(prevKey);
+			synchronized (globalIndex) {
+				if (prev != null) {
+					long prevKey = prev.id;
+					index.remove(prevKey);
+					globalIndex.remove(prevKey);
+				}
+
+				globalIndex.put(key, message);
 			}
 
-			globalIndex.put(key, message);
 			messages[writeIdx] = message;
 			writeIdx = inc(writeIdx);
 
@@ -315,8 +333,11 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		}
 
 		void clear() {
-			for (Long key : index.keySet()) {
-				globalIndex.remove(key);
+			synchronized (globalIndex) {
+				for (LongIterator it = index.keySet().iterator(); it.hasNext(); ) {
+					long key = it.nextLong();
+					globalIndex.remove(key);
+				}
 			}
 
 			index.clear();
@@ -345,92 +366,6 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 
 	private static int dec(int idx) {
 		return (idx + MESSAGE_LIMIT - 1) % MESSAGE_LIMIT;
-	}
-
-	public static final class CachedMessage {
-		CachedMessage() {
-			this.id = -1;
-			this.channelId = -1;
-			this.authorId = -1;
-			this.userMentions = null;
-			this.roleMentions = null;
-		}
-
-		CachedMessage(Message message) {
-			this.id = message.getId();
-			this.channelId = message.getChannel().getId();
-
-			MessageAuthor author = message.getAuthor();
-			this.authorId = author.isWebhook() ? -1 : author.getId();
-
-			userMentions = serializeMentions(message.getMentionedUsers());
-			roleMentions = serializeMentions(message.getMentionedRoles());
-		}
-
-		private static long[] serializeMentions(List<? extends DiscordEntity> list) {
-			int size = list.size();
-			if (size == 0) return emptyMentions;
-
-			long[] ret = new long[size];
-
-			for (int i = 0; i < size; i++) {
-				ret[i] = list.get(i).getId();
-			}
-
-			return ret;
-		}
-
-		public long getId() {
-			return id;
-		}
-
-		public Instant getCreationTime() {
-			return DiscordEntity.getCreationTimestamp(id);
-		}
-
-		public long getChannelId() {
-			return channelId;
-		}
-
-		public long getAuthorDiscordId() {
-			return authorId;
-		}
-
-		public long[] getUserMentions() {
-			return userMentions;
-		}
-
-		public long[] getRoleMentions() {
-			return roleMentions;
-		}
-
-		public boolean isDeleted() {
-			return deleted;
-		}
-
-		void setDeleted() {
-			deleted = true;
-		}
-
-		public @Nullable Message toMessage(Server server) throws DiscordException {
-			TextChannel channel = server.getTextChannelById(channelId).orElse(null);
-			if (channel == null) return null;
-
-			try {
-				return DiscordUtil.join(channel.getMessageById(id));
-			} catch (NotFoundException e) {
-				return null;
-			}
-		}
-
-		private static final long[] emptyMentions = new long[0];
-
-		final long id;
-		final long channelId;
-		final long authorId;
-		private final long[] userMentions;
-		private final long[] roleMentions;
-		private volatile boolean deleted;
 	}
 
 	public interface Visitor {

@@ -22,8 +22,10 @@ import java.util.Optional;
 
 import org.javacord.api.entity.channel.ServerChannel;
 import org.javacord.api.entity.channel.ServerTextChannel;
+import org.jetbrains.annotations.Nullable;
 
-import net.fabricmc.discord.bot.MessageIndex.CachedMessage;
+import net.fabricmc.discord.bot.CachedMessage;
+import net.fabricmc.discord.bot.config.ConfigKey;
 
 public abstract class Command {
 	/**
@@ -149,5 +151,25 @@ public abstract class Command {
 		if (context.bot().getUserHandler().hasImmunity(targetDiscordUserId, context.userId(), allowBotTarget)) {
 			throw new CommandException("The target has immunity");
 		}
+	}
+
+	public static <V> V getConfig(CommandContext context, ConfigKey<V> key) {
+		return context.bot().getConfigEntry(key);
+	}
+
+	public static <V> @Nullable V getUserConfig(CommandContext context, ConfigKey<V> key) {
+		return context.bot().getUserConfig(context.userId(), key);
+	}
+
+	public static <V> V getUserConfig(CommandContext context, ConfigKey<V> key, V defaultValue) {
+		return context.bot().getUserConfig(context.userId(), key, defaultValue);
+	}
+
+	public static <V> boolean setUserConfig(CommandContext context, ConfigKey<V> key, V value) {
+		return context.bot().setUserConfig(context.userId(), key, value);
+	}
+
+	public static boolean removeUserConfig(CommandContext context, ConfigKey<?> key) {
+		return context.bot().removeUserConfig(context.userId(), key);
 	}
 }

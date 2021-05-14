@@ -67,6 +67,7 @@ final class DbMigration {
 			case 5: migrate_5_6(st);
 			case 6: migrate_6_7(st);
 			case 7: migrate_7_8(st);
+			case 8: migrate_8_9(st);
 			}
 
 			st.executeUpdate(String.format("REPLACE INTO `config` VALUES ('dbVersion', '%d')", Database.currentVersion));
@@ -262,5 +263,10 @@ final class DbMigration {
 		st.executeUpdate("DROP TABLE `channelactionsuspension`");
 		st.executeUpdate("DROP TABLE `channelactionexpiration`");
 		st.executeUpdate("DROP TABLE `activechannelaction`");
+	}
+
+	private static void migrate_8_9(Statement st) throws SQLException {
+		st.executeUpdate("CREATE TABLE `userconfig` (`user_id` INTEGER, `key` TEXT, `value` TEXT, UNIQUE(`user_id`, `key`))");
+		st.executeUpdate("CREATE INDEX `userconfig_user_id` ON `userconfig` (`user_id`)");
 	}
 }

@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import net.fabricmc.discord.bot.command.UsageParser.EmptyNode;
@@ -122,7 +123,7 @@ public final class CommandParser {
 				}
 
 				if (DEBUG) System.out.printf("new flarg: %s = %s%n", key, value);
-				floatingArgs.put(key, value);
+				floatingArgs.put(key.toLowerCase(Locale.ENGLISH), value);
 				i = end;
 			} else if (!Character.isWhitespace(c)) {
 				int end = findBlockEndWhitespace(input, i + 1, inputEnd);
@@ -138,7 +139,7 @@ public final class CommandParser {
 		}
 
 		capturedArgs.clear();
-		allowedFloatingArgs.clear();
+		capturedFloatingArgs.clear();
 		queueSize = 0;
 
 		boolean ret = processNodes(node, 0, tokenCount);
@@ -152,7 +153,12 @@ public final class CommandParser {
 				out.put(key, value);
 			}
 
-			out.putAll(floatingArgs);
+			for (int i = 0; i < capturedFloatingArgs.size(); i += 2) {
+				String key = capturedFloatingArgs.get(i);
+				String value = capturedFloatingArgs.get(i + 1);
+
+				out.put(key, value);
+			}
 		}
 
 		this.input = null;
@@ -206,8 +212,8 @@ public final class CommandParser {
 				if (node instanceof FloatingArgNode) {
 					FloatingArgNode faNode = (FloatingArgNode) node;
 
-					if (floatingArgs.containsKey(faNode.key)) {
-						String value = floatingArgs.get(faNode.key);
+					if (floatingArgs.containsKey(faNode.lcKey)) {
+						String value = floatingArgs.get(faNode.lcKey);
 
 						matched = value == null && (faNode.value == null || faNode.value.isOptional())
 								|| value != null && faNode.value != null;  // TODO: check if value is compliant with whatever faNode.value requires
@@ -271,7 +277,10 @@ public final class CommandParser {
 					int tokensConsumed;
 
 					if (node instanceof FloatingArgNode) {
-						allowedFloatingArgs.add(((FloatingArgNode) node).key);
+						FloatingArgNode faNode = (FloatingArgNode) node;
+
+						capturedFloatingArgs.add(faNode.key);
+						capturedFloatingArgs.add(floatingArgs.get(faNode.lcKey));
 						tokensConsumed = 0;
 					} else if (node instanceof PlainNode) {
 						capturedArgs.add(null);
@@ -326,7 +335,16 @@ public final class CommandParser {
 	private boolean checkFloatingArgs() {
 		if (!floatingArgs.isEmpty()) { // check if all floating args have been provided on the path taken
 			for (String arg : floatingArgs.keySet()) {
-				if (!allowedFloatingArgs.contains(arg)) { // extra floating args
+				boolean found = false;
+
+				for (int i = 0; i < capturedFloatingArgs.size(); i += 2) {
+					if (capturedFloatingArgs.get(i).equalsIgnoreCase(arg)) {
+						found = true;
+						break;
+					}
+				}
+
+				if (!found) { // extra floating args
 					return false;
 				}
 			}
@@ -352,7 +370,7 @@ public final class CommandParser {
 		queuedData[dataIdx++] = token;
 		queuedData[dataIdx++] = tokensAvailable;
 		queuedData[dataIdx++] = capturedArgs.size();
-		queuedData[dataIdx++] = allowedFloatingArgs.size();
+		queuedData[dataIdx++] = capturedFloatingArgs.size();
 		queueSize++;
 
 		assert nodeIdx == queueSize * QUEUE_NODE_STRIDE;
@@ -370,7 +388,7 @@ public final class CommandParser {
 
 		int dataIdx = queueSize * QUEUE_DATA_STRIDE;
 		trimList(capturedArgs, queuedData[dataIdx + 3]);
-		trimList(allowedFloatingArgs, queuedData[dataIdx + 4]);
+		trimList(capturedFloatingArgs, queuedData[dataIdx + 4]);
 
 		return ret;
 	}
@@ -447,7 +465,7 @@ public final class CommandParser {
 	private final Map<String, String> floatingArgs = new HashMap<>();
 	private final StringBuilder buffer = new StringBuilder();
 	private final List<String> capturedArgs = new ArrayList<>();
-	private final List<String> allowedFloatingArgs = new ArrayList<>();
+	private final List<String> capturedFloatingArgs = new ArrayList<>();
 
 	private Node[] queuedNodes;
 	private int[] queuedData;

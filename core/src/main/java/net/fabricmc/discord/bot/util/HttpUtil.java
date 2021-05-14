@@ -39,7 +39,11 @@ public final class HttpUtil {
 	}
 
 	public static HttpResponse<InputStream> makeRequest(String host, String path, String query) throws URISyntaxException, IOException, InterruptedException {
-		HttpRequest request = HttpRequest.newBuilder(new URI("https", null, host, -1, path, query, null))
+		return makeRequest(new URI("https", null, host, -1, path, query, null));
+	}
+
+	public static HttpResponse<InputStream> makeRequest(URI uri) throws IOException, InterruptedException {
+		HttpRequest request = HttpRequest.newBuilder(uri)
 				.timeout(timeout)
 				.build();
 

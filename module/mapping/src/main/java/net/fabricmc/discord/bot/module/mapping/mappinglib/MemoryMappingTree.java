@@ -1,7 +1,24 @@
+/*
+ * Copyright (c) 2021 FabricMC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package net.fabricmc.discord.bot.module.mapping.mappinglib;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -141,9 +158,9 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 	}
 
 	@Override
-	public ClassMapping getClass(String name, int namespace) {
-		if (!indexByDstNames || namespace < 0) {
-			return MappingTree.super.getClass(name, namespace);
+	public ClassEntry getClass(String name, int namespace) {
+		if (namespace < 0 || !indexByDstNames) {
+			return (ClassEntry) MappingTree.super.getClass(name, namespace);
 		} else {
 			return classesByDstNames[namespace].get(name);
 		}
@@ -221,11 +238,75 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 
 	@Override
 	public void visitNamespaces(String srcNamespace, List<String> dstNamespaces) {
-		this.srcNamespace = srcNamespace;
-		this.dstNamespaces = dstNamespaces;
+		srcNsMap = SRC_NAMESPACE_ID;
+		dstNameMap = new int[dstNamespaces.size()];
 
-		if (indexByDstNames) {
-			initClassesByDstNames();
+		if (this.srcNamespace != null) { // ns already set, try to merge
+			if (!srcNamespace.equals(this.srcNamespace)) {
+				srcNsMap = this.dstNamespaces.indexOf(srcNamespace);
+				if (srcNsMap < 0) throw new UnsupportedOperationException("can't merge with disassociated src namespace"); // srcNamespace must already be present
+			}
+
+			int newDstNamespaces = 0;
+
+			for (int i = 0; i < dstNameMap.length; i++) {
+				String dstNs = dstNamespaces.get(i);
+				int idx = this.dstNamespaces.indexOf(dstNs);
+
+				if (idx < 0) {
+					if (dstNs.equals(this.srcNamespace)) throw new UnsupportedOperationException("can't merge with existing src namespace in new dst namespaces");
+					if (newDstNamespaces == 0) this.dstNamespaces = new ArrayList<>(this.dstNamespaces);
+
+					idx = this.dstNamespaces.size();
+					this.dstNamespaces.add(dstNs);
+					newDstNamespaces++;
+				}
+
+				dstNameMap[i] = idx;
+			}
+
+			if (newDstNamespaces > 0) {
+				int newSize = this.dstNamespaces.size();
+
+				for (ClassEntry cls : getClasses()) {
+					cls.resizeDstNames(newSize);
+
+					for (FieldEntry field : cls.getFields()) {
+						field.resizeDstNames(newSize);
+					}
+
+					for (MethodEntry method : cls.getMethods()) {
+						method.resizeDstNames(newSize);
+
+						for (MethodArgEntry arg : method.getArgs()) {
+							arg.resizeDstNames(newSize);
+						}
+
+						for (MethodVarEntry var : method.getVars()) {
+							var.resizeDstNames(newSize);
+						}
+					}
+				}
+
+				if (indexByDstNames) {
+					classesByDstNames = Arrays.copyOf(classesByDstNames, newSize);
+
+					for (int i = newSize - newDstNamespaces; i < classesByDstNames.length; i++) {
+						classesByDstNames[i] = new HashMap<String, ClassEntry>(classesBySrcName.size());
+					}
+				}
+			}
+		} else {
+			this.srcNamespace = srcNamespace;
+			this.dstNamespaces = dstNamespaces;
+
+			for (int i = 0; i < dstNameMap.length; i++) {
+				dstNameMap[i] = i;
+			}
+
+			if (indexByDstNames) {
+				initClassesByDstNames();
+			}
 		}
 	}
 
@@ -238,9 +319,14 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 	public boolean visitClass(String srcName) {
 		currentMethod = null;
 
-		ClassEntry cls = getClass(srcName);
+		ClassEntry cls = getClass(srcName, srcNsMap);
 
 		if (cls == null) {
+			if (srcNsMap >= 0) { // can't create new entry without src name
+				currentEntry = currentClass = null;
+				return false;
+			}
+
 			cls = new ClassEntry(this, srcName);
 			classesBySrcName.put(srcName, cls);
 		}
@@ -256,9 +342,14 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 
 		currentMethod = null;
 
-		FieldEntry field = currentClass.getField(srcName, srcDesc);
+		FieldEntry field = currentClass.getField(srcName, srcDesc, srcNsMap);
 
 		if (field == null) {
+			if (srcNsMap >= 0) { // can't create new entry without src name
+				currentEntry = null;
+				return false;
+			}
+
 			field = new FieldEntry(currentClass, srcName, srcDesc);
 			currentClass.addField(field);
 		}
@@ -272,9 +363,14 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 	public boolean visitMethod(String srcName, String srcDesc) {
 		if (currentClass == null) throw new UnsupportedOperationException("Tried to visit method before owning class");
 
-		MethodEntry method = currentClass.getMethod(srcName, srcDesc);
+		MethodEntry method = currentClass.getMethod(srcName, srcDesc, srcNsMap);
 
 		if (method == null) {
+			if (srcNsMap >= 0) { // can't create new entry without src name
+				currentEntry = currentMethod = null;
+				return false;
+			}
+
 			method = new MethodEntry(currentClass, srcName, srcDesc);
 			currentClass.addMethod(method);
 		}
@@ -327,6 +423,8 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 
 	@Override
 	public void visitDstName(MappedElementKind targetKind, int namespace, String name) {
+		namespace = dstNameMap[namespace];
+
 		if (currentEntry == null) throw new UnsupportedOperationException("Tried to visit mapped name before owner");
 		currentEntry.setDstName(namespace, name);
 
@@ -389,6 +487,10 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 			dstNames[namespace] = name;
 		}
 
+		void resizeDstNames(int newSize) {
+			dstNames = Arrays.copyOf(dstNames, newSize);
+		}
+
 		@Override
 		public final String getComment() {
 			return comment;
@@ -426,7 +528,7 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 		}
 
 		protected final String srcName;
-		protected final String[] dstNames;
+		protected String[] dstNames;
 		protected String comment;
 	}
 
@@ -494,6 +596,11 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 		}
 
 		@Override
+		public FieldEntry getField(String name, String desc, int namespace) {
+			return (FieldEntry) ClassMapping.super.getField(name, desc, namespace);
+		}
+
+		@Override
 		public FieldEntry addField(FieldMapping field) {
 			FieldEntry entry = field instanceof FieldEntry && field.getOwner() == this ? (FieldEntry) field : new FieldEntry(this, field);
 
@@ -520,6 +627,11 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 		@Override
 		public MethodEntry getMethod(String srcName, String srcDesc) {
 			return getMember(srcName, srcDesc, methods, flags >>> 2);
+		}
+
+		@Override
+		public MethodEntry getMethod(String name, String desc, int namespace) {
+			return (MethodEntry) ClassMapping.super.getMethod(name, desc, namespace);
 		}
 
 		@Override
@@ -1059,6 +1171,8 @@ public final class MemoryMappingTree implements MappingTree, MappingVisitor {
 	private final Map<String, ClassEntry> classesBySrcName = new LinkedHashMap<>();
 	private Map<String, ClassEntry>[] classesByDstNames;
 
+	private int srcNsMap;
+	private int[] dstNameMap;
 	private Entry currentEntry;
 	private ClassEntry currentClass;
 	private MethodEntry currentMethod;

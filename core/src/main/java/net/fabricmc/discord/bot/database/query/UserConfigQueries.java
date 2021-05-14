@@ -24,15 +24,18 @@ import java.util.HashMap;
 import java.util.Map;
 
 import net.fabricmc.discord.bot.database.Database;
+import net.fabricmc.discord.bot.database.IdArmor;
 
-public final class ConfigQueries {
-	public static Map<String, String> getAll(Database db) throws SQLException {
+public final class UserConfigQueries {
+	public static Map<String, String> getAll(Database db, int userId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
+		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
+
 		try (Connection conn = db.getConnection();
-				PreparedStatement ps = conn.prepareStatement("""
-						SELECT `key`, `value` FROM `config`
-						""")) {
+				PreparedStatement ps = conn.prepareStatement("SELECT `key`, `value` FROM `userconfig` WHERE `user_id` = ?")) {
+			ps.setInt(1, rawUserId);
+
 			try (ResultSet res = ps.executeQuery()) {
 				Map<String, String> ret = new HashMap<>();
 
@@ -45,15 +48,16 @@ public final class ConfigQueries {
 		}
 	}
 
-	public static String get(Database db, String key) throws SQLException {
+	public static String get(Database db, int userId, String key) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 		if (key == null) throw new NullPointerException("null key");
 
+		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
+
 		try (Connection conn = db.getConnection();
-				PreparedStatement ps = conn.prepareStatement("""
-						SELECT `value` FROM `config` WHERE `key` = ?
-						""")) {
-			ps.setString(1, key);
+				PreparedStatement ps = conn.prepareStatement("SELECT `value` FROM `userconfig` WHERE `user_id` = ? AND `key` = ?")) {
+			ps.setInt(1, rawUserId);
+			ps.setString(2, key);
 
 			try (ResultSet res = ps.executeQuery()) {
 				if (!res.next()) return null;
@@ -63,31 +67,46 @@ public final class ConfigQueries {
 		}
 	}
 
-	public static boolean set(Database db, String key, String value) throws SQLException {
+	public static boolean set(Database db, int userId, String key, String value) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 		if (key == null) throw new NullPointerException("null key");
 		if (value == null) throw new NullPointerException("null value");
 
+		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
+
 		try (Connection conn = db.getConnection();
-				PreparedStatement ps = conn.prepareStatement("""
-						REPLACE INTO `config` (`key`, `value`) VALUES (?, ?)
-						""")) {
-			ps.setString(1, key);
-			ps.setString(2, value);
+				PreparedStatement ps = conn.prepareStatement("REPLACE INTO `userconfig` (`user_id`, `key`, `value`) VALUES (?, ?, ?)")) {
+			ps.setInt(1, rawUserId);
+			ps.setString(2, key);
+			ps.setString(3, value);
 
 			return ps.executeUpdate() > 0;
 		}
 	}
 
-	public static boolean remove(Database db, String key) throws SQLException {
+	public static boolean remove(Database db, int userId, String key) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 		if (key == null) throw new NullPointerException("null key");
 
+		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
+
 		try (Connection conn = db.getConnection();
-				PreparedStatement ps = conn.prepareStatement("""
-						DELETE FROM `config` WHERE `key` = ?
-						""")) {
-			ps.setString(1, key);
+				PreparedStatement ps = conn.prepareStatement("DELETE FROM `userconfig` WHERE `user_id` = ? AND `key` = ?")) {
+			ps.setInt(1, rawUserId);
+			ps.setString(2, key);
+
+			return ps.executeUpdate() > 0;
+		}
+	}
+
+	public static boolean removeAll(Database db, int userId) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+
+		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement ps = conn.prepareStatement("DELETE FROM `userconfig` WHERE `user_id` = ?")) {
+			ps.setInt(1, rawUserId);
 
 			return ps.executeUpdate() > 0;
 		}

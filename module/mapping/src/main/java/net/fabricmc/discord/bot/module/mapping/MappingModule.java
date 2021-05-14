@@ -17,14 +17,30 @@
 package net.fabricmc.discord.bot.module.mapping;
 
 import java.nio.file.Path;
+import java.util.List;
 
 import org.apache.logging.log4j.Logger;
 import org.javacord.api.DiscordApi;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.Module;
+import net.fabricmc.discord.bot.config.ConfigKey;
+import net.fabricmc.discord.bot.config.ValueSerializers;
+import net.fabricmc.discord.bot.module.mapping.SetNamespaceCommand.NamespaceApplication;
 
 public final class MappingModule implements Module {
+	static final List<String> supportedNamespaces = List.of("official", "intermediary", "yarn", "mojmap", "srg", "mcp");
+	private static final List<String> defaultNamespaces = List.of("official", "intermediary", "yarn");
+	private static final List<String> publicNamespaces = defaultNamespaces;
+
+	// global properties
+	static final ConfigKey<List<String>> DEFAULT_NAMESPACES = new ConfigKey<>("mapping.defaultNamespaces", ValueSerializers.STRING_LIST);
+	static final ConfigKey<List<String>> PUBLIC_NAMESPACES = new ConfigKey<>("mapping.publicNamespaces", ValueSerializers.STRING_LIST);
+
+	// user properties
+	static final ConfigKey<List<String>> QUERY_NAMESPACES = new ConfigKey<>("mapping.queryNamespaces", ValueSerializers.STRING_LIST);
+	static final ConfigKey<List<String>> DISPLAY_NAMESPACES = new ConfigKey<>("mapping.displayNamespaces", ValueSerializers.STRING_LIST);
+
 	private MappingRepository repo;
 
 	@Override
@@ -38,14 +54,21 @@ public final class MappingModule implements Module {
 	}
 
 	@Override
-	public void registerConfigEntries(DiscordBot bot) { }
+	public void registerConfigEntries(DiscordBot bot) {
+		bot.registerConfigEntry(DEFAULT_NAMESPACES, () -> defaultNamespaces);
+		bot.registerConfigEntry(PUBLIC_NAMESPACES, () -> publicNamespaces);
+	}
 
 	@Override
 	public void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
-		repo = new MappingRepository(bot);
+		repo = new MappingRepository(bot, dataDir);
 
 		bot.registerCommand(new YarnClassCommand(repo));
 		bot.registerCommand(new YarnFieldCommand(repo));
 		bot.registerCommand(new YarnMethodCommand(repo));
+
+		for (NamespaceApplication application : NamespaceApplication.values()) {
+			bot.registerCommand(new SetNamespaceCommand(application));
+		}
 	}
 }

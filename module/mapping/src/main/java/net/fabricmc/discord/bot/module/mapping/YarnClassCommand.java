@@ -24,6 +24,7 @@ import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.message.Paginator;
 import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.ClassMapping;
+import net.fabricmc.discord.bot.util.FormatUtil;
 
 public final class YarnClassCommand extends Command {
 	private final MappingRepository repo;
@@ -44,33 +45,47 @@ public final class YarnClassCommand extends Command {
 
 	@Override
 	public String usage() {
-		return "<className> [latest | latestStable | <mcVersion>]";
+		return "<className> [latest | latestStable | <mcVersion>] [--ns=<nsList>] [--queryNs=<nsList>] [--displayNs=<nsList>]";
 	}
 
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
-		String mcVersion = arguments.get("mcVersion");
-		if (mcVersion == null) mcVersion = arguments.get("unnamed_1");
-
-		MappingData data = YarnCommandUtil.getMappingData(repo, mcVersion);
+		String mcVersion = MappingCommandUtil.getMcVersion(context, arguments);
+		MappingData data = MappingCommandUtil.getMappingData(repo, mcVersion);
 		String name = arguments.get("className");
-		Collection<ClassMapping> results = data.findClasses(name);
+
+		List<String> queryNamespaces = MappingCommandUtil.getNamespaces(context, arguments, true);
+		Collection<ClassMapping> results = data.findClasses(name, data.resolveNamespaces(queryNamespaces, false));
 
 		if (results.isEmpty()) {
-			context.channel().sendMessage("no matches for the given class name and MC version");
+			context.channel().sendMessage("no matches for the given class name, MC version and query namespace");
 			return true;
 		}
 
+		List<String> namespaces = MappingCommandUtil.getNamespaces(context, arguments, false);
+
 		Paginator.Builder builder = new Paginator.Builder(context.author())
-				.title("%s matches", data.mcVersion);
+				.title("%s matches", data.mcVersion)
+				.footer("query ns: %s", String.join(",", queryNamespaces));
+
+		StringBuilder sb = new StringBuilder(400);
 
 		for (ClassMapping result : results) {
-			builder.page("**Names**\n\n**Official:** `%s`\n**Intermediary:** `%s`\n**Yarn:** `%s`\n\n"
-					+ "**Yarn Access Widener**\n\n```accessible\tclass\t%s```",
-					result.getName("official"),
-					result.getName("intermediary"),
-					result.getName("named"),
-					result.getName("named"));
+			sb.append("**Names**\n\n");
+
+			for (String ns : namespaces) {
+				String res = result.getName(ns);
+
+				if (res != null) {
+					sb.append(String.format("**%s:** `%s`\n", FormatUtil.capitalize(ns), res));
+				}
+			}
+
+			sb.append(String.format("\n**Yarn Access Widener**\n\n```accessible\tclass\t%s```",
+					result.getName("yarn")));
+
+			builder.page(sb);
+			sb.setLength(0);
 		}
 
 		builder.buildAndSend(context.channel());

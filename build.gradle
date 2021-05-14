@@ -52,6 +52,8 @@ allprojects {
 		// Json Serialization
 		implementation("com.google.code.gson:gson:2.8.6")
 
+		implementation("it.unimi.dsi:fastutil-core:8.5.4");
+
 		// TODO: Do we want this so we can :irritater: instead of raw id for custom emotes?
 		//  https://github.com/vdurmont/emoji-java
 	}

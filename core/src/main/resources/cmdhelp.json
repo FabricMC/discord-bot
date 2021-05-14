@@ -144,6 +144,18 @@ Examples:
 `!ym Entity.getPos`
 `!ym isDead`"
 		},
+		"setMcVersion": {
+			"short": "Configure default MC version for various queries"
+		},
+		"setNamespace": {
+			"short": "Configure default namespace for mapping queries and display"
+		},
+		"setDisplayNamespace": {
+			"short": "Configure default namespace for mapping display"
+		},
+		"setQueryNamespace": {
+			"short": "Configure default namespace for mapping queries"
+		},
 		"fabricVersion": {
 			"short": "Show the latest Fabric versions for a mod build script"
 		},

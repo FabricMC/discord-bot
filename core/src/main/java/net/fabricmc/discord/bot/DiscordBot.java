@@ -65,6 +65,7 @@ import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializer;
 import net.fabricmc.discord.bot.database.Database;
 import net.fabricmc.discord.bot.database.query.ConfigQueries;
+import net.fabricmc.discord.bot.database.query.UserConfigQueries;
 import net.fabricmc.discord.bot.filter.FilterHandler;
 import net.fabricmc.discord.bot.message.Mentions;
 import net.fabricmc.discord.bot.util.Collections2;
@@ -339,6 +340,40 @@ public final class DiscordBot {
 		return this.configEntryRegistry.keySet();
 	}
 
+	public <V> @Nullable V getUserConfig(int userId, ConfigKey<V> key) {
+		try {
+			String valueStr = UserConfigQueries.get(database, userId, key.name());
+
+			return valueStr != null ? key.valueSerializer().deserialize(valueStr) : null;
+		} catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	public <V> V getUserConfig(int userId, ConfigKey<V> key, V defaultValue) {
+		V ret = getUserConfig(userId, key);
+
+		return ret != null ? ret : defaultValue;
+	}
+
+	public <V> boolean setUserConfig(int userId, ConfigKey<V> key, V value) {
+		String valueStr = key.valueSerializer().serialize(value);
+
+		try {
+			return UserConfigQueries.set(database, userId, key.name(), valueStr);
+		} catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	public boolean removeUserConfig(int userId, ConfigKey<?> key) {
+		try {
+			return UserConfigQueries.remove(database, userId, key.name());
+		} catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
 	private BotConfig loadConfig(Path configPath) throws IOException {
 		if (Files.notExists(configPath)) {
 			DiscordBot.LOGGER.info("Creating bot config");
@@ -525,7 +560,7 @@ public final class DiscordBot {
 		User user = author.asUser().orElse(null);
 		Server server = author.getMessage().getServer().orElse(null);
 
-		return user != null && server != null && userHandler.hasPermission(user, server, permission);
+		return user != null && userHandler.hasPermission(user, server, permission);
 	}
 
 	record CommandRecord(UsageParser.Node node, Command command) {
