@@ -161,10 +161,10 @@ final class MappingData {
 		}
 	}
 
-	private static int detectIntermediaryIdStart(String name, boolean allowInner) {
+	private static int detectIntermediaryIdStart(String name, boolean allowNested) {
 		int outerEnd = name.lastIndexOf('$');
 
-		if ((outerEnd >= 0 || allowInner) && name.startsWith(intermediaryClassPrefix, outerEnd + 1)) { // nested intermediary: bla$class_123 or just class_123 with allowInner=true
+		if ((outerEnd >= 0 || allowNested) && name.startsWith(intermediaryClassPrefix, outerEnd + 1)) { // nested intermediary: bla$class_123 or just class_123 with allowNested=true
 			return outerEnd + 1 + intermediaryClassPrefix.length();
 		} else if (outerEnd < 0 && name.startsWith(intermediaryFullClassPrefix)) { // regular intermediary: net/minecraft/class_123
 			return  intermediaryFullClassPrefix.length();
@@ -207,10 +207,11 @@ final class MappingData {
 
 	public Set<ClassMapping> findClasses(String name, int[] namespaces) {
 		Set<ClassMapping> ret = new ObjectOpenHashSet<>();
+		boolean potentiallyNested = isPotentiallyNestedClass(name);
 		name = parseClassName(name);
 
 		for (int ns : namespaces) {
-			findClasses0(name, ns, ret);
+			findClasses0(name, potentiallyNested, ns, ret);
 		}
 
 		return ret;
@@ -221,38 +222,51 @@ final class MappingData {
 		if (ns == NULL_NAMESPACE_ID) return Collections.emptySet();
 
 		Set<ClassMapping> ret = new ObjectOpenHashSet<>();
-		findClasses0(parseClassName(name), ns, ret);
+		findClasses0(parseClassName(name), isPotentiallyNestedClass(name), ns, ret);
 
 		return ret;
 	}
 
-	private void findClasses0(String name, int namespace, Collection<ClassMapping> out) {
-		if (hasWildcard(name)) { // wildcard present
-			Pattern search = compileSearch(name);
+	private void findClasses0(String name, boolean potentialNested, int namespace, Collection<ClassMapping> out) {
+		int oldSize = out.size();
+		int startPos = potentialNested ? name.length() : 0;
 
-			if (name.indexOf('/') > 0) { // package present too
-				for (ClassMapping cls : mappingTree.getClasses()) {
-					if (search.matcher(cls.getName(namespace)).matches()) {
-						out.add(cls);
+		for (;;) { // loop for testing gradually increasing class nesting levels (a.b.c.d, a.b.c$d, a.b$c$d, a$b$c$d)
+			if (hasWildcard(name)) { // wildcard present
+				Pattern search = compileSearch(name);
+
+				if (name.indexOf('/') > 0) { // package present too
+					for (ClassMapping cls : mappingTree.getClasses()) {
+						if (search.matcher(cls.getName(namespace)).matches()) {
+							out.add(cls);
+						}
 					}
+				} else { // just a wildcard class name
+					findNameEntries(classByName[namespace - MIN_NAMESPACE_ID], search, out);
 				}
-			} else { // just a wildcard class name
-				findNameEntries(classByName[namespace - MIN_NAMESPACE_ID], search, out);
-			}
-		} else if (name.indexOf('/') >= 0) { // package present
-			ClassMapping cls = mappingTree.getClass(name, namespace);
-			if (cls != null) out.add(cls);
-		} else if (namespace == intermediaryNs) {
-			int idStart = detectIntermediaryIdStart(name, true);
-			if (idStart < 0) idStart = 0; // allow just the intermediary number
-
-			try {
-				int id = Integer.parseUnsignedInt(name, idStart, name.length(), 10);
-				ClassMapping cls = classByIntermediaryId.get(id);
+			} else if (name.indexOf('/') >= 0) { // package present
+				ClassMapping cls = mappingTree.getClass(name, namespace);
 				if (cls != null) out.add(cls);
-			} catch (NumberFormatException e) { }
-		} else {
-			readNameEntry(classByName[namespace - MIN_NAMESPACE_ID].get(name), out);
+			} else if (namespace == intermediaryNs) {
+				int idStart = detectIntermediaryIdStart(name, true);
+				if (idStart < 0) idStart = 0; // allow just the intermediary number
+
+				try {
+					int id = Integer.parseUnsignedInt(name, idStart, name.length(), 10);
+					ClassMapping cls = classByIntermediaryId.get(id);
+					if (cls != null) out.add(cls);
+				} catch (NumberFormatException e) { }
+			} else {
+				readNameEntry(classByName[namespace - MIN_NAMESPACE_ID].get(name), out);
+			}
+
+			if (out.size() > oldSize
+					|| startPos <= 0
+					|| (startPos = name.lastIndexOf('/', startPos - 1)) <= 0) {
+				break;
+			}
+
+			name = String.format("%s$%s", name.substring(0, startPos), name.substring(startPos + 1));
 		}
 	}
 
@@ -333,7 +347,7 @@ final class MappingData {
 	private void findFields0(MemberRef ref, int namespace, Collection<FieldMapping> out) {
 		if (ref.owner() != null) { // owner/package present
 			Set<ClassMapping> owners = new ObjectOpenHashSet<>();
-			findClasses0(ref.owner(), namespace, owners);
+			findClasses0(ref.owner(), ref.potentiallyNestedClass(), namespace, owners);
 
 			if (!owners.isEmpty()) {
 				if (hasWildcard(ref.name())) {
@@ -402,7 +416,7 @@ final class MappingData {
 	private void findMethods0(MemberRef ref, int namespace, Collection<MethodMapping> out) {
 		if (ref.owner() != null) { // owner/package present
 			Set<ClassMapping> owners = new ObjectOpenHashSet<>();
-			findClasses0(ref.owner(), namespace, owners);
+			findClasses0(ref.owner(), ref.potentiallyNestedClass(), namespace, owners);
 
 			if (!owners.isEmpty()) {
 				if (hasWildcard(ref.name())) {
@@ -504,6 +518,14 @@ final class MappingData {
 		out.put(key, newEntry);
 	}
 
+	private static boolean isPotentiallyNestedClass(String name) {
+		return isPotentiallyNestedClass(name, 0, name.length());
+	}
+
+	private static boolean isPotentiallyNestedClass(String name, int start, int end) {
+		return name.lastIndexOf('.', end - 1) > start && name.lastIndexOf('$', end - 1) < start; // contains . (not at start), but not $
+	}
+
 	private static String parseClassName(String name) {
 		name = name.replace('.', '/');
 
@@ -515,6 +537,7 @@ final class MappingData {
 	}
 
 	private static MemberRef parseMemberName(String name) {
+		String origName = name;
 		name = name.replace('.', '/').replace('#', '/');
 
 		// adjacent method desc: name(Lbla;)V
@@ -549,19 +572,22 @@ final class MappingData {
 		}
 
 		String owner, mname;
+		boolean potentiallyNestedClass;
 
 		if (ownerEnd < 0) {
 			owner = null;
+			potentiallyNestedClass = false;
 			mname = name.substring(0, nameEnd);
 		} else {
 			owner = name.substring(ownerStart, ownerEnd);
+			potentiallyNestedClass = isPotentiallyNestedClass(origName, ownerStart, ownerEnd);
 			mname = name.substring(ownerEnd + 1, nameEnd);
 		}
 
 		String desc = descStart >= 0 ? name.substring(descStart) : null; // TODO: translate java signature to asm desc as needed, make use of desc
 
-		return new MemberRef(owner, mname, desc);
+		return new MemberRef(owner, potentiallyNestedClass, mname, desc);
 	}
 
-	private record MemberRef(String owner, String name, String desc) { }
+	private record MemberRef(String owner, boolean potentiallyNestedClass, String name, String desc) { }
 }
