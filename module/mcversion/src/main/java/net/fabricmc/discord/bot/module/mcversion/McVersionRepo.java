@@ -194,7 +194,7 @@ public final class McVersionRepo {
 				handler.onMcVersionUpdate(latest, latestStable);
 			}
 		} catch (Throwable t) {
-			LOGGER.warn("MC version retrieval failed", t);
+			HttpUtil.logError("mc version retrieval failed", t, LOGGER);
 		}
 	}
 

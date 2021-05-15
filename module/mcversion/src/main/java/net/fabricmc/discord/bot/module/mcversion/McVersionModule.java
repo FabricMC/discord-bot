@@ -232,7 +232,7 @@ public final class McVersionModule implements Module {
 				}
 			}
 		} catch (Throwable t) {
-			LOGGER.warn("mc version check failed", t);
+			HttpUtil.logError("mc version check failed", t, LOGGER);
 		}
 	}
 
