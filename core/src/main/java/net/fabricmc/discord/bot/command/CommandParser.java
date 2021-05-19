@@ -433,10 +433,10 @@ public final class CommandParser {
 		start = escapeStart;
 
 		while (start < end) {
-			char c = input.charAt(start);
+			char c = input.charAt(start++);
 
-			if (c == '\\' && start + 1 < end) {
-				c = input.charAt(++start);
+			if (c == '\\' && start < end) {
+				c = input.charAt(start++);
 
 				int idx = "nrtb".indexOf(c);
 
