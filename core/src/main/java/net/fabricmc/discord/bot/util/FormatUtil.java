@@ -211,6 +211,10 @@ public final class FormatUtil {
 	private static final String TO_ESCAPE = "*_~|<>`:@[]\\";
 	private static final char ZERO_WIDTH_SPACE = '\u200b';
 
+	public static String escapePlain(String s) {
+		return escape(s, OutputType.PLAIN, false);
+	}
+
 	public static String escape(String s, OutputType outputType, boolean emitBlock) {
 		int len = s.length();
 

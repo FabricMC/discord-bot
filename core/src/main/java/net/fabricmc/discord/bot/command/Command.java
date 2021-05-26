@@ -22,6 +22,7 @@ import java.util.Optional;
 
 import org.javacord.api.entity.channel.ServerChannel;
 import org.javacord.api.entity.channel.ServerTextChannel;
+import org.javacord.api.entity.server.Server;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.CachedMessage;
@@ -87,11 +88,26 @@ public abstract class Command {
 	}
 
 	public static ServerChannel getChannel(CommandContext context, String channel) throws CommandException {
+		ServerChannel ret = getChannelUnchecked(context, channel);
+
+		if (!ret.canYouSee()
+				|| ret instanceof ServerTextChannel && !((ServerTextChannel) ret).canYouReadMessageHistory()
+				|| !ret.canSee(context.user())) {
+			throw new CommandException("Inaccessible channel");
+		}
+
+		return ret;
+	}
+
+	private static ServerChannel getChannelUnchecked(CommandContext context, String channel) throws CommandException {
+		Server server = context.server();
+		if (server == null) throw new CommandException("No server context (DM?)");
+
 		if (channel.startsWith("#")) {
 			String name = channel.substring(1);
 
-			List<ServerChannel> matches = context.server().getChannelsByName(name);
-			if (matches.isEmpty()) matches = context.server().getChannelsByNameIgnoreCase(name);
+			List<ServerChannel> matches = server.getChannelsByName(name);
+			if (matches.isEmpty()) matches = server.getChannelsByNameIgnoreCase(name);
 			if (matches.size() == 1) return matches.get(0);
 		}
 
@@ -106,13 +122,13 @@ public abstract class Command {
 			}
 
 			long id = Long.parseUnsignedLong(channel.substring(start, channel.length() + end));
-			Optional<ServerChannel> ret = context.server().getChannelById(id);
+			Optional<ServerChannel> ret = server.getChannelById(id);
 
 			if (ret.isPresent()) return ret.get();
 		} catch (NumberFormatException e) { }
 
-		List<ServerChannel> matches = context.server().getChannelsByName(channel);
-		if (matches.isEmpty()) matches = context.server().getChannelsByNameIgnoreCase(channel);
+		List<ServerChannel> matches = server.getChannelsByName(channel);
+		if (matches.isEmpty()) matches = server.getChannelsByNameIgnoreCase(channel);
 		if (matches.size() != 1) throw new CommandException("Unknown or ambiguous channel");
 
 		return matches.get(0);

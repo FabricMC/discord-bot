@@ -16,6 +16,7 @@
 
 package net.fabricmc.discord.bot.command.mod;
 
+import java.util.List;
 import java.util.Map;
 
 import org.javacord.api.entity.user.User;
@@ -32,6 +33,11 @@ public final class NickCommand extends Command {
 	@Override
 	public String name() {
 		return "nick";
+	}
+
+	@Override
+	public List<String> aliases() {
+		return List.of("rename", "name");
 	}
 
 	@Override
@@ -83,7 +89,7 @@ public final class NickCommand extends Command {
 		ActionUtil.announceAction(entry.type(), false, "", "from %s to %s".formatted(oldNick, newNick),
 				targetUserId, entry.creationTime(), entry.expirationTime(), entry.reason(),
 				entry.id(),
-				context.channel(), context.author().asUser().get(),
+				context.channel(), context.user(),
 				context.bot(), context.server(), true);
 
 		// update nick lock entries
@@ -93,7 +99,11 @@ public final class NickCommand extends Command {
 		// apply discord action
 
 		if (target != null) {
-			context.server().updateNickname(target, newNick, arguments.get("reason"));
+			if (target.getName().equals(newNick)) {
+				context.server().resetNickname(target, entry.reason());
+			} else {
+				context.server().updateNickname(target, newNick, entry.reason());
+			}
 		}
 
 		return true;

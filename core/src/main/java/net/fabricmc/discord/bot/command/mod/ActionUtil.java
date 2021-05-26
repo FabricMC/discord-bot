@@ -180,7 +180,7 @@ public final class ActionUtil {
 				targetId,
 				entry.creationTime(), entry.expirationTime(), reason,
 				entry.id(),
-				context.channel(), context.author().asUser().get(),
+				context.channel(), context.user(),
 				context.bot(), context.server(),
 				false);
 
@@ -233,7 +233,7 @@ public final class ActionUtil {
 				targetId,
 				System.currentTimeMillis(), 0, reason,
 				actionId,
-				context.channel(), context.author().asUser().get(),
+				context.channel(), context.user(),
 				context.bot(), context.server(),
 				true);
 	}

@@ -60,7 +60,7 @@ public final class ActionCommand extends Command {
 			if (actions.isEmpty()) {
 				context.channel().sendMessage(String.format("No actions for user %d", userId));
 			} else {
-				Paginator.Builder builder = new Paginator.Builder(context.author()).title("User %d Actions".formatted(userId));
+				Paginator.Builder builder = new Paginator.Builder(context.user()).title("User %d Actions".formatted(userId));
 				StringBuilder sb = new StringBuilder();
 				int count = 0;
 

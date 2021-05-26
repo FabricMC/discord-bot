@@ -495,7 +495,7 @@ public final class ActionQueries {
 		if (db == null) throw new NullPointerException("null db");
 
 		try (Connection conn = db.getConnection();
-				PreparedStatement ps = conn.prepareStatement("DELETE FROM `nicklock` WHERE discorduser_id.id = ?")) {
+				PreparedStatement ps = conn.prepareStatement("DELETE FROM `nicklock` WHERE discorduser_id = ?")) {
 			ps.setLong(1, discordUserId);
 
 			return ps.executeUpdate() > 0;
@@ -509,8 +509,9 @@ public final class ActionQueries {
 				PreparedStatement ps = conn.prepareStatement("INSERT OR REPLACE INTO `nicklock` (`discorduser_id`, `nick`) "
 						+ "SELECT du.id, ? "
 						+ "FROM `discorduser` du "
-						+ "JOIN `activeaction` aa ON aa.target_id = du.user_id AND aa.targetkind = '"+ActionType.Kind.USER.id+"' "
-						+ "WHERE du.id = ?")) {
+						+ "JOIN `activeaction` aa ON aa.target_id = du.user_id "
+						+ "JOIN `action` a ON a.id = aa.action_id "
+						+ "WHERE du.id = ? AND a.targetkind = '"+ActionType.Kind.USER.id+"'")) {
 			ps.setString(1, nick);
 			ps.setLong(2, discordUserId);
 

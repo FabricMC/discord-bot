@@ -16,11 +16,10 @@
 
 package net.fabricmc.discord.bot.command;
 
-import java.net.URL;
-
 import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.MessageAuthor;
+import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.server.Server;
+import org.javacord.api.entity.user.User;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.DiscordBot;
@@ -32,12 +31,11 @@ public record CommandContext(
 		CommandResponder responder,
 		DiscordBot bot,
 		@Nullable Server server,
-		URL messageLink,
-		MessageAuthor author,
-		int userId,
 		TextChannel channel,
-		String content,
-		long messageId) {
+		Message message,
+		User user,
+		int userId,
+		String content) {
 	public boolean isPrivateMessage() {
 		return server == null;
 	}

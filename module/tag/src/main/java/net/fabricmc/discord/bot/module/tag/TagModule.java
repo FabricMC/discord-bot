@@ -50,7 +50,6 @@ import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
-import net.fabricmc.discord.bot.message.Mentions;
 import net.fabricmc.discord.bot.util.Collections2;
 import net.fabricmc.tag.TagFrontMatter;
 import net.fabricmc.tag.TagLoadResult;
@@ -238,7 +237,7 @@ public final class TagModule implements Module, CommandStringHandler {
 
 	@Override
 	public boolean tryHandle(CommandContext context, String input, String name, String arguments) throws CommandException {
-		if (context.author().isBotUser()) {
+		if (context.user().isBot()) {
 			return false; // Do not dispatch tags from bots
 		}
 
@@ -260,7 +259,7 @@ public final class TagModule implements Module, CommandStringHandler {
 			// TODO: Improve message
 			// TODO: Remove sender's message and this message after time to replicate current logic
 			context.channel().sendMessage(String.format("%s: Unknown tag, use `%s%s` to see all available tags",
-					Mentions.createUserMention(context.author()),
+					context.user().getNicknameMentionTag(),
 					context.bot().getCommandPrefix(),
 					context.bot().getCommand(TagCommand.class).name()));
 			return;

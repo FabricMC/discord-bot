@@ -145,7 +145,7 @@ public final class UserCommand extends Command {
 
 			context.channel().sendMessage(msg);
 		} else {
-			Paginator.Builder builder = new Paginator.Builder(context.author()).title(title);
+			Paginator.Builder builder = new Paginator.Builder(context.user()).title(title);
 			builder.page(new Page.Builder(firstPageSb).thumbnail(firstThumbnail).build());
 
 			for (DiscordUserData discordUserData : userData.discordUsers()) {

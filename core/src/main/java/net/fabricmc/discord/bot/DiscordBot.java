@@ -50,7 +50,6 @@ import org.apache.logging.log4j.Logger;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.DiscordApiBuilder;
 import org.javacord.api.entity.intent.Intent;
-import org.javacord.api.entity.message.MessageAuthor;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
 import org.jetbrains.annotations.Nullable;
@@ -67,7 +66,6 @@ import net.fabricmc.discord.bot.database.Database;
 import net.fabricmc.discord.bot.database.query.ConfigQueries;
 import net.fabricmc.discord.bot.database.query.UserConfigQueries;
 import net.fabricmc.discord.bot.filter.FilterHandler;
-import net.fabricmc.discord.bot.message.Mentions;
 import net.fabricmc.discord.bot.util.Collections2;
 import net.fabricmc.discord.bot.util.DaemonThreadFactory;
 
@@ -493,7 +491,7 @@ public final class DiscordBot {
 
 	void tryHandleCommand(CommandContext context) {
 		// Don't dispatch commands if the bot is the sender
-		if (context.author().isYourself()) {
+		if (context.user().isYourself()) {
 			return;
 		}
 
@@ -522,8 +520,8 @@ public final class DiscordBot {
 			if (commandRecord == null && invokeCommandStringHandler(context, content, name, rawArguments)) {
 				return; // handled by command string handler
 			} else if (commandRecord == null
-					|| !checkAccess(context.author(), commandRecord.command())) {
-				context.channel().sendMessage("%s: Unknown command".formatted(Mentions.createUserMention(context.author())));
+					|| !checkAccess(context.user(), context.server(), commandRecord.command())) {
+				context.channel().sendMessage("%s: Unknown command".formatted(context.user().getNicknameMentionTag()));
 				return;
 			}
 
@@ -540,7 +538,7 @@ public final class DiscordBot {
 					reason = "Missing or invalid parameters, usage: `%s`".formatted(usage);
 				}
 
-				context.channel().sendMessage("%s: Invalid command syntax: %s".formatted(Mentions.createUserMention(context.author()), reason));
+				context.channel().sendMessage("%s: Invalid command syntax: %s".formatted(context.user().getNicknameMentionTag(), reason));
 				return;
 			}
 
@@ -553,12 +551,9 @@ public final class DiscordBot {
 		}
 	}
 
-	public boolean checkAccess(MessageAuthor author, Command command) {
+	public boolean checkAccess(User user, Server server, Command command) {
 		String permission = command.permission();
 		if (permission == null) return true;
-
-		User user = author.asUser().orElse(null);
-		Server server = author.getMessage().getServer().orElse(null);
 
 		return user != null && userHandler.hasPermission(user, server, permission);
 	}

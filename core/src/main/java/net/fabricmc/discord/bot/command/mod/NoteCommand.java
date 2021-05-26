@@ -72,7 +72,7 @@ public final class NoteCommand extends Command {
 
 			if (logChannel != null) {
 				// include executing moderator info
-				msg.setDescription("%s\n**Moderator:** %s".formatted(description, UserHandler.formatDiscordUser(context.author().asUser().get())));
+				msg.setDescription("%s\n**Moderator:** %s".formatted(description, UserHandler.formatDiscordUser(context.user())));
 
 				logChannel.sendMessage(msg).get();
 			}

@@ -52,7 +52,7 @@ final class TagCommand extends Command {
 		List<TagInstance> tags = new ArrayList<>(handler.getTags());
 		tags.sort(Comparator.comparing(TagInstance::getName));
 
-		Paginator.Builder builder = new Paginator.Builder(context.author()).title("Tag list");
+		Paginator.Builder builder = new Paginator.Builder(context.user()).title("Tag list");
 		StringBuilder currentPage = new StringBuilder();
 		String cmdPrefix = context.bot().getCommandPrefix();
 		currentPage.append(String.format("Post a tag with `%s%s<tagName>` and arguments as required.\nSpecifying the base name is enough when unique.\n\n",

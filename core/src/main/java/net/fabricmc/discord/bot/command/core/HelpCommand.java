@@ -48,7 +48,7 @@ public final class HelpCommand extends Command {
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
 		if (!arguments.containsKey("command")) {
-			Paginator.Builder builder = new Paginator.Builder(context.author()).title("Bot Usage Help");
+			Paginator.Builder builder = new Paginator.Builder(context.user()).title("Bot Usage Help");
 			StringBuilder currentPage = new StringBuilder();
 			String cmdPrefix = context.bot().getCommandPrefix();
 			currentPage.append(String.format("Run a command with `%s<cmdName>` and arguments as required.\nUse `%s%s <cmdName>` for additional information.\n\n",
@@ -56,7 +56,7 @@ public final class HelpCommand extends Command {
 			int pos = 0;
 
 			for (Command cmd : context.bot().getCommands()) {
-				if (!context.bot().checkAccess(context.author(), cmd)) continue;
+				if (!context.bot().checkAccess(context.user(), context.server(), cmd)) continue;
 
 				if (pos % 10 == 0 && pos != 0) {
 					builder.page(currentPage);
@@ -91,7 +91,7 @@ public final class HelpCommand extends Command {
 		} else {
 			Command cmd = context.bot().getCommand(arguments.get("command"));
 
-			if (cmd == null || !context.bot().checkAccess(context.author(), cmd)) {
+			if (cmd == null || !context.bot().checkAccess(context.user(), context.server(), cmd)) {
 				throw new CommandException("Unknown command");
 			}
 

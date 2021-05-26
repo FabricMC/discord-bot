@@ -28,7 +28,6 @@ import org.javacord.api.listener.message.MessageCreateListener;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandResponder;
 import net.fabricmc.discord.bot.command.core.ConfigCommand;
-import net.fabricmc.discord.bot.command.core.DbCommand;
 import net.fabricmc.discord.bot.command.core.GroupCommand;
 import net.fabricmc.discord.bot.command.core.HelpCommand;
 import net.fabricmc.discord.bot.command.core.PermissionCommand;
@@ -46,6 +45,9 @@ import net.fabricmc.discord.bot.command.mod.SlowmodeCommand;
 import net.fabricmc.discord.bot.command.mod.UnlockCommand;
 import net.fabricmc.discord.bot.command.mod.UserActionType;
 import net.fabricmc.discord.bot.command.mod.UserCommand;
+import net.fabricmc.discord.bot.command.util.DbCommand;
+import net.fabricmc.discord.bot.command.util.ExportChannelCommand;
+import net.fabricmc.discord.bot.command.util.ImportChannelCommand;
 
 /**
  * The builtin module of the discord bot.
@@ -82,7 +84,6 @@ final class BuiltinModule implements Module, MessageCreateListener {
 		bot.registerCommand(new ConfigCommand());
 		bot.registerCommand(new GroupCommand());
 		bot.registerCommand(new PermissionCommand());
-		bot.registerCommand(new DbCommand());
 
 		// mod/action
 		bot.registerCommand(new ActionCommand());
@@ -110,6 +111,11 @@ final class BuiltinModule implements Module, MessageCreateListener {
 		bot.registerCommand(new FilterGroupCommand());
 		bot.registerCommand(new FilterActionCommand());
 
+		// util
+		bot.registerCommand(new DbCommand());
+		bot.registerCommand(new ExportChannelCommand());
+		bot.registerCommand(new ImportChannelCommand());
+
 		api.addMessageCreateListener(this);
 	}
 
@@ -128,13 +134,11 @@ final class BuiltinModule implements Module, MessageCreateListener {
 				new CommandResponder(event),
 				this.bot,
 				event.getServer().orElse(null),
-				event.getMessageLink(),
-				event.getMessageAuthor(),
-				bot.getUserHandler().getUserId(user),
 				event.getChannel(),
-				event.getMessageContent(),
-				event.getMessageId()
-				);
+				event.getMessage(),
+				user,
+				bot.getUserHandler().getUserId(user),
+				event.getMessageContent());
 
 		this.bot.tryHandleCommand(context);
 	}

@@ -63,7 +63,7 @@ public final class CleanCommand extends Command {
 
 			for (ServerTextChannel channel : targetChannels) {
 				if (!channel.canYouSee() || !channel.canYouReadMessageHistory() || !channel.canYouManageMessages()) continue;
-				if (!channel.canSee(context.author().asUser().get())) continue;
+				if (!channel.canSee(context.user())) continue;
 
 				long[] messageIds = context.bot().getMessageIndex().getAllIdsByAuthor(channel, targetDiscordUserId, false);
 

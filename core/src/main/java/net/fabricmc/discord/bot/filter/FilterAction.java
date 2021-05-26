@@ -25,6 +25,7 @@ import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.database.query.FilterQueries.FilterData;
 import net.fabricmc.discord.bot.database.query.FilterQueries.FilterEntry;
+import net.fabricmc.discord.bot.util.DiscordUtil;
 
 public enum FilterAction {
 	ALERT("alert") {
@@ -44,7 +45,7 @@ public enum FilterAction {
 							filter.pattern()))
 					.setFooter("Filter ID: %d".formatted(filter.id()))
 					.setTimestamp(message.getLastEditTimestamp().orElse(message.getCreationTimestamp())))
-			//.setAllowedMentions(new AllowedMentionsBuilder().setMentionEveryoneAndHere(true).build())
+			.setAllowedMentions(DiscordUtil.NO_MENTIONS)
 			.send(alertChannel)
 			.exceptionally(exc -> {
 				exc.printStackTrace();

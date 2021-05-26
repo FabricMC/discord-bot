@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package net.fabricmc.discord.bot.command.core;
+package net.fabricmc.discord.bot.command.util;
 
 import java.sql.Connection;
 import java.sql.ResultSet;

@@ -77,8 +77,8 @@ public final class DeleteRangeCommand extends Command {
 			if (!channel.canYouSee()
 					|| !channel.canYouReadMessageHistory()
 					|| !channel.canYouManageMessages()
-					|| !channel.canSee(context.author().asUser().get())) {
-				throw new CommandException("inaccessible channel");
+					|| !channel.canSee(context.user())) {
+				throw new CommandException("Inaccessible channel");
 			}
 
 			List<Message> messages = new ArrayList<>();

@@ -64,7 +64,7 @@ public final class YarnFieldCommand extends Command {
 
 		List<String> namespaces = MappingCommandUtil.getNamespaces(context, arguments, false);
 
-		Paginator.Builder builder = new Paginator.Builder(context.author())
+		Paginator.Builder builder = new Paginator.Builder(context.user())
 				.title("%s matches", data.mcVersion)
 				.footer("query ns: %s", String.join(",", queryNamespaces));
 

@@ -226,7 +226,7 @@ public final class SetNamespaceCommand extends Command {
 
 		@Override
 		public void onReactionAdd(ReactionAddEvent event) {
-			if (event.getUserId() != context.author().getId()) {
+			if (event.getUserId() != context.user().getId()) {
 				return;
 			}
 

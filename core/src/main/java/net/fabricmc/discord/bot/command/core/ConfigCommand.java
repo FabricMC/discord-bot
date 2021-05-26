@@ -25,7 +25,6 @@ import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.config.ConfigKey;
-import net.fabricmc.discord.bot.message.Mentions;
 import net.fabricmc.discord.bot.message.Paginator;
 
 public final class ConfigCommand extends Command {
@@ -56,7 +55,7 @@ public final class ConfigCommand extends Command {
 
 	private boolean runList(CommandContext context, Map<String, String> arguments) throws DiscordException {
 		int pos = 0;
-		Paginator.Builder builder = new Paginator.Builder(context.author()).title("Config Entries");
+		Paginator.Builder builder = new Paginator.Builder(context.user()).title("Config Entries");
 		StringBuilder currentPage = new StringBuilder();
 
 		for (ConfigKey<?> configEntry : context.bot().getConfigEntries()) {
@@ -84,7 +83,7 @@ public final class ConfigCommand extends Command {
 		@Nullable final ConfigKey<Object> configKey = (ConfigKey<Object>) context.bot().getConfigKey(key);
 
 		if (configKey == null) {
-			context.channel().sendMessage("%s\nInvalid config entry key `%s`".formatted(Mentions.createUserMention(context.author()), key));
+			context.channel().sendMessage("%s\nInvalid config entry key `%s`".formatted(context.user().getNicknameMentionTag(), key));
 			return false;
 		}
 
@@ -100,7 +99,7 @@ public final class ConfigCommand extends Command {
 		}
 
 		if (!context.bot().setConfigEntry(configKey, deserializedValue)) {
-			context.channel().sendMessage("%s\nInvalid value: cannot set config entry %s to %s".formatted(Mentions.createUserMention(context.author()), key, value));
+			context.channel().sendMessage("%s\nInvalid value: cannot set config entry %s to %s".formatted(context.user().getNicknameMentionTag(), key, value));
 			return false;
 		}
 
@@ -115,7 +114,7 @@ public final class ConfigCommand extends Command {
 		@Nullable final ConfigKey<Object> configKey = (ConfigKey<Object>) context.bot().getConfigKey(key);
 
 		if (configKey == null) {
-			context.channel().sendMessage("%s: Invalid config entry key %s".formatted(Mentions.createUserMention(context.author()), key));
+			context.channel().sendMessage("%s: Invalid config entry key %s".formatted(context.user().getNicknameMentionTag(), key));
 			return false;
 		}
 
