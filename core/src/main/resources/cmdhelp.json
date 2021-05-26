@@ -76,6 +76,9 @@
 		"nick": {
 			"short": "Rename a user by dropping or changing the nick name"
 		},
+		"resetNick": {
+			"short": "Rename a user by dropping the nick name"
+		},
 		"note": {
 			"short": "Add a note about a user without notification"
 		},

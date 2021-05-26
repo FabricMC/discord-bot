@@ -398,7 +398,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 
 		assert user.getName().equals(event.getNewName());
 
-		if (!bot.getActionSyncHandler().applyNickLock(server, user)) {
+		if (!bot.getActionSyncHandler().applyNickLock(server, user)) { // only update db
 			refreshUser(server, user, true, true);
 		}
 	}

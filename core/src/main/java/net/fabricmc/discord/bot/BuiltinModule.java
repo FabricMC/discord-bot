@@ -41,6 +41,7 @@ import net.fabricmc.discord.bot.command.mod.GenericUserActionCommand;
 import net.fabricmc.discord.bot.command.mod.LockCommand;
 import net.fabricmc.discord.bot.command.mod.NickCommand;
 import net.fabricmc.discord.bot.command.mod.NoteCommand;
+import net.fabricmc.discord.bot.command.mod.ResetNickCommand;
 import net.fabricmc.discord.bot.command.mod.SlowmodeCommand;
 import net.fabricmc.discord.bot.command.mod.UnlockCommand;
 import net.fabricmc.discord.bot.command.mod.UserActionType;
@@ -93,6 +94,7 @@ final class BuiltinModule implements Module, MessageCreateListener {
 		bot.registerCommand(new UnlockCommand());
 		bot.registerCommand(new NickCommand());
 		bot.registerCommand(new NoteCommand());
+		bot.registerCommand(new ResetNickCommand());
 		bot.registerCommand(new SlowmodeCommand());
 		bot.registerCommand(new UserCommand());
 

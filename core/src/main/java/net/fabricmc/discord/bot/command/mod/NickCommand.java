@@ -52,7 +52,12 @@ public final class NickCommand extends Command {
 
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
-		long targetDiscordUserId = getDiscordUserId(context, arguments.get("user"));
+		run(context, arguments.get("user"), arguments.get("nick"), arguments.get("reason"));
+		return true;
+	}
+
+	static void run(CommandContext context, String user, String newNick, String reason) throws Exception {
+		long targetDiscordUserId = getDiscordUserId(context, user);
 		checkImmunity(context, targetDiscordUserId, false);
 
 		User target = context.server().getMemberById(targetDiscordUserId).orElse(null);
@@ -66,12 +71,12 @@ public final class NickCommand extends Command {
 
 		if (target != null) {
 			oldNick = target.getDisplayName(context.server());
+			if (newNick == null) newNick = target.getName();
 		} else {
 			DiscordUserData data = userHandler.getDiscordUserData(targetDiscordUserId, false, false);
 			oldNick = data.nickname() != null ? data.nickname() : data.username();
+			if (newNick == null) newNick = data.username();
 		}
-
-		String newNick = arguments.get("nick");
 
 		if (newNick.equals(oldNick)) {
 			throw new CommandException("Name unchanged");
@@ -81,7 +86,7 @@ public final class NickCommand extends Command {
 
 		int targetUserId = userHandler.getUserId(targetDiscordUserId);
 		ActionEntry entry = ActionQueries.createAction(context.bot().getDatabase(), UserActionType.RENAME, null,
-				targetUserId, context.userId(), 0, System.currentTimeMillis(), 0, arguments.get("reason"),
+				targetUserId, context.userId(), 0, System.currentTimeMillis(), 0, reason,
 				0);
 
 		// announce action
@@ -100,12 +105,10 @@ public final class NickCommand extends Command {
 
 		if (target != null) {
 			if (target.getName().equals(newNick)) {
-				context.server().resetNickname(target, entry.reason());
+				context.server().resetNickname(target, reason);
 			} else {
-				context.server().updateNickname(target, newNick, entry.reason());
+				context.server().updateNickname(target, newNick, reason);
 			}
 		}
-
-		return true;
 	}
 }
