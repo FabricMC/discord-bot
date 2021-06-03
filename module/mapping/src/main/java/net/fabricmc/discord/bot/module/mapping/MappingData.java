@@ -20,6 +20,8 @@ import static net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.MIN
 import static net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.NULL_NAMESPACE_ID;
 
 import java.lang.reflect.Array;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -33,17 +35,25 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree;
 import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.ClassMapping;
+import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.ElementMapping;
 import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.FieldMapping;
+import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.MemberMapping;
+import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.MethodArgMapping;
 import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.MethodMapping;
+import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.MethodVarMapping;
 
 final class MappingData {
 	private static final String intermediaryClassPrefix = "class_";
 	private static final String intermediaryFullClassPrefix = "net/minecraft/"+intermediaryClassPrefix;
 	private static final String intermediaryFieldPrefix = "field_";
 	private static final String intermediaryMethodPrefix = "method_";
+
+	private static final Logger LOGGER = LogManager.getLogger(MappingData.class);
 
 	public final String mcVersion;
 	public final String intermediaryMavenId;
@@ -590,4 +600,106 @@ final class MappingData {
 	}
 
 	private record MemberRef(String owner, boolean potentiallyNestedClass, String name, String desc) { }
+
+	public URI getJavadocUrl(ElementMapping element) {
+		ClassMapping cls;
+		MemberMapping member;
+
+		if (element instanceof ClassMapping) {
+			cls = (ClassMapping) element;
+			member = null;
+		} else if (element instanceof MemberMapping) {
+			member = (MemberMapping) element;
+			cls = member.getOwner();
+		} else if (element instanceof MethodArgMapping) {
+			member = ((MethodArgMapping) element).getMethod();
+			cls = member.getOwner();
+		} else if (element instanceof MethodVarMapping) {
+			member = ((MethodVarMapping) element).getMethod();
+			cls = member.getOwner();
+		} else {
+			throw new IllegalArgumentException(element.getClass().toString());
+		}
+
+		String clsName = cls.getName("yarn");
+		if (clsName == null) return null;
+
+		String fragment;
+		String memberName;
+
+		if (member == null
+				|| (memberName = member.getName("yarn")) == null && (memberName = member.getName("intermediary")) == null) {
+			fragment = null;
+		} else if (member instanceof FieldMapping) {
+			fragment = memberName;
+		} else { // MethodMapping
+			StringBuilder sb = new StringBuilder(memberName);
+			String desc = member.getDesc("yarn");
+			appendJavaDesc(desc, sb);
+			fragment = sb.toString();
+		}
+
+		URI ret = null;
+
+		try {
+			return new URI("https", null,
+					"maven.fabricmc.net", -1,
+					String.format("/docs/%s/%s.html",
+							yarnMavenId.substring(yarnMavenId.indexOf(':') + 1).replace(':', '-'), // net.fabricmc:yarn:1.16.5+build.9 -> yarn-1.16.5+build.9
+							clsName.replace('$', '.')),
+					null, fragment);
+		} catch (URISyntaxException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	private static void appendJavaDesc(String desc, StringBuilder sb) {
+		boolean first = true;
+		int dims = 0;
+
+		for (int i = 0; i < desc.length(); i++) {
+			char c = desc.charAt(i);
+
+			if (c == '(') {
+				sb.append(c);
+				continue;
+			} else if (c == ')') {
+				sb.append(c);
+				break;
+			} else if (c == '[') {
+				dims++;
+				continue;
+			}
+
+			if (first) {
+				first = false;
+			} else {
+				sb.append(',');
+			}
+
+			switch (c) {
+			case 'Z' -> sb.append("boolean");
+			case 'C' -> sb.append("char");
+			case 'B' -> sb.append("byte");
+			case 'S' -> sb.append("short");
+			case 'I' -> sb.append("int");
+			case 'F' -> sb.append("float");
+			case 'J' -> sb.append("long");
+			case 'D' -> sb.append("double");
+			case 'L' -> {
+				int end = desc.indexOf(';', i + 1);
+				if (end < 0) throw new RuntimeException("invalid desc: "+desc);
+
+				sb.append(desc.substring(i + 1, end).replace('/', '.').replace('$', '.'));
+				i = end;
+			}
+			default -> throw new RuntimeException("invalid desc: "+desc);
+			}
+
+			while (dims > 0) {
+				sb.append("[]");
+				dims--;
+			}
+		}
+	}
 }

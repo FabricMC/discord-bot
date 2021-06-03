@@ -16,6 +16,7 @@
 
 package net.fabricmc.discord.bot.module.mapping;
 
+import java.net.URI;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -83,6 +84,12 @@ public final class YarnClassCommand extends Command {
 
 			sb.append(String.format("\n**Yarn Access Widener**\n\n```accessible\tclass\t%s```",
 					result.getName("yarn")));
+
+			URI javadocUrl = data.getJavadocUrl(result);
+
+			if (javadocUrl != null) {
+				sb.append(String.format("\n**[Javadoc](%s)**", javadocUrl));
+			}
 
 			builder.page(sb);
 			sb.setLength(0);

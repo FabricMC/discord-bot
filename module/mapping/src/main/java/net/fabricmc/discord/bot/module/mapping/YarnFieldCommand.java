@@ -16,6 +16,7 @@
 
 package net.fabricmc.discord.bot.module.mapping;
 
+import java.net.URI;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -91,12 +92,18 @@ public final class YarnFieldCommand extends Command {
 				}
 			}
 
-			sb.append(String.format("\n**Yarn Field Descriptor**\n\n```%s```\n\n"
+			sb.append(String.format("\n**Yarn Field Descriptor**\n\n```%s```\n"
 					+ "**Yarn Access Widener**\n\n```accessible\tfield\t%s\t%s\t%s```",
 					result.getDesc("yarn"),
 					result.getOwner().getName("yarn"),
 					result.getName("yarn"),
 					result.getDesc("yarn")));
+
+			URI javadocUrl = data.getJavadocUrl(result);
+
+			if (javadocUrl != null) {
+				sb.append(String.format("\n**[Javadoc](%s)**", javadocUrl));
+			}
 
 			builder.page(sb);
 			sb.setLength(0);
