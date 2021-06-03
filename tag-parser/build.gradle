@@ -3,7 +3,7 @@ plugins {
 	id("com.github.johnrengelman.shadow")
 }
 
-def configurateVersion = "4.1.0-SNAPSHOT"
+def configurateVersion = "4.1.1"
 
 dependencies {
 	api("org.spongepowered:configurate-yaml:$configurateVersion") {

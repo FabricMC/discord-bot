@@ -398,7 +398,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 
 		assert user.getName().equals(event.getNewName());
 
-		if (!bot.getActionSyncHandler().applyNickLock(server, user)) { // only update db
+		if (!bot.getActionSyncHandler().applyNickLock(server, user)) { // only update db if nick lock didn't reject the name change
 			refreshUser(server, user, true, true);
 		}
 	}
@@ -412,7 +412,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 
 		assert user.getNickname(server).equals(event.getNewNickname());
 
-		if (!bot.getActionSyncHandler().applyNickLock(server, user)) {
+		if (!bot.getActionSyncHandler().applyNickLock(server, user)) { // only update db if nick lock didn't reject the name change
 			refreshUser(server, user, true, true);
 		}
 	}

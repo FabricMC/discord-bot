@@ -18,6 +18,7 @@ package net.fabricmc.discord.bot.util;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.ConnectException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
@@ -63,7 +64,8 @@ public final class HttpUtil {
 	}
 
 	public static void logError(String desc, Throwable exc, Logger logger) {
-		if (exc instanceof HttpConnectTimeoutException) {
+		if (exc instanceof HttpConnectTimeoutException
+				|| exc instanceof ConnectException) {
 			logger.warn("{}: {}", desc, exc.toString());
 		} else {
 			logger.warn("mc version check failed", exc);

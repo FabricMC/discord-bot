@@ -271,12 +271,16 @@ public final class McVersionModule implements Module {
 	}
 
 	private void updateSpecific(String kind, String latestVersion, ConfigKey<String> announcedVersionKey) throws IOException, URISyntaxException, InterruptedException {
+		String oldVersion;
+
 		if (latestVersion == null // no version specified
-				|| latestVersion.equals(bot.getConfigEntry(announcedVersionKey)) // same as last announced
+				|| latestVersion.equals(oldVersion = bot.getConfigEntry(announcedVersionKey)) // same as last announced
 				|| isOldVersion(latestVersion) // already known to Fabric, mcmeta glitch
 				|| announcedVersions.contains(latestVersion)) { // already posted by this instance
 			return;
 		}
+
+		LOGGER.info("Announcing MC {} {} -> {}", kind, oldVersion, latestVersion);
 
 		String msgText = NESSAGE.formatted(kind, latestVersion);
 
@@ -356,6 +360,8 @@ public final class McVersionModule implements Module {
 
 						if (version == null
 								|| !hasAnnouncedSnapshot(version) && !isOldVersion(version.toString())) {
+							LOGGER.info("Announcing MC news {} (regular, version {})", path, version != null ? version.toString() : "(unknown)");
+
 							if (!sendAnnouncement(updateChannel, "https://"+MC_NEWS_HOST+path)) {
 								return; // avoid updating ANNOUNCED_NEWS_DATE
 							}
@@ -402,6 +408,8 @@ public final class McVersionModule implements Module {
 		if (dateMs > announcedNewsDate
 				&& !announcedNews.contains(path)
 				&& !isOldVersion(version.toString())) {
+			LOGGER.info("Announcing MC news {} (url poll, version {})", path, version);
+
 			if (!sendAnnouncement(updateChannel, "https://"+MC_NEWS_HOST+path)) {
 				return;
 			}
@@ -416,7 +424,11 @@ public final class McVersionModule implements Module {
 		if (version.indexOf('/') >= 0)  throw new IllegalArgumentException("invalid mc version: "+version);
 
 		HttpResponse<InputStream> response = HttpUtil.makeRequest(FABRIC_VERSION_HOST, FABRIC_VERSION_PATH.formatted(version));
-		if (response.statusCode() != 200) return false;
+
+		if (response.statusCode() != 200) {
+			LOGGER.warn("MC version verification against Fabric Meta failed: {}", response.statusCode());
+			return false;
+		}
 
 		try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
 			reader.beginArray();

@@ -28,6 +28,7 @@ import org.javacord.api.entity.permission.Role;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
 import org.javacord.api.entity.user.UserStatus;
+import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
@@ -72,6 +73,7 @@ public final class UserCommand extends Command {
 
 		String title = "User %d Info".formatted(targetUserId);
 		long currentTime = System.currentTimeMillis();
+		Server server = context.server();
 
 		DiscordUserData firstDiscordUser = null;
 		StringBuilder discordUserList = new StringBuilder();
@@ -92,12 +94,13 @@ public final class UserCommand extends Command {
 				firstSeen = Math.min(firstSeen, du.firstSeen());
 				lastSeen = Math.max(lastSeen, du.lastSeen());
 
-				User user = context.server().getMemberById(du.id()).orElse(null);
+				User user;
 
-				if (user != null) {
+				if (server != null
+						&& (user = server.getMemberById(du.id()).orElse(null)) != null) {
 					lastSeen = currentTime;
 
-					Instant curJoinTime = user.getJoinedAtTimestamp(context.server()).orElse(null);
+					Instant curJoinTime = user.getJoinedAtTimestamp(server).orElse(null);
 					if (curJoinTime != null) firstSeen = Math.min(firstSeen, curJoinTime.toEpochMilli());
 				}
 
@@ -131,9 +134,9 @@ public final class UserCommand extends Command {
 
 		if (firstDiscordUser != null) {
 			firstPageSb.append("\n\n");
-			firstPageSb.append(formatDiscordUser(++num, firstDiscordUser, currentTime, context.server(), userData.discordUsers().size() > 1));
+			firstPageSb.append(formatDiscordUser(++num, firstDiscordUser, currentTime, server, userData.discordUsers().size() > 1));
 
-			firstThumbnail = getAvatarUrl(firstDiscordUser.id(), context.server());
+			firstThumbnail = getAvatarUrl(firstDiscordUser.id(), server);
 		}
 
 		if (userData.discordUsers().size() <= 1) {
@@ -151,8 +154,8 @@ public final class UserCommand extends Command {
 			for (DiscordUserData discordUserData : userData.discordUsers()) {
 				if (discordUserData == firstDiscordUser) continue;
 
-				builder.page(new Page.Builder(formatDiscordUser(++num, discordUserData, currentTime, context.server(), userData.discordUsers().size() > 1))
-						.thumbnail(getAvatarUrl(discordUserData.id(), context.server()))
+				builder.page(new Page.Builder(formatDiscordUser(++num, discordUserData, currentTime, server, userData.discordUsers().size() > 1))
+						.thumbnail(getAvatarUrl(discordUserData.id(), server))
 						.build());
 			}
 
@@ -162,8 +165,8 @@ public final class UserCommand extends Command {
 		return true;
 	}
 
-	private static String formatDiscordUser(int num, DiscordUserData data, long currentTime, Server server, boolean showTimes) {
-		User user = server.getMemberById(data.id()).orElse(null);
+	private static String formatDiscordUser(int num, DiscordUserData data, long currentTime, @Nullable Server server, boolean showTimes) {
+		User user = server != null ? server.getMemberById(data.id()).orElse(null) : null;
 		UserStatus status = user != null ? user.getStatus() : null;
 		Instant createTime = DiscordEntity.getCreationTimestamp(data.id());
 		Instant joinTime = user != null ? user.getJoinedAtTimestamp(server).orElse(null) : null;
@@ -207,7 +210,9 @@ public final class UserCommand extends Command {
 				FormatUtil.formatDuration(currentTime - time.toEpochMilli(), 3));
 	}
 
-	private static String getAvatarUrl(long discordUserId, Server server) {
+	private static String getAvatarUrl(long discordUserId, @Nullable Server server) {
+		if (server == null) return null;
+
 		User user = server.getMemberById(discordUserId).orElse(null);
 
 		return user != null ? user.getAvatar().getUrl().toString() : null;

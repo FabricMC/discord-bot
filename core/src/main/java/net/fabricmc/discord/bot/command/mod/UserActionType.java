@@ -167,7 +167,7 @@ public enum UserActionType implements ActionType {
 			if (NOP_MODE) return;
 
 			try {
-				if (!ActionQueries.addNickLock(bot.getDatabase(), target.getId(), target.getDisplayName(server))) {
+				if (!ActionQueries.addNickLock(bot.getDatabase(), target.getId(), target.getDisplayName(server))) { // new nicklock gets applied by the caller
 					bot.getActionSyncHandler().applyNickLock(server, target);
 				}
 			} catch (SQLException e) {

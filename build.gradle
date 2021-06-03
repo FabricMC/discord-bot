@@ -12,11 +12,6 @@ version "1.0-SNAPSHOT"
 
 repositories {
 	mavenCentral()
-
-	maven {
-		name = "Sonatype Snapshots"
-		url = "https://oss.sonatype.org/content/repositories/snapshots"
-	}
 }
 
 allprojects {
