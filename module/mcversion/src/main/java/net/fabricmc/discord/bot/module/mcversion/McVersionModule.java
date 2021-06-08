@@ -36,6 +36,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -75,7 +76,7 @@ public final class McVersionModule implements Module {
 
 	private static final String MC_NEWS_HOST = "www.minecraft.net";
 	private static final String MC_NEWS_PATH = "/content/minecraft-net/_jcr_content.articles.grid";
-	private static final String MC_NEWS_QUERY = "tileselection=auto&tagsPath=minecraft:article/news,minecraft:stockholm/news,minecraft:stockholm/minecraft-build&offset=0&count=4&pageSize=4&locale=en-us&lang=/content/minecraft-net/language-masters/en-us";
+	private static final String MC_NEWS_QUERY = "tileselection=auto&tagsPath=minecraft:article/news,minecraft:stockholm/news,minecraft:stockholm/minecraft-build,%d&offset=0&count=4&pageSize=4&locale=en-us&lang=/content/minecraft-net/language-masters/en-us";
 	private static final DateTimeFormatter MC_NEWS_DATE_FORMATTER = DateTimeFormatter.ofPattern("dd MMMM y HH:mm:ss zzz", Locale.ENGLISH);
 	private static final Pattern MC_NEWS_SNAPSHOT_PATTERN = Pattern.compile(" (\\d{2})w(\\d{1,2})([a-z]) ");
 	private static final Pattern MC_NEWS_RELEASE_PATTERN = Pattern.compile(" 1\\.\\d{2}[ \\.]");
@@ -294,7 +295,7 @@ public final class McVersionModule implements Module {
 	private void updateNewsByQuery() throws IOException, URISyntaxException, InterruptedException {
 		long announcedNewsDate = bot.getConfigEntry(ANNOUNCED_NEWS_DATE);
 
-		HttpResponse<InputStream> response = HttpUtil.makeRequest(MC_NEWS_HOST, MC_NEWS_PATH, MC_NEWS_QUERY);
+		HttpResponse<InputStream> response = HttpUtil.makeRequest(MC_NEWS_HOST, MC_NEWS_PATH, MC_NEWS_QUERY.formatted(ThreadLocalRandom.current().nextInt(0x40000000)));
 		if (response.statusCode() != 200) throw new IOException("request failed with code "+response.statusCode());
 
 		long firstDateMs = 0;
