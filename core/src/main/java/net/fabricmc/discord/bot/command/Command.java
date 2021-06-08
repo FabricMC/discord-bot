@@ -23,6 +23,7 @@ import java.util.Optional;
 import org.javacord.api.entity.channel.ServerChannel;
 import org.javacord.api.entity.channel.ServerTextChannel;
 import org.javacord.api.entity.server.Server;
+import org.javacord.api.exception.DiscordException;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.CachedMessage;
@@ -144,12 +145,29 @@ public abstract class Command {
 		}
 	}
 
-	public static CachedMessage getMessage(CommandContext context, String message, boolean includeDeleted) throws CommandException {
+	public static CachedMessage getMessage(CommandContext context, String message, boolean includeDeleted) throws CommandException, DiscordException {
 		CachedMessage ret = context.bot().getMessageIndex().get(message, context.server());
 		if (ret == null || !includeDeleted && ret.isDeleted()) throw new CommandException("Unknown message");
 
 		return ret;
 	}
+
+	public static UserTarget getUserTarget(CommandContext context, String userOrMessage) throws CommandException, DiscordException {
+		CachedMessage msg = context.bot().getMessageIndex().get(userOrMessage, context.server());
+		int userId;
+
+		if (msg != null) {
+			userId = context.bot().getUserHandler().getUserId(msg.getAuthorDiscordId());
+			if (userId < 0) throw new CommandException("Message from unknown user");
+		} else {
+			userId = context.bot().getUserHandler().getUserId(userOrMessage, context.server(), true);
+			if (userId < 0) throw new CommandException("Unknown or ambiguous user/message");
+		}
+
+		return new UserTarget(userId, msg);
+	}
+
+	public static record UserTarget(int userId, @Nullable CachedMessage message) { }
 
 	public static void checkSelfTarget(CommandContext context, int targetUserId) throws CommandException {
 		if (targetUserId == context.userId()) {

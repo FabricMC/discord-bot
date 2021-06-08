@@ -87,13 +87,13 @@ public final class NickCommand extends Command {
 		int targetUserId = userHandler.getUserId(targetDiscordUserId);
 		ActionEntry entry = ActionQueries.createAction(context.bot().getDatabase(), UserActionType.RENAME, null,
 				targetUserId, context.userId(), 0, System.currentTimeMillis(), 0, reason,
-				0);
+				null, 0);
 
 		// announce action
 
 		ActionUtil.announceAction(entry.type(), false, "", "from %s to %s".formatted(oldNick, newNick),
 				targetUserId, entry.creationTime(), entry.expirationTime(), entry.reason(),
-				entry.id(),
+				entry.id(), null,
 				context.channel(), context.user(),
 				context.bot(), context.server(), true);
 

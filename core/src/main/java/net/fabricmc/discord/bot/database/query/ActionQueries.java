@@ -16,6 +16,8 @@
 
 package net.fabricmc.discord.bot.database.query;
 
+import java.io.IOException;
+import java.net.URISyntaxException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -26,6 +28,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import net.fabricmc.discord.bot.CachedMessage;
+import net.fabricmc.discord.bot.CachedMessageAttachment;
 import net.fabricmc.discord.bot.command.mod.ActionType;
 import net.fabricmc.discord.bot.database.Database;
 import net.fabricmc.discord.bot.database.IdArmor;
@@ -38,7 +42,7 @@ public final class ActionQueries {
 
 		try (Connection conn = db.getConnection();
 				PreparedStatement ps = conn.prepareStatement("SELECT "
-						+ "a.targetkind, a.type, d.data, d.resetdata, a.target_id, a.actor_user_id, a.creation, a.expiration, a.reason, a.prev_id, s.suspender_user_id, s.time, s.reason "
+						+ "a.targetkind, a.type, d.data, d.resetdata, a.target_id, a.actor_user_id, a.creation, a.expiration, a.reason, a.context_message_id, a.prev_id, s.suspender_user_id, s.time, s.reason "
 						+ "FROM `action` a "
 						+ "LEFT JOIN `actiondata` d ON d.action_id = a.id "
 						+ "LEFT JOIN `actionsuspension` s ON s.action_id = a.id "
@@ -53,10 +57,10 @@ public final class ActionQueries {
 				int dataVal = res.getInt(3);
 				ActionData data = res.wasNull() ? null : new ActionData(dataVal, res.getInt(4));
 
-				int rawSuspenderUserId = res.getInt(11);
+				int rawSuspenderUserId = res.getInt(12);
 				if (res.wasNull()) rawSuspenderUserId = -1;
 
-				long suspendTime = res.getLong(12);
+				long suspendTime = res.getLong(13);
 				if (res.wasNull()) suspendTime = -1;
 
 				return new ActionEntry(actionId, // id
@@ -67,10 +71,11 @@ public final class ActionQueries {
 						res.getLong(7), // creationTime
 						res.getLong(8), // expirationTime
 						res.getString(9), // reason
-						IdArmor.encodeOptional(res.getInt(10)), // prevId
+						res.getLong(10), // contextMessageId
+						IdArmor.encodeOptional(res.getInt(11)), // prevId
 						IdArmor.encodeOptional(rawSuspenderUserId), // suspenderUserId
 						suspendTime, // suspensionTime
-						res.getString(13)); // suspendReason
+						res.getString(14)); // suspendReason
 			}
 		}
 	}
@@ -81,7 +86,7 @@ public final class ActionQueries {
 		long rawTargetId = IdArmor.decodeOrThrowCond(targetId, kind.useEncodedTargetId, "target id");
 
 		try (Connection conn = db.getConnection();
-				PreparedStatement ps = conn.prepareStatement("SELECT a.id, a.targetkind, a.type, d.data, d.resetdata, a.actor_user_id, a.creation, a.expiration, a.reason, a.prev_id, s.suspender_user_id, s.time, s.reason "
+				PreparedStatement ps = conn.prepareStatement("SELECT a.id, a.targetkind, a.type, d.data, d.resetdata, a.actor_user_id, a.creation, a.expiration, a.reason, a.context_message_id, a.prev_id, s.suspender_user_id, s.time, s.reason "
 						+ "FROM `action` a "
 						+ "LEFT JOIN `actiondata` d ON d.action_id = a.id "
 						+ "LEFT JOIN `actionsuspension` s ON s.action_id = a.id "
@@ -99,10 +104,10 @@ public final class ActionQueries {
 					int dataVal = res.getInt(4);
 					ActionData data = res.wasNull() ? null : new ActionData(dataVal, res.getInt(5));
 
-					int rawSuspenderUserId = res.getInt(11);
+					int rawSuspenderUserId = res.getInt(12);
 					if (res.wasNull()) rawSuspenderUserId = -1;
 
-					long suspendTime = res.getLong(12);
+					long suspendTime = res.getLong(13);
 					if (res.wasNull()) suspendTime = -1;
 
 					ret.add(new ActionEntry(IdArmor.encode(res.getInt(1)), // id
@@ -113,10 +118,11 @@ public final class ActionQueries {
 							res.getLong(7), // creationTime
 							res.getLong(8), // expirationTime
 							res.getString(9), // reason
-							IdArmor.encodeOptional(res.getInt(10)), // prevId
+							res.getLong(10), // contextMessageId
+							IdArmor.encodeOptional(res.getInt(11)), // prevId
 							IdArmor.encodeOptional(rawSuspenderUserId), // suspenderUserId
 							suspendTime, // suspensionTime
-							res.getString(13))); // suspendReason
+							res.getString(14))); // suspendReason
 				}
 
 				return ret;
@@ -126,19 +132,21 @@ public final class ActionQueries {
 
 	public static ActionEntry createAction(Database db, ActionType type, ActionData data,
 			long targetId, int actorUserId, long durationMs, long creationTime, long expirationTime, String reason,
-			int prevId) throws SQLException {
+			CachedMessage contextMessage, int prevId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 		if (type == null) throw new NullPointerException("null type");
 		if (targetId < 0) throw new IllegalArgumentException("invalid target id");
 		if (actorUserId < 0) throw new IllegalArgumentException("invalid actor userid");
 		if (durationMs == 0 && type.hasDuration()) throw new IllegalArgumentException("invalid zero duration");
 
+		long contextMessageId = contextMessage != null ? contextMessage.getId() : -1;
+
 		long rawTargetId = IdArmor.decodeOrThrowCond(targetId, type.getKind().useEncodedTargetId, "target id");
 		int rawActorUserId = IdArmor.decodeOrThrow(actorUserId, "actor user id");
 		int rawPrevId = IdArmor.decodeOptionalOrThrow(prevId, "prev id");
 
 		try (Connection conn = db.getConnection();
-				PreparedStatement ps = conn.prepareStatement("INSERT INTO `action` (targetkind, type, target_id, actor_user_id, creation, expiration, reason, prev_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS);
+				PreparedStatement ps = conn.prepareStatement("INSERT INTO `action` (targetkind, type, target_id, actor_user_id, creation, expiration, reason, context_message_id, prev_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", Statement.RETURN_GENERATED_KEYS);
 				PreparedStatement psExpire = conn.prepareStatement("INSERT INTO `actionexpiration` (action_id, time) VALUES (?, ?)");
 				PreparedStatement psActive = conn.prepareStatement("INSERT INTO `activeaction` (action_id, target_id) VALUES (?, ?)")) {
 			conn.setAutoCommit(false);
@@ -150,7 +158,8 @@ public final class ActionQueries {
 			ps.setLong(5, creationTime);
 			ps.setLong(6, expirationTime);
 			ps.setString(7, reason);
-			ps.setInt(8, rawPrevId);
+			ps.setLong(8, contextMessageId);
+			ps.setInt(9, rawPrevId);
 			ps.executeUpdate();
 
 			int rawActionId;
@@ -181,12 +190,51 @@ public final class ActionQueries {
 				psActive.executeUpdate();
 			}
 
+			if (contextMessage != null) {
+				recordMessage(conn, contextMessage, rawActionId);
+			}
+
 			conn.commit();
 
 			return new ActionEntry(IdArmor.encode(rawActionId), type, data, targetId, actorUserId,
 					creationTime, expirationTime,
-					reason, IdArmor.encodeOptional(prevId),
+					reason, contextMessageId, IdArmor.encodeOptional(prevId),
 					-1, -1, null);
+		}
+	}
+
+	private static void recordMessage(Connection conn, CachedMessage message, int rawActionId) throws SQLException {
+		final int maxSize = 250_000;
+
+		try (PreparedStatement psMsg = conn.prepareStatement("INSERT OR IGNORE INTO `message` (id, author_discorduser_id, channel_id, content, action_id) VALUES (?, ?, ?, ?, ?)");
+				PreparedStatement psAtt = conn.prepareStatement("INSERT OR IGNORE INTO `messageattachment` (id, message_id, url, filename, size, data) VALUES (?, ?, ?, ?, ?, ?)");) {
+			psMsg.setLong(1, message.getId());
+			psMsg.setLong(2, message.getAuthorDiscordId());
+			psMsg.setLong(3, message.getChannelId());
+			psMsg.setString(4, message.getContent());
+			psMsg.setInt(5, rawActionId);
+			psMsg.executeUpdate();
+
+			for (CachedMessageAttachment attachment : message.getAttachments()) {
+				psAtt.setLong(1, attachment.getId());
+				psAtt.setLong(2, message.getId());
+				psAtt.setString(3, attachment.getUrl());
+				psAtt.setString(4, attachment.getFileName());
+				psAtt.setLong(5, attachment.getSize());
+
+				byte[] data = null;
+
+				if (attachment.getSize() <= maxSize) {
+					try {
+						data = attachment.getData(false);
+					} catch (IOException | InterruptedException | URISyntaxException e) {
+						e.printStackTrace();
+					}
+				}
+
+				psAtt.setBytes(6, data);
+				psAtt.executeUpdate();
+			}
 		}
 	}
 
@@ -222,7 +270,7 @@ public final class ActionQueries {
 
 	public record ActionEntry(int id, ActionType type, ActionData data, long targetId, int actorUserId,
 			long creationTime, long expirationTime,
-			String reason, int prevId,
+			String reason, long contextMessageId, int prevId,
 			int suspenderUserId, long suspensionTime, String suspendReason) { }
 
 	public record ActionData(int data, int resetData) { }

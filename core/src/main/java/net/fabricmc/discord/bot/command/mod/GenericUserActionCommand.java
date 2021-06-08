@@ -20,6 +20,7 @@ import java.util.Map;
 
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
+import net.fabricmc.discord.bot.command.mod.ActionUtil.UserMessageAction;
 
 public final class GenericUserActionCommand extends Command {
 	public GenericUserActionCommand(UserActionType type, boolean activate) {
@@ -39,9 +40,9 @@ public final class GenericUserActionCommand extends Command {
 	@Override
 	public String usage() {
 		if (type.hasDuration && activate) {
-			return "<user> <duration> <reason...>";
+			return "<user/message> <duration> <reason...> ([--keep] | [--clean] | [--cleanLocal])";
 		} else {
-			return "<user> <reason...>";
+			return "<user/message> <reason...> ([--keep] | [--clean] | [--cleanLocal])";
 		}
 	}
 
@@ -52,18 +53,29 @@ public final class GenericUserActionCommand extends Command {
 
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
-		int targetUserId = getUserId(context, arguments.get("user"));
+		UserTarget target = getUserTarget(context, arguments.get("user/message"));
 		String reason = arguments.get("reason");
+		UserMessageAction targetMessageAction;
+
+		if (arguments.containsKey("clean")) {
+			targetMessageAction = UserMessageAction.CLEAN;
+		} else if (arguments.containsKey("cleanLocal")) {
+			targetMessageAction = UserMessageAction.CLEAN_LOCAL;
+		} else if (target.message() == null || arguments.containsKey("keep")) {
+			targetMessageAction = UserMessageAction.NONE;
+		} else {
+			targetMessageAction = UserMessageAction.DELETE;
+		}
 
 		if (activate) {
-			checkSelfTarget(context, targetUserId);
-			checkImmunity(context, targetUserId, false);
+			checkSelfTarget(context, target.userId());
+			checkImmunity(context, target.userId(), false);
 
 			String duration = type.hasDuration ? arguments.get("duration") : null;
 
-			ActionUtil.applyAction(type, 0, targetUserId, duration, reason, null, context);
+			ActionUtil.applyUserAction(type, 0, target.userId(), duration, reason, target.message(), targetMessageAction, context);
 		} else {
-			ActionUtil.suspendAction(type, targetUserId, reason, context);
+			ActionUtil.suspendAction(type, target.userId(), reason, context);
 		}
 
 		return true;

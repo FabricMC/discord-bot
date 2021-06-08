@@ -68,6 +68,7 @@ final class DbMigration {
 			case 6: migrate_6_7(st);
 			case 7: migrate_7_8(st);
 			case 8: migrate_8_9(st);
+			case 9: migrate_9_10(st);
 			}
 
 			st.executeUpdate(String.format("REPLACE INTO `config` VALUES ('dbVersion', '%d')", Database.currentVersion));
@@ -268,5 +269,13 @@ final class DbMigration {
 	private static void migrate_8_9(Statement st) throws SQLException {
 		st.executeUpdate("CREATE TABLE `userconfig` (`user_id` INTEGER, `key` TEXT, `value` TEXT, UNIQUE(`user_id`, `key`))");
 		st.executeUpdate("CREATE INDEX `userconfig_user_id` ON `userconfig` (`user_id`)");
+	}
+
+	private static void migrate_9_10(Statement st) throws SQLException {
+		st.executeUpdate("ALTER TABLE `action` ADD COLUMN `context_message_id` INTEGER DEFAULT '-1'");
+		st.executeUpdate("CREATE TABLE `message` (`id` INTEGER PRIMARY KEY, `author_discorduser_id` INTEGER, `channel_id` INTEGER, `content` TEXT, `action_id` INTEGER)");
+		st.executeUpdate("CREATE INDEX `message_action_id` ON `message` (`action_id`)");
+		st.executeUpdate("CREATE TABLE `messageattachment` (`id` INTEGER PRIMARY KEY, `message_id` INTEGER, `url` TEXT, `filename` TEXT, `size` INTEGER, `data` BLOB)");
+		st.executeUpdate("CREATE INDEX `messageattachment_message_id` ON `messageattachment` (`message_id`)");
 	}
 }

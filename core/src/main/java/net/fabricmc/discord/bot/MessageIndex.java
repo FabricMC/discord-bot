@@ -16,9 +16,11 @@
 
 package net.fabricmc.discord.bot;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,6 +33,7 @@ import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongIterator;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import org.javacord.api.entity.channel.Channel;
 import org.javacord.api.entity.channel.ServerChannel;
 import org.javacord.api.entity.channel.ServerTextChannel;
@@ -41,19 +44,22 @@ import org.javacord.api.event.channel.server.ServerChannelCreateEvent;
 import org.javacord.api.event.channel.server.ServerChannelDeleteEvent;
 import org.javacord.api.event.message.MessageCreateEvent;
 import org.javacord.api.event.message.MessageDeleteEvent;
+import org.javacord.api.event.message.MessageEditEvent;
 import org.javacord.api.exception.DiscordException;
+import org.javacord.api.exception.NotFoundException;
 import org.javacord.api.listener.ChainableGloballyAttachableListenerManager;
 import org.javacord.api.listener.channel.server.ServerChannelChangeOverwrittenPermissionsListener;
 import org.javacord.api.listener.channel.server.ServerChannelCreateListener;
 import org.javacord.api.listener.channel.server.ServerChannelDeleteListener;
 import org.javacord.api.listener.message.MessageCreateListener;
 import org.javacord.api.listener.message.MessageDeleteListener;
+import org.javacord.api.listener.message.MessageEditListener;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.util.DiscordUtil;
 
 public final class MessageIndex implements MessageCreateListener, MessageDeleteListener,
-ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOverwrittenPermissionsListener {
+ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 	private static final int INIT_LIMIT = 1000;
 	private static final int MESSAGE_LIMIT = 10000;
 
@@ -100,7 +106,7 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 
 		synchronized (globalIndex) {
 			for (CachedMessage message : globalIndex.values()) {
-				if (message.authorId == authorId && (includeDeleted || !message.isDeleted())) {
+				if (message.getAuthorDiscordId() == authorId && (includeDeleted || !message.isDeleted())) {
 					ret.add(message);
 				}
 			}
@@ -109,29 +115,23 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		return ret;
 	}
 
-	public long[] getAllIdsByAuthor(ServerTextChannel channel, long authorId, boolean includeDeleted) {
-		class IdGatherVisitor implements Visitor {
-			@Override
-			public boolean visit(CachedMessage message) {
-				if (message.authorId == authorId) {
-					if (idx >= res.length) res = Arrays.copyOf(res, res.length * 2);
-					res[idx++] = message.id;
-				}
+	public Collection<CachedMessage> getAllIdsByAuthors(ServerTextChannel channel, LongSet authorDiscordIds, boolean includeDeleted) {
+		if (authorDiscordIds.isEmpty()) return Collections.emptyList();
 
-				return true;
+		List<CachedMessage> res = new ArrayList<>();
+
+		accept(channel, msg -> {
+			if (authorDiscordIds.contains(msg.getAuthorDiscordId())) {
+				res.add(msg);
 			}
 
-			long[] res = new long[50];
-			int idx;
-		}
+			return true;
+		}, includeDeleted);
 
-		IdGatherVisitor visitor = new IdGatherVisitor();
-		accept(channel, visitor, includeDeleted);
-
-		return Arrays.copyOf(visitor.res, visitor.idx);
+		return res;
 	}
 
-	public @Nullable CachedMessage get(String desc, @Nullable Server server) {
+	public @Nullable CachedMessage get(String desc, @Nullable Server server) throws DiscordException {
 		Matcher matcher = MESSAGE_LINK_PATTERN.matcher(desc);
 
 		if (matcher.matches()) {
@@ -139,8 +139,20 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 
 			if (!guild.equals("@me") && server != null && server.getId() == Long.parseUnsignedLong(guild)) {
 				ServerTextChannel channel = server.getTextChannelById(Long.parseUnsignedLong(matcher.group(2))).orElse(null);
+				if (channel == null) return null;
 
-				return channel != null ? get(channel, Long.parseUnsignedLong(matcher.group(3))) : null;
+				long msgId = Long.parseUnsignedLong(matcher.group(3));
+				CachedMessage msg = get(channel, msgId);
+
+				if (msg == null) {
+					try {
+						msg = new CachedMessage(DiscordUtil.join(channel.getMessageById(msgId)));
+					} catch (NotFoundException e) {
+						// ignore
+					}
+				}
+
+				return msg;
 			} else {
 				desc = matcher.group(3);
 			}
@@ -167,6 +179,7 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		src.addServerChannelDeleteListener(this);
 		src.addServerChannelChangeOverwrittenPermissionsListener(this);
 		src.addMessageCreateListener(this);
+		src.addMessageEditListener(this);
 		src.addMessageDeleteListener(this);
 	}
 
@@ -268,6 +281,18 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 	}
 
 	@Override
+	public void onMessageEdit(MessageEditEvent event) {
+		ChannelMessageCache cache = channelCaches.get(event.getChannel());
+		if (cache == null) return;
+
+		Instant time = Instant.now();
+
+		synchronized (cache) {
+			cache.update(event.getMessageId(), event.getNewContent(), time);
+		}
+	}
+
+	@Override
 	public void onMessageDelete(MessageDeleteEvent event) {
 		Server server = event.getServer().orElse(null);
 		if (server == null) return;
@@ -311,14 +336,14 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		}
 
 		boolean add(CachedMessage message) {
-			long key = message.id;
+			long key = message.getId();
 			if (index.putIfAbsent(key, writeIdx) >= 0) return false;
 
 			CachedMessage prev = messages[writeIdx];
 
 			synchronized (globalIndex) {
 				if (prev != null) {
-					long prevKey = prev.id;
+					long prevKey = prev.getId();
 					index.remove(prevKey);
 					globalIndex.remove(prevKey);
 				}
@@ -328,6 +353,27 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 
 			messages[writeIdx] = message;
 			writeIdx = inc(writeIdx);
+
+			return true;
+		}
+
+		boolean update(long id, String newContent, Instant editTime) {
+			Integer pos = index.get(id);
+			if (pos < 0) return false;
+
+			CachedMessage prev = messages[pos];
+
+			if (prev.getContent().equals(newContent)) {
+				return false;
+			}
+
+			CachedMessage updated = new CachedMessage(prev, newContent, editTime);
+
+			synchronized (globalIndex) {
+				globalIndex.put(id, updated);
+			}
+
+			messages[pos] = updated;
 
 			return true;
 		}

@@ -18,11 +18,14 @@ package net.fabricmc.discord.bot.command.mod;
 
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.javacord.api.entity.channel.ServerChannel;
+import org.javacord.api.entity.channel.ServerTextChannel;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.javacord.api.entity.permission.Role;
@@ -31,6 +34,7 @@ import org.javacord.api.entity.user.User;
 import org.javacord.api.exception.DiscordException;
 import org.jetbrains.annotations.Nullable;
 
+import net.fabricmc.discord.bot.CachedMessage;
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.CommandContext;
@@ -46,6 +50,7 @@ import net.fabricmc.discord.bot.database.query.ActionQueries.ActiveActionEntry;
 import net.fabricmc.discord.bot.database.query.ActionQueries.ExpiringActionEntry;
 import net.fabricmc.discord.bot.util.DiscordUtil;
 import net.fabricmc.discord.bot.util.FormatUtil;
+import net.fabricmc.discord.bot.util.FormatUtil.OutputType;
 
 public final class ActionUtil {
 	static final Logger LOGGER = LogManager.getLogger("action");
@@ -89,7 +94,71 @@ public final class ActionUtil {
 	 * @param context command context
 	 * @return true if the action was executed successfully
 	 */
-	static void applyAction(ActionType type, int data, long targetId, String duration, String reason, @Nullable String extraBodyDesc, CommandContext context) throws Exception {
+	static void applyUserAction(ActionType type, int data, int targetUserId, String duration, String reason,
+			@Nullable CachedMessage targetMessage, UserMessageAction targetMessageAction,
+			CommandContext context) throws Exception {
+		String extraBodyDesc;
+
+		if (targetMessage == null || targetMessageAction == UserMessageAction.NONE) {
+			extraBodyDesc = null;
+		} else {
+			extraBodyDesc = "with %s".formatted(targetMessageAction.desc);
+		}
+
+		int actionId = applyAction(type, data, targetUserId, duration, reason,
+				targetMessage,
+				extraBodyDesc, context);
+
+		if (targetMessageAction != UserMessageAction.NONE && targetMessage != null) {
+			String deleteReason = "Action %d".formatted(actionId);
+
+			int count = 0;
+
+			if (targetMessage.delete(context.server(), deleteReason)) {
+				count++;
+			}
+
+			Collection<CachedMessage> extraDeleted = switch (targetMessageAction) {
+			case CLEAN -> CleanCommand.clean(targetUserId, null, deleteReason, context);
+			case CLEAN_LOCAL -> {
+				ServerTextChannel channel;
+
+				if (targetMessage != null
+						&& (channel = context.server().getTextChannelById(targetMessage.getChannelId()).orElse(null)) != null) {
+					yield CleanCommand.clean(targetUserId, channel, deleteReason, context);
+				} else {
+					yield Collections.emptyList();
+				}
+			}
+			default -> Collections.emptyList();
+			};
+
+			count += extraDeleted.size();
+			context.channel().sendMessage("Deleted %d message%s".formatted(count, count != 1 ? "s" : ""));
+		}
+	}
+
+	enum UserMessageAction {
+		NONE("none"),
+		DELETE("delete"),
+		CLEAN("clean"),
+		CLEAN_LOCAL("local clean");
+
+		UserMessageAction(String desc) {
+			this.desc = desc;
+		}
+
+		public final String desc;
+	}
+
+	static void applyChannelAction(ActionType type, int data, long targetChannelId, String duration, String reason,
+			@Nullable String extraBodyDesc, CommandContext context) throws Exception {
+		applyAction(type, data, targetChannelId, duration, reason, null, extraBodyDesc, context);
+	}
+
+	private static int applyAction(ActionType type, int data, long targetId, String duration, String reason,
+			CachedMessage targetMessageContext,
+			@Nullable String extraBodyDesc, CommandContext context) throws Exception {
 		// check for conflict
 
 		int prevId = -1;
@@ -105,7 +174,7 @@ public final class ActionUtil {
 					throw new CommandException("The %s is already %s", type.getKind().id, type.getDesc(false));
 				} else if (cmp > 0 && !type.checkData(data, existingAction.data().resetData())) { // downgrade to or below the prev action's reset level, just suspend with no new action
 					suspendAction(type, targetId, reason, context);
-					return;
+					return existingAction.id();
 				}
 
 				if (ActionQueries.suspendAction(context.bot().getDatabase(), existingAction.id(), context.userId(), "superseded")) {
@@ -162,7 +231,8 @@ public final class ActionUtil {
 		ActionEntry entry = ActionQueries.createAction(context.bot().getDatabase(),
 				type,
 				(data != 0 || result.resetData() != null ? new ActionData(data, resetData) : null),
-				targetId, context.userId(), durationMs, creationTime, expirationTime, reason, prevId);
+				targetId, context.userId(), durationMs, creationTime, expirationTime, reason,
+				targetMessageContext, prevId);
 
 		// apply discord action again in case the user rejoined quickly (race condition)
 
@@ -179,7 +249,7 @@ public final class ActionUtil {
 		announceAction(type, false, null, extraBodyDesc,
 				targetId,
 				entry.creationTime(), entry.expirationTime(), reason,
-				entry.id(),
+				entry.id(), targetMessageContext,
 				context.channel(), context.user(),
 				context.bot(), context.server(),
 				false);
@@ -187,6 +257,8 @@ public final class ActionUtil {
 		// record action for expiration
 
 		context.bot().getActionSyncHandler().onNewAction(entry);
+
+		return entry.id();
 	}
 
 	static void suspendAction(ActionType type, long targetId, String reason, CommandContext context) throws Exception {
@@ -232,7 +304,7 @@ public final class ActionUtil {
 		announceAction(type, true, "", "",
 				targetId,
 				System.currentTimeMillis(), 0, reason,
-				actionId,
+				actionId, null,
 				context.channel(), context.user(),
 				context.bot(), context.server(),
 				true);
@@ -251,7 +323,7 @@ public final class ActionUtil {
 		announceAction(entry.type(), true, "(expiration)", "automatically",
 				entry.targetId(),
 				System.currentTimeMillis(), 0, null,
-				entry.id(),
+				entry.id(), null,
 				null, null,
 				bot, server,
 				true);
@@ -260,7 +332,7 @@ public final class ActionUtil {
 	static void announceAction(ActionType type, boolean reversal, @Nullable String extraTitleDesc, @Nullable String extraBodyDesc,
 			long targetId,
 			long creation, long expiration, String reason,
-			int actionId,
+			int actionId, CachedMessage targetMessageContext,
 			TextChannel actingChannel, User actor,
 			DiscordBot bot, Server server,
 			boolean notifyTarget) {
@@ -314,10 +386,20 @@ public final class ActionUtil {
 		// log to log channel
 
 		if (logChannel != null) {
+			if (targetMessageContext != null) {
+				// include target message context
+				description = String.format("%s\n**Context Channel:** <#%d>\n**Context Message:** %s",
+						description,
+						targetMessageContext.getChannelId(),
+						FormatUtil.escape(targetMessageContext.getContent(), OutputType.CODE, true));
+			}
+
 			if (actor != null) {
 				// include executing moderator info
-				msg.setDescription("%s\n**Moderator:** %s".formatted(description, UserHandler.formatDiscordUser(actor)));
+				description = "%s\n**Moderator:** %s".formatted(description, UserHandler.formatDiscordUser(actor));
 			}
+
+			msg.setDescription(description);
 
 			logChannel.sendMessage(msg);
 		}

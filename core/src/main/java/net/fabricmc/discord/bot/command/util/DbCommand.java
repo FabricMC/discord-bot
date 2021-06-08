@@ -20,6 +20,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Statement;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -61,7 +62,14 @@ public final class DbCommand extends Command {
 
 				while (res.next()) {
 					for (int i = 1; i <= cols; i++) {
-						String val = res.getString(i);
+						String val;
+
+						if (meta.getColumnType(i) != Types.BLOB) {
+							val = res.getString(i);
+						} else {
+							val = formatBlob(res.getBytes(i));
+						}
+
 						values.add(val != null ? val : "NULL");
 					}
 				}
@@ -149,4 +157,28 @@ public final class DbCommand extends Command {
 
 		return true;
 	}
+
+	private static String formatBlob(byte[] data) {
+		if (data == null) return null;
+
+		boolean truncate = data.length > MAX_BLOB_LEN;
+		int len = Math.min(data.length, MAX_BLOB_LEN - 1);
+		char[] chars = new char[len];
+
+		for (int j = 0; j < len; j++) {
+			int b = data[j] & 0xff;
+
+			if (b >= ' ' && b <= '~') {
+				chars[j] = (char) b;
+			} else {
+				chars[j] = '.';
+			}
+		}
+
+		if (truncate) chars[len - 1] = '…';
+
+		return new String(chars);
+	}
+
+	private static final int MAX_BLOB_LEN = 60;
 }

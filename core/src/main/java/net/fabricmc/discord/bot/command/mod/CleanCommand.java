@@ -17,19 +17,28 @@
 package net.fabricmc.discord.bot.command.mod;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import org.javacord.api.entity.channel.ServerTextChannel;
+import org.javacord.api.entity.message.Message;
+import org.javacord.api.exception.DiscordException;
+import org.javacord.api.exception.NotFoundException;
 
+import net.fabricmc.discord.bot.CachedMessage;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
+import net.fabricmc.discord.bot.util.DiscordUtil;
 
 public final class CleanCommand extends Command {
 	private final Map<Integer, List<ChannelEntry>> pendingActions = new ConcurrentHashMap<>();
@@ -56,22 +65,10 @@ public final class CleanCommand extends Command {
 			checkImmunity(context, targetDiscordUserId, true);
 
 			String targetChannelName = arguments.get("channel");
-			Collection<ServerTextChannel> targetChannels = targetChannelName != null ? Collections.singletonList(getTextChannel(context, targetChannelName)) : context.server().getTextChannels();
+			ServerTextChannel targetChannel = targetChannelName != null ? getTextChannel(context, targetChannelName) : null;
 
 			List<ChannelEntry> actions = new ArrayList<>();
-			int count = 0;
-
-			for (ServerTextChannel channel : targetChannels) {
-				if (!channel.canYouSee() || !channel.canYouReadMessageHistory() || !channel.canYouManageMessages()) continue;
-				if (!channel.canSee(context.user())) continue;
-
-				long[] messageIds = context.bot().getMessageIndex().getAllIdsByAuthor(channel, targetDiscordUserId, false);
-
-				if (messageIds.length > 0) {
-					actions.add(new ChannelEntry(channel, messageIds));
-					count += messageIds.length;
-				}
-			}
+			int count = gatherActions(LongSet.of(targetDiscordUserId), targetChannel, context, actions);
 
 			if (count == 0) {
 				throw new CommandException("No messages");
@@ -80,20 +77,18 @@ public final class CleanCommand extends Command {
 				pendingActions.put(id, actions);
 				context.bot().getScheduledExecutor().schedule(() -> pendingActions.remove(id), 5, TimeUnit.MINUTES);
 
-				context.channel().sendMessage(String.format("You are about to delete %d messages by %s, use `%s%s confirm %d` to continue",
+				DiscordUtil.sendMentionlessMessage(context.channel(), String.format("You are about to delete %d messages by %s, use `%s%s confirm %d` to continue",
 						count,
 						context.bot().getUserHandler().formatDiscordUser(targetDiscordUserId, context.server()),
 						context.bot().getCommandPrefix(),
 						name(),
-						id)); // TODO: suppress mentions once https://github.com/Javacord/Javacord/pull/587 is released
+						id));
 			}
 		} else {
 			List<ChannelEntry> actions = pendingActions.remove(Integer.parseInt(arguments.get("id")));
 			if (actions == null) throw new CommandException("Invalid id");
 
-			for (ChannelEntry entry : actions) {
-				entry.channel.deleteMessages(entry.messageIds);
-			}
+			applyActions(actions, null);
 
 			context.channel().sendMessage("Messages deleted");
 		}
@@ -101,5 +96,75 @@ public final class CleanCommand extends Command {
 		return true;
 	}
 
-	private record ChannelEntry(ServerTextChannel channel, long[] messageIds) { }
+	private static int gatherActions(LongSet targetDiscordUserIds, ServerTextChannel targetChannel, CommandContext context, List<ChannelEntry> actions) {
+		Collection<ServerTextChannel> targetChannels = targetChannel != null ? Collections.singletonList(targetChannel) : context.server().getTextChannels();
+		int count = 0;
+
+		for (ServerTextChannel channel : targetChannels) {
+			if (!channel.canYouSee() || !channel.canYouReadMessageHistory() || !channel.canYouManageMessages()) continue;
+			if (!channel.canSee(context.user())) continue;
+
+			Collection<CachedMessage> messages = context.bot().getMessageIndex().getAllIdsByAuthors(channel, targetDiscordUserIds, false);
+
+			if (!messages.isEmpty()) {
+				actions.add(new ChannelEntry(channel, messages));
+				count += messages.size();
+			}
+		}
+
+		return count;
+	}
+
+	private static void applyActions(List<ChannelEntry> actions, String reason) throws DiscordException {
+		List<CompletableFuture<Void>> futures = new ArrayList<>();
+
+		for (ChannelEntry entry : actions) {
+			if (entry.messages().size() == 1) {
+				CachedMessage msg = entry.messages().iterator().next();
+
+				if (!msg.isDeleted()) { // reduce delete race potential
+					futures.add(Message.delete(entry.channel().getApi(), entry.channel().getId(), msg.getId(), reason));
+				}
+			} else {
+				long[] msgIds = new long[entry.messages().size()];
+				int writeIdx = 0;
+
+				for (CachedMessage msg : entry.messages()) {
+					if (!msg.isDeleted()) { // reduce delete race potential
+						msgIds[writeIdx++] = msg.getId();
+					}
+				}
+
+				if (writeIdx != msgIds.length) msgIds = Arrays.copyOf(msgIds, writeIdx);
+
+				futures.add(entry.channel().deleteMessages(msgIds));
+			}
+		}
+
+		for (CompletableFuture<?> future : futures) {
+			try {
+				DiscordUtil.join(future);
+			} catch (NotFoundException e) {
+				// ignore, presumably already deleted
+			}
+		}
+	}
+
+	static Collection<CachedMessage> clean(int targetUserId, ServerTextChannel targetChannel, String reason, CommandContext context) throws DiscordException {
+		LongSet targetDiscordUserIds = new LongOpenHashSet(context.bot().getUserHandler().getDiscordUserIds(targetUserId));
+
+		List<ChannelEntry> actions = new ArrayList<>();
+		int count = gatherActions(targetDiscordUserIds, targetChannel, context, actions);
+		applyActions(actions, reason);
+
+		List<CachedMessage> ret = new ArrayList<>(count);
+
+		for (ChannelEntry entry : actions) {
+			ret.addAll(entry.messages());
+		}
+
+		return ret;
+	}
+
+	private record ChannelEntry(ServerTextChannel channel, Collection<CachedMessage> messages) { }
 }
