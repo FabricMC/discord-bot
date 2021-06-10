@@ -267,17 +267,23 @@ public final class McVersionModule implements Module {
 			}
 		}
 
-		updateSpecific(KIND_RELEASE, latestRelease, ANNOUNCED_RELEASE_VERSION);
-		updateSpecific(KIND_SNAPSHOT, latestSnapshot, ANNOUNCED_SNAPSHOT_VERSION);
+		updateSpecific(KIND_RELEASE, latestRelease, ANNOUNCED_RELEASE_VERSION, null);
+		updateSpecific(KIND_SNAPSHOT, latestSnapshot, ANNOUNCED_SNAPSHOT_VERSION, ANNOUNCED_RELEASE_VERSION);
 	}
 
-	private void updateSpecific(String kind, String latestVersion, ConfigKey<String> announcedVersionKey) throws IOException, URISyntaxException, InterruptedException {
+	private void updateSpecific(String kind, String latestVersion, ConfigKey<String> announcedVersionKey, ConfigKey<String> altAnnouncedVersionKey) throws IOException, URISyntaxException, InterruptedException {
 		String oldVersion;
 
 		if (latestVersion == null // no version specified
 				|| latestVersion.equals(oldVersion = bot.getConfigEntry(announcedVersionKey)) // same as last announced
 				|| isOldVersion(latestVersion) // already known to Fabric, mcmeta glitch
 				|| announcedVersions.contains(latestVersion)) { // already posted by this instance
+			return;
+		}
+
+		// suppress announcing release as snapshot
+		if (altAnnouncedVersionKey != null && latestVersion.equals(bot.getConfigEntry(altAnnouncedVersionKey))) {
+			bot.setConfigEntry(announcedVersionKey, latestVersion);
 			return;
 		}
 
