@@ -50,22 +50,22 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 import net.fabricmc.discord.bot.DiscordBot;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.ForwardingMappingVisitor;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappedElementKind;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingNsRenamer;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingSourceNsSwitch;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.ClassMapping;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.FieldMapping;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.MethodMapping;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingUtil;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingVisitor;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MemoryMappingTree;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.ProGuardReader;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.Tiny1Reader;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.Tiny2Reader;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.TsrgReader;
 import net.fabricmc.discord.bot.util.HttpUtil;
+import net.fabricmc.mappingio.MappedElementKind;
+import net.fabricmc.mappingio.MappingUtil;
+import net.fabricmc.mappingio.MappingVisitor;
+import net.fabricmc.mappingio.adapter.ForwardingMappingVisitor;
+import net.fabricmc.mappingio.adapter.MappingNsRenamer;
+import net.fabricmc.mappingio.adapter.MappingSourceNsSwitch;
+import net.fabricmc.mappingio.format.ProGuardReader;
+import net.fabricmc.mappingio.format.Tiny1Reader;
+import net.fabricmc.mappingio.format.Tiny2Reader;
+import net.fabricmc.mappingio.format.TsrgReader;
+import net.fabricmc.mappingio.tree.MappingTree;
+import net.fabricmc.mappingio.tree.MappingTree.ClassMapping;
+import net.fabricmc.mappingio.tree.MappingTree.FieldMapping;
+import net.fabricmc.mappingio.tree.MappingTree.MethodMapping;
+import net.fabricmc.mappingio.tree.MemoryMappingTree;
 
 public final class MappingRepository {
 	private static final int updatePeriodSec = 120;

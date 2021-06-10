@@ -26,6 +26,11 @@ allprojects {
 			name = "Sonatype Snapshots"
 			url = "https://oss.sonatype.org/content/repositories/snapshots"
 		}
+
+		maven {
+			name = "Fabric"
+			url = "https://maven.fabricmc.net"
+		}
 	}
 
 	// Common dependencies

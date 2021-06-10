@@ -16,8 +16,8 @@
 
 package net.fabricmc.discord.bot.module.mapping;
 
-import static net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.MIN_NAMESPACE_ID;
-import static net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.NULL_NAMESPACE_ID;
+import static net.fabricmc.mappingio.tree.MappingTree.MIN_NAMESPACE_ID;
+import static net.fabricmc.mappingio.tree.MappingTree.NULL_NAMESPACE_ID;
 
 import java.lang.reflect.Array;
 import java.net.URI;
@@ -38,14 +38,14 @@ import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.ClassMapping;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.ElementMapping;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.FieldMapping;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.MemberMapping;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.MethodArgMapping;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.MethodMapping;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.MethodVarMapping;
+import net.fabricmc.mappingio.tree.MappingTree;
+import net.fabricmc.mappingio.tree.MappingTree.ClassMapping;
+import net.fabricmc.mappingio.tree.MappingTree.ElementMapping;
+import net.fabricmc.mappingio.tree.MappingTree.FieldMapping;
+import net.fabricmc.mappingio.tree.MappingTree.MemberMapping;
+import net.fabricmc.mappingio.tree.MappingTree.MethodArgMapping;
+import net.fabricmc.mappingio.tree.MappingTree.MethodMapping;
+import net.fabricmc.mappingio.tree.MappingTree.MethodVarMapping;
 
 final class MappingData {
 	private static final String intermediaryClassPrefix = "class_";

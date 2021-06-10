@@ -24,8 +24,8 @@ import java.util.Map;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.message.Paginator;
-import net.fabricmc.discord.bot.module.mapping.mappinglib.MappingTree.MethodMapping;
 import net.fabricmc.discord.bot.util.FormatUtil;
+import net.fabricmc.mappingio.tree.MappingTree.MethodMapping;
 
 public final class YarnMethodCommand extends Command {
 	private final MappingRepository repo;
