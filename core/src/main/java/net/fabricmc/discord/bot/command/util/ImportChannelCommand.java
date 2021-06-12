@@ -17,9 +17,9 @@
 package net.fabricmc.discord.bot.command.util;
 
 import static net.fabricmc.discord.bot.command.util.ExportChannelCommand.MSG_BOUNDARY;
-import static net.fabricmc.discord.bot.command.util.ExportChannelCommand.MSG_SIZE_LIMIT;
 import static net.fabricmc.discord.bot.command.util.ExportChannelCommand.TAG_END;
 import static net.fabricmc.discord.bot.command.util.ExportChannelCommand.TAG_START;
+import static net.fabricmc.discord.bot.util.FormatUtil.MAX_MESSAGE_LENGTH;
 
 import java.awt.Color;
 import java.io.IOException;
@@ -91,16 +91,16 @@ public final class ImportChannelCommand extends Command {
 				delimiterSize = 0;
 			}
 
-			if (endPos - startPos > MSG_SIZE_LIMIT) { // oversized -> try to split at line break
+			if (endPos - startPos > MAX_MESSAGE_LENGTH) { // oversized -> try to split at line break
 				delimiterSize = 1;
-				endPos = content.lastIndexOf('\n', startPos + MSG_SIZE_LIMIT); // FIXME: this should skip over markdown blocks
+				endPos = content.lastIndexOf('\n', startPos + MAX_MESSAGE_LENGTH); // FIXME: this should skip over markdown blocks
 
 				if (endPos <= startPos) {  // not found (-1), before start or at start -> try to split at space
-					endPos = content.lastIndexOf(' ', startPos + MSG_SIZE_LIMIT);
+					endPos = content.lastIndexOf(' ', startPos + MAX_MESSAGE_LENGTH);
 
 					if (endPos <= startPos) {  // not found (-1), before start or at start -> split at size limit
 						delimiterSize = 0;
-						endPos = startPos + MSG_SIZE_LIMIT;
+						endPos = startPos + MAX_MESSAGE_LENGTH;
 					}
 				}
 			}
@@ -157,7 +157,7 @@ public final class ImportChannelCommand extends Command {
 				throw new CommandException("Fetching content failed with status %d", response.statusCode());
 			}
 
-			StringBuilder sb = new StringBuilder(MSG_SIZE_LIMIT + MSG_BOUNDARY.length());
+			StringBuilder sb = new StringBuilder(MAX_MESSAGE_LENGTH + MSG_BOUNDARY.length());
 
 			try (InputStreamReader reader = new InputStreamReader(response.body(), StandardCharsets.UTF_8)) {
 				char[] buf = new char[8192];

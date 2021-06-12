@@ -391,7 +391,7 @@ public final class ActionUtil {
 				description = String.format("%s\n**Context Channel:** <#%d>\n**Context Message:** %s",
 						description,
 						targetMessageContext.getChannelId(),
-						FormatUtil.escape(targetMessageContext.getContent(), OutputType.CODE, true));
+						FormatUtil.escape(FormatUtil.truncateMessage(targetMessageContext.getContent(), 600), OutputType.CODE, true)); // assume 600 chars of non-context-msg content
 			}
 
 			if (actor != null) {

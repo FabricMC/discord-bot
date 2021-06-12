@@ -40,7 +40,6 @@ import net.fabricmc.discord.bot.util.FormatUtil.OutputType;
 
 public final class ExportChannelCommand extends Command {
 	static final int MSG_COUNT_LIMIT = 100;
-	static final int MSG_SIZE_LIMIT = 2000; // discord api limit
 	static final String MSG_BOUNDARY = "\n-----msgbound-----\n";
 	static final String TAG_START = "<<<<<";
 	static final String TAG_END = ">>>>>";
@@ -70,7 +69,7 @@ public final class ExportChannelCommand extends Command {
 		MessageSet messages = DiscordUtil.join(channel.getMessages(MSG_COUNT_LIMIT));
 		if (messages.isEmpty()) throw new CommandException("empty channel");
 
-		StringBuilder sb = new StringBuilder(MSG_SIZE_LIMIT + MSG_BOUNDARY.length());
+		StringBuilder sb = new StringBuilder(FormatUtil.MAX_MESSAGE_LENGTH + MSG_BOUNDARY.length());
 		boolean first = true;
 
 		for (Message message : messages) {

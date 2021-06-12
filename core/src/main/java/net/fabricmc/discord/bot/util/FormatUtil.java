@@ -30,6 +30,7 @@ import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
 
 public final class FormatUtil {
+	public static final int MAX_MESSAGE_LENGTH = 2000;
 	public static final DateTimeFormatter dateFormatter = DateTimeFormatter.ISO_LOCAL_DATE.withZone(ZoneOffset.UTC);
 	public static final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("EEE, d MMM y HH:mm:ss z", Locale.ENGLISH).withZone(ZoneOffset.UTC);
 
@@ -310,5 +311,15 @@ public final class FormatUtil {
 		if (s.isEmpty()) return s;
 
 		return Character.toUpperCase(s.charAt(0))+s.substring(1);
+	}
+
+	public static String truncate(String s, int limit) {
+		if (s.length() <= limit) return s;
+
+		return s.substring(0, limit - 1).concat("…");
+	}
+
+	public static String truncateMessage(String s, int extraLen) {
+		return truncate(s, MAX_MESSAGE_LENGTH - extraLen);
 	}
 }

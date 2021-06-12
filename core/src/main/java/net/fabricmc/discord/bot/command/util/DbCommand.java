@@ -28,6 +28,7 @@ import java.util.Map;
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
+import net.fabricmc.discord.bot.util.FormatUtil;
 
 public final class DbCommand extends Command {
 	@Override
@@ -142,7 +143,7 @@ public final class DbCommand extends Command {
 
 				lineSb.append('\n');
 
-				if (pageSb.length() + lineSb.length() + 3 <= 2000) {
+				if (pageSb.length() + lineSb.length() + 3 <= FormatUtil.MAX_MESSAGE_LENGTH) {
 					pageSb.append(lineSb);
 					row++;
 				} else {
