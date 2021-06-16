@@ -29,6 +29,7 @@ import org.javacord.api.entity.message.MessageAttachment;
 import org.javacord.api.entity.message.MessageBuilder;
 import org.javacord.api.entity.message.MessageSet;
 import org.javacord.api.entity.message.embed.Embed;
+import org.javacord.api.exception.DiscordException;
 
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
@@ -69,6 +70,7 @@ public final class ExportChannelCommand extends Command {
 		MessageSet messages = DiscordUtil.join(channel.getMessages(MSG_COUNT_LIMIT));
 		if (messages.isEmpty()) throw new CommandException("empty channel");
 
+		boolean embedData = arguments.containsKey("embedData");
 		StringBuilder sb = new StringBuilder(FormatUtil.MAX_MESSAGE_LENGTH + MSG_BOUNDARY.length());
 		boolean first = true;
 
@@ -81,59 +83,67 @@ public final class ExportChannelCommand extends Command {
 				sb.append("\n");
 			}
 
-			sb.append(message.getContent());
-
-			for (MessageAttachment attachment : message.getAttachments()) {
-				JsonObject obj = new JsonObject();
-				obj.addProperty("type", "attachment");
-				obj.addProperty("fileName", attachment.getFileName());
-				obj.addProperty("url", attachment.getUrl().toString());
-
-				if (arguments.containsKey("embedData")) {
-					try {
-						obj.addProperty("data", Base64.getEncoder().encodeToString(attachment.downloadAsByteArray().join()));
-					} catch (CompletionException e) {
-						Throwable cause = e.getCause();
-
-						if (cause != null) {
-							cause.printStackTrace();
-							context.channel().sendMessage(String.format("Error fetching data from %s: %s",
-									FormatUtil.escape(attachment.getUrl().toString(), OutputType.INLINE_CODE, true),
-									FormatUtil.escapePlain(attachment.getUrl().toString())));
-						} else {
-							e.printStackTrace();
-						}
-					}
-				}
-
-				sb.append(TAG_START);
-				GSON.toJson(obj, sb);
-				sb.append(TAG_END);
-			}
-
-			for (Embed embed : message.getEmbeds()) {
-				JsonObject obj = new JsonObject();
-				obj.addProperty("type", "embed");
-				obj.addProperty("embedType", embed.getType());
-				if (embed.getTitle().isPresent()) obj.addProperty("title", embed.getTitle().orElseThrow());
-				if (embed.getDescription().isPresent()) obj.addProperty("description", embed.getDescription().orElseThrow());
-				if (embed.getUrl().isPresent()) obj.addProperty("url", embed.getUrl().orElseThrow().toString());
-				if (embed.getTimestamp().isPresent()) obj.addProperty("timestamp", embed.getTimestamp().orElseThrow().toEpochMilli());
-				if (embed.getColor().isPresent()) obj.addProperty("color", embed.getColor().orElseThrow().getRGB());
-				// TODO: remaining properties
-
-				sb.append(TAG_START);
-				GSON.toJson(obj, sb);
-				sb.append(TAG_END);
-			}
+			exportMessage(context, message, embedData, sb);
 		}
 
+		uploadExport(context, sb);
+
+		return true;
+	}
+
+	static void exportMessage(CommandContext context, Message message, boolean embedData, StringBuilder out) {
+		out.append(message.getContent());
+
+		for (MessageAttachment attachment : message.getAttachments()) {
+			JsonObject obj = new JsonObject();
+			obj.addProperty("type", "attachment");
+			obj.addProperty("fileName", attachment.getFileName());
+			obj.addProperty("url", attachment.getUrl().toString());
+
+			if (embedData) {
+				try {
+					obj.addProperty("data", Base64.getEncoder().encodeToString(attachment.downloadAsByteArray().join()));
+				} catch (CompletionException e) {
+					Throwable cause = e.getCause();
+
+					if (cause != null) {
+						cause.printStackTrace();
+						context.channel().sendMessage(String.format("Error fetching data from %s: %s",
+								FormatUtil.escape(attachment.getUrl().toString(), OutputType.INLINE_CODE, true),
+								FormatUtil.escapePlain(attachment.getUrl().toString())));
+					} else {
+						e.printStackTrace();
+					}
+				}
+			}
+
+			out.append(TAG_START);
+			GSON.toJson(obj, out);
+			out.append(TAG_END);
+		}
+
+		for (Embed embed : message.getEmbeds()) {
+			JsonObject obj = new JsonObject();
+			obj.addProperty("type", "embed");
+			obj.addProperty("embedType", embed.getType());
+			if (embed.getTitle().isPresent()) obj.addProperty("title", embed.getTitle().orElseThrow());
+			if (embed.getDescription().isPresent()) obj.addProperty("description", embed.getDescription().orElseThrow());
+			if (embed.getUrl().isPresent()) obj.addProperty("url", embed.getUrl().orElseThrow().toString());
+			if (embed.getTimestamp().isPresent()) obj.addProperty("timestamp", embed.getTimestamp().orElseThrow().toEpochMilli());
+			if (embed.getColor().isPresent()) obj.addProperty("color", embed.getColor().orElseThrow().getRGB());
+			// TODO: remaining properties
+
+			out.append(TAG_START);
+			GSON.toJson(obj, out);
+			out.append(TAG_END);
+		}
+	}
+
+	static void uploadExport(CommandContext context, CharSequence data) throws DiscordException {
 		Message msg = DiscordUtil.join(new MessageBuilder()
-				.addAttachment(sb.toString().getBytes(StandardCharsets.UTF_8), "contents.txt")
+				.addAttachment(data.toString().getBytes(StandardCharsets.UTF_8), "contents.txt")
 				.send(context.channel()));
 
 		msg.edit(msg.getAttachments().get(0).getUrl().toString());
-
-		return true;
 	}
 }

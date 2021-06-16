@@ -48,6 +48,7 @@ import net.fabricmc.discord.bot.command.mod.UserActionType;
 import net.fabricmc.discord.bot.command.mod.UserCommand;
 import net.fabricmc.discord.bot.command.util.DbCommand;
 import net.fabricmc.discord.bot.command.util.ExportChannelCommand;
+import net.fabricmc.discord.bot.command.util.ExportMessageCommand;
 import net.fabricmc.discord.bot.command.util.ImportChannelCommand;
 
 /**
@@ -117,6 +118,7 @@ final class BuiltinModule implements Module, MessageCreateListener {
 		bot.registerCommand(new DbCommand());
 		bot.registerCommand(new ExportChannelCommand());
 		bot.registerCommand(new ImportChannelCommand());
+		bot.registerCommand(new ExportMessageCommand());
 
 		api.addMessageCreateListener(this);
 	}

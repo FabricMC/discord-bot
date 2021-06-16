@@ -18,6 +18,7 @@ package net.fabricmc.discord.bot.command;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.javacord.api.entity.channel.ServerChannel;
@@ -75,6 +76,8 @@ public abstract class Command {
 	public abstract boolean run(CommandContext context, Map<String, String> arguments) throws Exception;
 
 	public static int getUserId(CommandContext context, String user) throws CommandException {
+		Objects.requireNonNull(user, "null user");
+
 		int ret = context.bot().getUserHandler().getUserId(user, context.server(), true);
 		if (ret < 0) throw new CommandException("Unknown or ambiguous user");
 
@@ -82,6 +85,8 @@ public abstract class Command {
 	}
 
 	public static long getDiscordUserId(CommandContext context, String user) throws CommandException {
+		Objects.requireNonNull(user, "null user");
+
 		long ret = context.bot().getUserHandler().getDiscordUserId(user, context.server(), true);
 		if (ret < 0) throw new CommandException("Unknown or ambiguous user");
 
@@ -89,6 +94,8 @@ public abstract class Command {
 	}
 
 	public static ServerChannel getChannel(CommandContext context, String channel) throws CommandException {
+		Objects.requireNonNull(channel, "null channel");
+
 		ServerChannel ret = getChannelUnchecked(context, channel);
 
 		if (!ret.canYouSee()
@@ -146,6 +153,8 @@ public abstract class Command {
 	}
 
 	public static CachedMessage getMessage(CommandContext context, String message, boolean includeDeleted) throws CommandException, DiscordException {
+		Objects.requireNonNull(message, "null message");
+
 		CachedMessage ret = context.bot().getMessageIndex().get(message, context.server());
 		if (ret == null || !includeDeleted && ret.isDeleted()) throw new CommandException("Unknown message");
 
@@ -153,6 +162,8 @@ public abstract class Command {
 	}
 
 	public static UserTarget getUserTarget(CommandContext context, String userOrMessage) throws CommandException, DiscordException {
+		Objects.requireNonNull(userOrMessage, "null userOrMessage");
+
 		CachedMessage msg = context.bot().getMessageIndex().get(userOrMessage, context.server());
 		int userId;
 

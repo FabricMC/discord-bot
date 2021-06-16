@@ -23,10 +23,10 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpClient.Redirect;
-import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandlers;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 
 import org.apache.logging.log4j.Logger;
@@ -64,7 +64,7 @@ public final class HttpUtil {
 	}
 
 	public static void logError(String desc, Throwable exc, Logger logger) {
-		if (exc instanceof HttpConnectTimeoutException
+		if (exc instanceof HttpTimeoutException
 				|| exc instanceof ConnectException) {
 			logger.warn("{}: {}", desc, exc.toString());
 		} else {
