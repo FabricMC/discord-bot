@@ -27,6 +27,7 @@ public final class Database {
 
 	private static final int preparedStatementCacheSize = 250;
 	private static final int preparedStatementCacheSqlLimit = 2048;
+	private static final int busyTimeoutMs = 10_000;
 
 	private final HikariDataSource dataSource;
 
@@ -37,6 +38,7 @@ public final class Database {
 		config.addDataSourceProperty("prepStmtCacheSize", Integer.toString(preparedStatementCacheSize));
 		config.addDataSourceProperty("prepStmtCacheSqlLimit", Integer.toString(preparedStatementCacheSqlLimit));
 		config.addDataSourceProperty("noAccessToProcedureBodies", "true");
+		config.addDataSourceProperty("busy_timeout", Integer.toString(busyTimeoutMs));
 
 		dataSource = new HikariDataSource(config);
 

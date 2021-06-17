@@ -39,6 +39,7 @@ import org.eclipse.jgit.api.CloneCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.MergeResult;
 import org.eclipse.jgit.api.PullResult;
+import org.eclipse.jgit.api.RebaseResult;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.javacord.api.DiscordApi;
@@ -128,7 +129,8 @@ public final class TagModule implements Module, CommandStringHandler {
 
 			final PullResult result = this.git.pull().call();
 
-			if (result.getMergeResult().getMergeStatus() == MergeResult.MergeStatus.ALREADY_UP_TO_DATE) {
+			if (result.getMergeResult() != null && result.getMergeResult().getMergeStatus() == MergeResult.MergeStatus.ALREADY_UP_TO_DATE
+					|| result.getRebaseResult() != null && result.getRebaseResult().getStatus() == RebaseResult.Status.UP_TO_DATE) {
 				if (!this.firstRun) {
 					return; // All up to date - no need to reload tags
 				}
