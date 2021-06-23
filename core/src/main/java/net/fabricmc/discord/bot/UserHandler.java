@@ -291,23 +291,25 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		}
 	}
 
-	public String formatUser(int userId, Server server) {
+	public String formatUser(int userId, @Nullable Server server) {
 		List<Long> ids = getDiscordUserIds(userId);
 		if (ids.isEmpty()) return Integer.toString(userId);
 
-		for (long id : ids) {
-			User user = server.getMemberById(id).orElse(null);
-			if (user != null) return formatDiscordUser(user);
+		if (server != null) {
+			for (long id : ids) {
+				User user = server.getMemberById(id).orElse(null);
+				if (user != null) return formatDiscordUser(user);
+			}
 		}
 
 		return formatDiscordUser(ids.get(0), server);
 	}
 
-	public String formatDiscordUser(long discordUserId, Server server) {
-		User user = server.getMemberById(discordUserId).orElse(null);
+	public String formatDiscordUser(long discordUserId, @Nullable Server server) {
+		User user;
 		DiscordUserData data;
 
-		if (user != null) {
+		if (server != null && (user = server.getMemberById(discordUserId).orElse(null)) != null) {
 			return formatDiscordUser(user);
 		} else if ((data = getDiscordUserData(discordUserId, false, false)) != null) {
 			return formatDiscordUser(data);

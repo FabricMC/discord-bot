@@ -1,4 +1,4 @@
 dependencies {
     implementation(project(":mcversion"))
-    implementation("net.fabricmc:mapping-io:0.1.0")
+    implementation("net.fabricmc:mapping-io:0.1.4")
 }

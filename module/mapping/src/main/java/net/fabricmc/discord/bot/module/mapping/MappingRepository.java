@@ -170,32 +170,36 @@ public final class MappingRepository {
 		}
 	}
 
-	private static boolean retrieveYarnMappings(String yarnMavenId, String classifier, boolean isTinyV2, MappingVisitor visitor) throws URISyntaxException, IOException, InterruptedException {
-		HttpResponse<InputStream> response = HttpUtil.makeRequest(mavenHost, getMavenPath(yarnMavenId, classifier, "jar"));
+	private static boolean retrieveYarnMappings(String yarnMavenId, String classifier, boolean isTinyV2, MappingVisitor visitor) throws URISyntaxException, InterruptedException {
+		try {
+			HttpResponse<InputStream> response = HttpUtil.makeRequest(mavenHost, getMavenPath(yarnMavenId, classifier, "jar"));
 
-		if (response.statusCode() != 200) {
-			response.body().close();
-			return false;
-		}
+			if (response.statusCode() != 200) {
+				response.body().close();
+				return false;
+			}
 
-		try (ZipInputStream zis = new ZipInputStream(response.body())) {
-			ZipEntry entry;
+			try (ZipInputStream zis = new ZipInputStream(response.body())) {
+				ZipEntry entry;
 
-			while ((entry = zis.getNextEntry()) != null) {
-				if (entry.getName().equals("mappings/mappings.tiny")) {
-					InputStreamReader reader = new InputStreamReader(zis, StandardCharsets.UTF_8);
+				while ((entry = zis.getNextEntry()) != null) {
+					if (entry.getName().equals("mappings/mappings.tiny")) {
+						InputStreamReader reader = new InputStreamReader(zis, StandardCharsets.UTF_8);
 
-					visitor = new MappingNsRenamer(visitor, Map.of("named", "yarn"));
+						visitor = new MappingNsRenamer(visitor, Map.of("named", "yarn"));
 
-					if (isTinyV2) {
-						Tiny2Reader.read(reader, visitor);
-					} else {
-						Tiny1Reader.read(reader, visitor);
+						if (isTinyV2) {
+							Tiny2Reader.read(reader, visitor);
+						} else {
+							Tiny1Reader.read(reader, visitor);
+						}
+
+						return true;
 					}
-
-					return true;
 				}
 			}
+		} catch (IOException e) {
+			HttpUtil.logError("fetching/parsing yarn mappings for %s, classifier %s failed".formatted(yarnMavenId, classifier), e, LOGGER);
 		}
 
 		return false; // no mappings/mappings.tiny
@@ -222,79 +226,77 @@ public final class MappingRepository {
 	}
 
 	private static boolean downloadMcMappings(String mcVersion, Path out) throws URISyntaxException, IOException, InterruptedException {
-		HttpResponse<InputStream> response = HttpUtil.makeRequest("launchermeta.mojang.com", "/mc/game/version_manifest_v2.json");
-
-		if (response.statusCode() != 200) {
-			response.body().close();
-			return false;
-		}
-
 		URI jsonUrl = null;
 
-		try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
-			reader.beginObject();
+		try {
+			HttpResponse<InputStream> response = HttpUtil.makeRequest("launchermeta.mojang.com", "/mc/game/version_manifest_v2.json");
 
-			while (reader.hasNext()) {
-				if (!reader.nextName().equals("versions")) {
-					reader.skipValue();
-					continue;
-				}
+			if (response.statusCode() != 200) {
+				response.body().close();
+				return false;
+			}
 
-				reader.beginArray();
+			try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+				reader.beginObject();
 
 				while (reader.hasNext()) {
-					reader.beginObject();
+					if (!reader.nextName().equals("versions")) {
+						reader.skipValue();
+						continue;
+					}
 
-					String id = null;
-					String url = null;
+					reader.beginArray();
 
 					while (reader.hasNext()) {
-						switch (reader.nextName()) {
-						case "id" -> id = reader.nextString();
-						case "url" -> url = reader.nextString();
-						default -> reader.skipValue();
+						reader.beginObject();
+
+						String id = null;
+						String url = null;
+
+						while (reader.hasNext()) {
+							switch (reader.nextName()) {
+							case "id" -> id = reader.nextString();
+							case "url" -> url = reader.nextString();
+							default -> reader.skipValue();
+							}
+						}
+
+						reader.endObject();
+
+						if (id == null) throw new IOException("missing id");
+						if (url == null) throw new IOException("missing url");
+
+						if (id.equals(mcVersion)) {
+							jsonUrl = new URI(url);
+							break;
 						}
 					}
 
-					reader.endObject();
-
-					if (id == null) throw new IOException("missing id");
-					if (url == null) throw new IOException("missing url");
-
-					if (id.equals(mcVersion)) {
-						jsonUrl = new URI(url);
-						break;
-					}
+					break;
 				}
-
-				break;
 			}
-		}
 
-		if (jsonUrl == null) return false;
-
-		response = HttpUtil.makeRequest(jsonUrl);
-
-		if (response.statusCode() != 200) {
-			response.body().close();
+			if (jsonUrl == null) return false;
+		} catch (IOException e) {
+			HttpUtil.logError("fetching/parsing mc launchermeta failed", e, LOGGER);
 			return false;
 		}
 
 		URI mappingsUrl = null;
 
-		try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
-			reader.beginObject();
+		try {
+			HttpResponse<InputStream> response = HttpUtil.makeRequest(jsonUrl);
 
-			while (reader.hasNext()) {
-				if (!reader.nextName().equals("downloads")) {
-					reader.skipValue();
-					continue;
-				}
+			if (response.statusCode() != 200) {
+				response.body().close();
+				return false;
+			}
 
+			try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
 				reader.beginObject();
 
 				while (reader.hasNext()) {
-					if (!reader.nextName().equals("client_mappings")) {
+					if (!reader.nextName().equals("downloads")) {
 						reader.skipValue();
 						continue;
 					}
@@ -302,19 +304,31 @@ public final class MappingRepository {
 					reader.beginObject();
 
 					while (reader.hasNext()) {
-						if (reader.nextName().equals("url")) {
-							mappingsUrl = new URI(reader.nextString());
-							break;
-						} else {
+						if (!reader.nextName().equals("client_mappings")) {
 							reader.skipValue();
+							continue;
 						}
+
+						reader.beginObject();
+
+						while (reader.hasNext()) {
+							if (reader.nextName().equals("url")) {
+								mappingsUrl = new URI(reader.nextString());
+								break;
+							} else {
+								reader.skipValue();
+							}
+						}
+
+						break;
 					}
 
 					break;
 				}
-
-				break;
 			}
+		} catch (IOException e) {
+			HttpUtil.logError("fetching/parsing mc version json %s failed".formatted(jsonUrl), e, LOGGER);
+			return false;
 		}
 
 		if (mappingsUrl == null) { // no mappings for the version
@@ -323,15 +337,20 @@ public final class MappingRepository {
 			return true;
 		}
 
-		response = HttpUtil.makeRequest(mappingsUrl);
+		try {
+			HttpResponse<InputStream> response = HttpUtil.makeRequest(mappingsUrl);
 
-		if (response.statusCode() != 200) {
-			response.body().close();
+			if (response.statusCode() != 200) {
+				response.body().close();
+				return false;
+			}
+
+			Files.createDirectories(out.toAbsolutePath().getParent());
+			Files.copy(response.body(), out, StandardCopyOption.REPLACE_EXISTING);
+		} catch (IOException e) {
+			HttpUtil.logError("fetching/saving mc mappings %s failed".formatted(mappingsUrl), e, LOGGER);
 			return false;
 		}
-
-		Files.createDirectories(out.toAbsolutePath().getParent());
-		Files.copy(response.body(), out, StandardCopyOption.REPLACE_EXISTING);
 
 		return true;
 	}
@@ -360,69 +379,79 @@ public final class MappingRepository {
 	}
 
 	private static boolean downloadSrgMappings(String mcVersion, Path out) throws URISyntaxException, IOException, InterruptedException {
-		HttpResponse<InputStream> response = HttpUtil.makeRequest("maven.minecraftforge.net", getMavenPath("de.oceanlabs.mcp:mcp_config:%s".formatted(mcVersion), null, "zip"));
+		try {
+			HttpResponse<InputStream> response = HttpUtil.makeRequest("maven.minecraftforge.net", getMavenPath("de.oceanlabs.mcp:mcp_config:%s".formatted(mcVersion), null, "zip"));
 
-		if (response.statusCode() != 200) {
-			response.body().close();
+			if (response.statusCode() != 200) {
+				response.body().close();
 
-			if (response.statusCode() == 404) {
-				Files.deleteIfExists(out);
-				Files.createFile(out);
-				return true;
-			} else {
-				return false;
-			}
-		}
-
-		try (ZipInputStream zis = new ZipInputStream(response.body())) {
-			ZipEntry entry;
-
-			while ((entry = zis.getNextEntry()) != null) {
-				if (entry.getName().equals("config/joined.tsrg")) {
-					Files.createDirectories(out.toAbsolutePath().getParent());
-					Files.copy(zis, out, StandardCopyOption.REPLACE_EXISTING);
-
+				if (response.statusCode() == 404) {
+					Files.deleteIfExists(out);
+					Files.createFile(out);
 					return true;
+				} else {
+					return false;
 				}
 			}
+
+			try (ZipInputStream zis = new ZipInputStream(response.body())) {
+				ZipEntry entry;
+
+				while ((entry = zis.getNextEntry()) != null) {
+					if (entry.getName().equals("config/joined.tsrg")) {
+						Files.createDirectories(out.toAbsolutePath().getParent());
+						Files.copy(zis, out, StandardCopyOption.REPLACE_EXISTING);
+
+						return true;
+					}
+				}
+			}
+
+			LOGGER.warn("can't find config/joined.tsrg in {} mcp_config", mcVersion);
+
+			return false; // no config/joined.tsrg
+		} catch (IOException e) {
+			HttpUtil.logError("fetching/parsing srg mappings for %s failed".formatted(mcVersion), e, LOGGER);
+			return false;
 		}
-
-		LOGGER.warn("can't find config/joined.tsrg in {} mcp_config", mcVersion);
-
-		return false; // no config/joined.tsrg
 	}
 
 	private static boolean retrieveMcpMappings(String mcVersion, Path mappingsDir, MemoryMappingTree visitor) throws URISyntaxException, IOException, InterruptedException {
 		if (!visitor.getDstNamespaces().contains("srg")) return true; // worthless without srg mappings
 
-		HttpResponse<InputStream> response = HttpUtil.makeRequest("maven.minecraftforge.net", "/de/oceanlabs/mcp/mcp_snapshot/maven-metadata.xml");
-
-		if (response.statusCode() != 200) {
-			response.body().close();
-			return false;
-		}
-
 		String mcpVersion = null;
 
-		try (InputStream is = response.body()) {
-			Element element = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(is).getDocumentElement();
-			element = (Element) element.getElementsByTagName("versioning").item(0);
-			element = (Element) element.getElementsByTagName("versions").item(0);
+		try {
+			HttpResponse<InputStream> response = HttpUtil.makeRequest("maven.minecraftforge.net", "/de/oceanlabs/mcp/mcp_snapshot/maven-metadata.xml");
 
-			NodeList list = element.getElementsByTagName("version");
-
-			for (int i = 0, max = list.getLength(); i < max; i++) {
-				String version = list.item(i).getTextContent();
-
-				if (version.endsWith(mcVersion)
-						&& version.length() > mcVersion.length()
-						&& version.charAt(version.length() - mcVersion.length() - 1) == '-') {
-					mcpVersion = version;
-					break;
-				}
+			if (response.statusCode() != 200) {
+				response.body().close();
+				return false;
 			}
-		} catch (ParserConfigurationException | SAXException e) {
-			LOGGER.warn("Error parsing mcp_snapshot maven metadata", e);
+
+			try (InputStream is = response.body()) {
+				Element element = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(is).getDocumentElement();
+				element = (Element) element.getElementsByTagName("versioning").item(0);
+				element = (Element) element.getElementsByTagName("versions").item(0);
+
+				NodeList list = element.getElementsByTagName("version");
+
+				for (int i = 0, max = list.getLength(); i < max; i++) {
+					String version = list.item(i).getTextContent();
+
+					if (version.endsWith(mcVersion)
+							&& version.length() > mcVersion.length()
+							&& version.charAt(version.length() - mcVersion.length() - 1) == '-') {
+						mcpVersion = version;
+						break;
+					}
+				}
+			} catch (ParserConfigurationException | SAXException e) {
+				LOGGER.warn("Error parsing mcp_snapshot maven metadata", e);
+				return false;
+			}
+		} catch (IOException e) {
+			HttpUtil.logError("fetching/parsing mcp_snapshot maven metadata failed", e, LOGGER);
 			return false;
 		}
 
@@ -518,20 +547,25 @@ public final class MappingRepository {
 		return true;
 	}
 
-	private static boolean downloadMcpMappings(String mcpVersion, Path out) throws URISyntaxException, IOException, InterruptedException {
-		HttpResponse<InputStream> response = HttpUtil.makeRequest("maven.minecraftforge.net", getMavenPath("de.oceanlabs.mcp:mcp_snapshot:%s".formatted(mcpVersion), null, "zip"));
+	private static boolean downloadMcpMappings(String mcpVersion, Path out) throws URISyntaxException, InterruptedException {
+		try {
+			HttpResponse<InputStream> response = HttpUtil.makeRequest("maven.minecraftforge.net", getMavenPath("de.oceanlabs.mcp:mcp_snapshot:%s".formatted(mcpVersion), null, "zip"));
 
-		if (response.statusCode() != 200) {
-			response.body().close();
+			if (response.statusCode() != 200) {
+				response.body().close();
+				return false;
+			}
+
+			try (InputStream is = response.body()) {
+				Files.createDirectories(out.toAbsolutePath().getParent());
+				Files.copy(is, out);
+			}
+
+			return true;
+		} catch (IOException e) {
+			HttpUtil.logError("fetching/saving mcp mappings %s failed".formatted(mcpVersion), e, LOGGER);
 			return false;
 		}
-
-		try (InputStream is = response.body()) {
-			Files.createDirectories(out.toAbsolutePath().getParent());
-			Files.copy(is, out);
-		}
-
-		return true;
 	}
 
 	private static String getMavenPath(String id, String classifier, String extension) {
@@ -565,7 +599,7 @@ public final class MappingRepository {
 		}
 
 		@Override
-		public boolean visitClass(String srcName) {
+		public boolean visitClass(String srcName) throws IOException {
 			cls = tree.getClass(srcName);
 			if (cls == null) return false;
 
@@ -573,14 +607,14 @@ public final class MappingRepository {
 		}
 
 		@Override
-		public boolean visitField(String srcName, String srcDesc) {
+		public boolean visitField(String srcName, String srcDesc) throws IOException {
 			if (cls.getField(srcName, srcDesc) == null) return false;
 
 			return super.visitField(srcName, srcDesc);
 		}
 
 		@Override
-		public boolean visitMethod(String srcName, String srcDesc) {
+		public boolean visitMethod(String srcName, String srcDesc) throws IOException {
 			if (cls.getMethod(srcName, srcDesc) == null) return false;
 
 			return super.visitMethod(srcName, srcDesc);

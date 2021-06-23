@@ -68,7 +68,7 @@ public final class HttpUtil {
 				|| exc instanceof ConnectException) {
 			logger.warn("{}: {}", desc, exc.toString());
 		} else {
-			logger.warn("mc version check failed", exc);
+			logger.warn("{}", desc, exc);
 		}
 	}
 }
