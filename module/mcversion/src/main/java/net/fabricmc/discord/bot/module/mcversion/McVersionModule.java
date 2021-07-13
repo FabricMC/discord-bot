@@ -20,6 +20,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -33,6 +34,7 @@ import java.time.temporal.IsoFields;
 import java.time.temporal.TemporalAccessor;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
@@ -40,6 +42,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
 
 import com.google.gson.stream.JsonReader;
 import org.apache.logging.log4j.LogManager;
@@ -71,6 +74,7 @@ import net.fabricmc.discord.bot.util.HttpUtil;
  */
 public final class McVersionModule implements Module {
 	private static final int UPDATE_DELAY = 30; // in s
+	private static final int NEWS_UPDATE_CYCLES = 4; // check news every n updates
 	private static final String MC_VERSION_HOST = "launchermeta.mojang.com";
 	private static final String MC_VERSION_PATH = "/mc/game/version_manifest_v2.json";
 
@@ -109,6 +113,7 @@ public final class McVersionModule implements Module {
 	private Future<?> future;
 	private volatile TextChannel announceChannel;
 	private volatile TextChannel updateChannel;
+	private int newsCycleCouter;
 	private final Set<String> announcedVersions = Collections.newSetFromMap(new ConcurrentHashMap<>());
 	private final Set<String> announcedNews = Collections.newSetFromMap(new ConcurrentHashMap<>());
 	private int announcedSnapshotYear; // 2 digit, e.g. 21
@@ -223,7 +228,8 @@ public final class McVersionModule implements Module {
 				updateLauncherMeta();
 			}
 
-			if (updateChannel != null) {
+			if (updateChannel != null
+					&& newsCycleCouter++ % NEWS_UPDATE_CYCLES == 0) {
 				updateNewsByQuery();
 
 				SnapshotVersion version = SnapshotVersion.getCurrent();
@@ -238,8 +244,12 @@ public final class McVersionModule implements Module {
 	}
 
 	private void updateLauncherMeta() throws IOException, URISyntaxException, InterruptedException {
-		HttpResponse<InputStream> response = HttpUtil.makeRequest(MC_VERSION_HOST, MC_VERSION_PATH);
-		if (response.statusCode() != 200) throw new IOException("request failed with code "+response.statusCode());
+		HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(MC_VERSION_HOST, MC_VERSION_PATH));
+
+		if (response.statusCode() != 200) {
+			LOGGER.warn("MC Launcher Meta query request failed: {}", response.statusCode());
+			return;
+		}
 
 		String latestRelease = null;
 		String latestSnapshot = null;
@@ -301,12 +311,16 @@ public final class McVersionModule implements Module {
 	private void updateNewsByQuery() throws IOException, URISyntaxException, InterruptedException {
 		long announcedNewsDate = bot.getConfigEntry(ANNOUNCED_NEWS_DATE);
 
-		HttpResponse<InputStream> response = HttpUtil.makeRequest(MC_NEWS_HOST, MC_NEWS_PATH, MC_NEWS_QUERY.formatted(ThreadLocalRandom.current().nextInt(0x40000000)));
-		if (response.statusCode() != 200) throw new IOException("request failed with code "+response.statusCode());
+		HttpResponse<InputStream> response = requestNews(HttpUtil.toUri(MC_NEWS_HOST, MC_NEWS_PATH, MC_NEWS_QUERY.formatted(ThreadLocalRandom.current().nextInt(0x40000000))), true);
+
+		if (response.statusCode() != 200) {
+			LOGGER.warn("MC news query request failed: {}", response.statusCode());
+			return;
+		}
 
 		long firstDateMs = 0;
 
-		try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+		try (JsonReader reader = new JsonReader(new InputStreamReader(getNewsIs(response), StandardCharsets.UTF_8))) {
 			reader.beginObject();
 
 			readLoop: while (reader.hasNext()) {
@@ -389,12 +403,16 @@ public final class McVersionModule implements Module {
 
 	private void updateNewsByArticlePoll(SnapshotVersion version) throws IOException, URISyntaxException, InterruptedException {
 		String path = MC_NEWS_ARTICLE_PATH.formatted(version.year, version.week);
-		HttpResponse<InputStream> response = HttpUtil.makeRequest(MC_NEWS_HOST, path);
-		if (response.statusCode() != 200) return;
+		HttpResponse<InputStream> response = requestNews(HttpUtil.toUri(MC_NEWS_HOST, path), false);
+
+		if (response.statusCode() != 200) {
+			if (response.statusCode() != 404) LOGGER.warn("MC news poll request failed: {}", response.statusCode());
+			return;
+		}
 
 		Instant date = null;
 
-		try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+		try (BufferedReader reader = new BufferedReader(new InputStreamReader(getNewsIs(response), StandardCharsets.UTF_8))) {
 			String line;
 
 			while ((line = reader.readLine()) != null) {
@@ -427,13 +445,30 @@ public final class McVersionModule implements Module {
 		bot.setConfigEntry(ANNOUNCED_NEWS_DATE, dateMs + 20_000); // add 20s in case the time stamp isn't accurate
 	}
 
+	private static HttpResponse<InputStream> requestNews(URI uri, boolean json) throws IOException, InterruptedException {
+		return HttpUtil.makeRequest(uri, Map.of("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
+				"Accept", (json ? "application/json" : "text/html"),
+				"Accept-Language", "en-US",
+				"Accept-Encoding", "gzip"));
+	}
+
+	private static InputStream getNewsIs(HttpResponse<InputStream> response) throws IOException {
+		InputStream ret = response.body();
+
+		if (response.headers().firstValue("Content-Encoding").orElse("").equals("gzip")) {
+			ret = new GZIPInputStream(ret);
+		}
+
+		return ret;
+	}
+
 	private static boolean isOldVersion(String version) throws IOException, URISyntaxException, InterruptedException {
 		if (version.indexOf('/') >= 0)  throw new IllegalArgumentException("invalid mc version: "+version);
 
-		HttpResponse<InputStream> response = HttpUtil.makeRequest(FABRIC_VERSION_HOST, FABRIC_VERSION_PATH.formatted(version));
+		HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(FABRIC_VERSION_HOST, FABRIC_VERSION_PATH.formatted(version)));
 
 		if (response.statusCode() != 200) {
-			LOGGER.warn("MC version verification against Fabric Meta failed: {}", response.statusCode());
+			LOGGER.warn("MC version verification request against Fabric Meta failed: {}", response.statusCode());
 			return false;
 		}
 

@@ -107,7 +107,7 @@ public final class MappingRepository {
 	private static @Nullable String getMavenId(String mcVersion, String kind) throws IOException, InterruptedException, URISyntaxException {
 		if (mcVersion.indexOf('/') >= 0) throw new IllegalArgumentException("invalid mc version: "+mcVersion);
 
-		HttpResponse<InputStream> response = HttpUtil.makeRequest(metaHost, "/v2/versions/%s/%s".formatted(kind, mcVersion), "limit=1");
+		HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(metaHost, "/v2/versions/%s/%s".formatted(kind, mcVersion), "limit=1"));
 		if (response.statusCode() != 200) throw new IOException("request failed with code "+response.statusCode());
 
 		String mavenId = null;
@@ -172,7 +172,7 @@ public final class MappingRepository {
 
 	private static boolean retrieveYarnMappings(String yarnMavenId, String classifier, boolean isTinyV2, MappingVisitor visitor) throws URISyntaxException, InterruptedException {
 		try {
-			HttpResponse<InputStream> response = HttpUtil.makeRequest(mavenHost, getMavenPath(yarnMavenId, classifier, "jar"));
+			HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(mavenHost, getMavenPath(yarnMavenId, classifier, "jar")));
 
 			if (response.statusCode() != 200) {
 				response.body().close();
@@ -229,7 +229,7 @@ public final class MappingRepository {
 		URI jsonUrl = null;
 
 		try {
-			HttpResponse<InputStream> response = HttpUtil.makeRequest("launchermeta.mojang.com", "/mc/game/version_manifest_v2.json");
+			HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri("launchermeta.mojang.com", "/mc/game/version_manifest_v2.json"));
 
 			if (response.statusCode() != 200) {
 				response.body().close();
@@ -380,7 +380,7 @@ public final class MappingRepository {
 
 	private static boolean downloadSrgMappings(String mcVersion, Path out) throws URISyntaxException, IOException, InterruptedException {
 		try {
-			HttpResponse<InputStream> response = HttpUtil.makeRequest("maven.minecraftforge.net", getMavenPath("de.oceanlabs.mcp:mcp_config:%s".formatted(mcVersion), null, "zip"));
+			HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri("maven.minecraftforge.net", getMavenPath("de.oceanlabs.mcp:mcp_config:%s".formatted(mcVersion), null, "zip")));
 
 			if (response.statusCode() != 200) {
 				response.body().close();
@@ -422,7 +422,7 @@ public final class MappingRepository {
 		String mcpVersion = null;
 
 		try {
-			HttpResponse<InputStream> response = HttpUtil.makeRequest("maven.minecraftforge.net", "/de/oceanlabs/mcp/mcp_snapshot/maven-metadata.xml");
+			HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri("maven.minecraftforge.net", "/de/oceanlabs/mcp/mcp_snapshot/maven-metadata.xml"));
 
 			if (response.statusCode() != 200) {
 				response.body().close();
@@ -549,7 +549,7 @@ public final class MappingRepository {
 
 	private static boolean downloadMcpMappings(String mcpVersion, Path out) throws URISyntaxException, InterruptedException {
 		try {
-			HttpResponse<InputStream> response = HttpUtil.makeRequest("maven.minecraftforge.net", getMavenPath("de.oceanlabs.mcp:mcp_snapshot:%s".formatted(mcpVersion), null, "zip"));
+			HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri("maven.minecraftforge.net", getMavenPath("de.oceanlabs.mcp:mcp_snapshot:%s".formatted(mcpVersion), null, "zip")));
 
 			if (response.statusCode() != 200) {
 				response.body().close();

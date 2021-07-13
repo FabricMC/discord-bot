@@ -28,6 +28,8 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandlers;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.Map;
 
 import org.apache.logging.log4j.Logger;
 
@@ -38,18 +40,27 @@ public final class HttpUtil {
 			.connectTimeout(timeout)
 			.build();
 
-	public static HttpResponse<InputStream> makeRequest(String host, String path) throws URISyntaxException, IOException, InterruptedException {
-		return makeRequest(host, path, null);
+	public static URI toUri(String host, String path) throws URISyntaxException {
+		return toUri(host, path, null);
 	}
 
-	public static HttpResponse<InputStream> makeRequest(String host, String path, String query) throws URISyntaxException, IOException, InterruptedException {
-		return makeRequest(new URI("https", null, host, -1, path, query, null));
+	public static URI toUri(String host, String path, String query) throws URISyntaxException {
+		return new URI("https", null, host, -1, path, query, null);
 	}
 
 	public static HttpResponse<InputStream> makeRequest(URI uri) throws IOException, InterruptedException {
-		HttpRequest request = HttpRequest.newBuilder(uri)
-				.timeout(timeout)
-				.build();
+		return makeRequest(uri, Collections.emptyMap());
+	}
+
+	public static HttpResponse<InputStream> makeRequest(URI uri, Map<String, String> headers) throws IOException, InterruptedException {
+		HttpRequest.Builder builder = HttpRequest.newBuilder(uri)
+				.timeout(timeout);
+
+		for (Map.Entry<String, String> entry : headers.entrySet()) {
+			builder.header(entry.getKey(), entry.getValue());
+		}
+
+		HttpRequest request = builder.build();
 
 		try {
 			return client.send(request, BodyHandlers.ofInputStream());

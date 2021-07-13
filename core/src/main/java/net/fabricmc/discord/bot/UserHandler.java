@@ -137,7 +137,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 				|| hasPermission(targetDiscordUserId, null, IMMUNITY_PERMISSION) && !hasPermission(actingUserId, null, BYPASS_IMMUNITY_PERMISSION);
 	}
 
-	public int getUserId(String user, Server server, boolean unique) {
+	public int getUserId(String user, @Nullable Server server, boolean unique) {
 		long ret = parseUserId(user, server, unique, true);
 
 		if (ret == -1 || !isDiscordUserId(ret)) {
@@ -147,7 +147,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		}
 	}
 
-	public long getDiscordUserId(String user, Server server, boolean unique) {
+	public long getDiscordUserId(String user, @Nullable  Server server, boolean unique) {
 		long ret = parseUserId(user, server, unique, true);
 
 		if (ret == -1 || isDiscordUserId(ret)) {
@@ -181,7 +181,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 
 	public record UserEntry(int id, List<User> discordUsers) { }*/
 
-	private long parseUserId(String user, Server server, boolean unique, boolean searchOffline) {
+	private long parseUserId(String user, @Nullable Server server, boolean unique, boolean searchOffline) {
 		// find by id if applicable
 
 		try {
@@ -202,8 +202,12 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		if (pos >= 0) {
 			String username = user.substring(0, pos);
 			String discriminator = user.substring(pos + 1);
-			User res = server.getMemberByNameAndDiscriminator(username, discriminator).orElse(null);
-			if (res != null) return res.getId();
+
+			if (server != null) {
+				User res = server.getMemberByNameAndDiscriminator(username, discriminator).orElse(null);
+				if (res != null) return res.getId();
+			}
+
 			if (!searchOffline) return -1;
 
 			try {
@@ -216,13 +220,15 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 
 		// find by name or nick
 
-		Collection<User> users = server.getMembersByNickname(user);
-		if (users.isEmpty()) users = server.getMembersByName(user);
-		if (users.isEmpty()) users = server.getMembersByDisplayNameIgnoreCase(user);
-		if (users.isEmpty()) users = server.getMembersByNameIgnoreCase(user);
+		if (server != null) {
+			Collection<User> users = server.getMembersByNickname(user);
+			if (users.isEmpty()) users = server.getMembersByName(user);
+			if (users.isEmpty()) users = server.getMembersByDisplayNameIgnoreCase(user);
+			if (users.isEmpty()) users = server.getMembersByNameIgnoreCase(user);
 
-		if (!users.isEmpty()) {
-			return unique && users.size() > 1 ? -1 : users.iterator().next().getId();
+			if (!users.isEmpty()) {
+				return unique && users.size() > 1 ? -1 : users.iterator().next().getId();
+			}
 		}
 
 		if (!searchOffline) return -1;

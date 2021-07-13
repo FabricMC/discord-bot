@@ -136,7 +136,7 @@ public final class FabricVersionCommand extends Command {
 		String yarnVersion = null;
 		String loaderVersion = null;
 
-		HttpResponse<InputStream> response = HttpUtil.makeRequest(metaHost, "/v1/versions/loader/%s".formatted(mcVersion), "limit=1");
+		HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(metaHost, "/v1/versions/loader/%s".formatted(mcVersion), "limit=1"));
 		if (response.statusCode() != 200) throw new IOException("meta request failed with code "+response.statusCode());
 
 		try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
@@ -178,7 +178,7 @@ public final class FabricVersionCommand extends Command {
 		String apiMavenGroupName = "net.fabricmc.fabric-api:fabric-api";
 		String apiVersion = null;
 
-		response = HttpUtil.makeRequest(mavenHost, "/%s/maven-metadata.xml".formatted(apiMavenGroupName.replace('.', '/').replace(':', '/')));
+		response = HttpUtil.makeRequest(HttpUtil.toUri(mavenHost, "/%s/maven-metadata.xml".formatted(apiMavenGroupName.replace('.', '/').replace(':', '/'))));
 		if (response.statusCode() != 200) throw new IOException("maven request failed with code "+response.statusCode());
 
 		try (InputStream is = response.body()) {
