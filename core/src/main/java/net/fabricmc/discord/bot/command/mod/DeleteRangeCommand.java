@@ -73,13 +73,7 @@ public final class DeleteRangeCommand extends Command {
 			if (firstMessage == null) throw new CommandException("Can't resolve firstMessage");
 
 			TextChannel channel = firstMessage.getChannel();
-
-			if (!channel.canYouSee()
-					|| !channel.canYouReadMessageHistory()
-					|| !channel.canYouManageMessages()
-					|| !channel.canSee(context.user())) {
-				throw new CommandException("Inaccessible channel");
-			}
+			checkMessageDeleteAccess(context, channel);
 
 			List<Message> messages = new ArrayList<>();
 			messages.add(firstMessage);

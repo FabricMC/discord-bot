@@ -29,7 +29,7 @@ import net.fabricmc.discord.bot.database.query.ActionQueries;
 import net.fabricmc.discord.bot.util.DiscordUtil;
 
 public enum UserActionType implements ActionType {
-	BAN("ban", true, "banned", "unbanned") {
+	BAN("ban", true, true, false) {
 		@Override
 		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) DiscordUtil.join(server.banUser(target, 0, reason));
@@ -45,13 +45,13 @@ public enum UserActionType implements ActionType {
 			return server.getBans().thenApply(bans -> bans.stream().anyMatch(ban -> ban.getUser().getId() == targetDiscordUserId)).join();
 		}
 	},
-	KICK("kick", false, "kicked", null) {
+	KICK("kick", false, true, false) {
 		@Override
 		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) DiscordUtil.join(server.kickUser(target, reason));
 		}
 	},
-	MUTE("mute", true, "muted", "unmuted") {
+	MUTE("mute", true) {
 		@Override
 		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.MUTE, reason, bot);
@@ -73,7 +73,7 @@ public enum UserActionType implements ActionType {
 			return target != null && ActionUtil.hasRole(server, target, ActionRole.MUTE, bot);
 		}
 	},
-	META_MUTE("metaMute", true, "meta muted", "meta unmuted") {
+	META_MUTE("metaMute", true) {
 		@Override
 		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.META_MUTE, reason, bot);
@@ -95,7 +95,7 @@ public enum UserActionType implements ActionType {
 			return target != null && ActionUtil.hasRole(server, target, ActionRole.META_MUTE, bot);
 		}
 	},
-	REACTION_MUTE("reactionMute", true, "reaction muted", "reaction unmuted") {
+	REACTION_MUTE("reactionMute", true) {
 		@Override
 		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.REACTION_MUTE, reason, bot);
@@ -117,7 +117,7 @@ public enum UserActionType implements ActionType {
 			return target != null && ActionUtil.hasRole(server, target, ActionRole.REACTION_MUTE, bot);
 		}
 	},
-	REQUESTS_MUTE("requestsMute", true, "requests muted", "requests unmuted") {
+	REQUESTS_MUTE("requestsMute", true) {
 		@Override
 		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.REQUESTS_MUTE, reason, bot);
@@ -139,7 +139,7 @@ public enum UserActionType implements ActionType {
 			return target != null && ActionUtil.hasRole(server, target, ActionRole.REQUESTS_MUTE, bot);
 		}
 	},
-	SUPPORT_MUTE("supportMute", true, "support muted", "support unmuted") {
+	SUPPORT_MUTE("supportMute", true) {
 		@Override
 		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.SUPPORT_MUTE, reason, bot);
@@ -161,7 +161,7 @@ public enum UserActionType implements ActionType {
 			return target != null && ActionUtil.hasRole(server, target, ActionRole.SUPPORT_MUTE, bot);
 		}
 	},
-	NICK_LOCK("nickLock", true, "nick locked", "nick unlocked") {
+	NICK_LOCK("nickLock", true) {
 		@Override
 		protected void activate(Server server, User target, String reason, DiscordBot bot) {
 			if (NOP_MODE) return;
@@ -193,30 +193,27 @@ public enum UserActionType implements ActionType {
 			}
 		}
 	},
-	WARN("warn", false, "warned", null),
-	RENAME("rename", false, "renamed", null, true);
+	WARN("warn", false),
+	DELETE_MESSAGE("deleteMessage", false, false, true),
+	RENAME("rename", false, false, true);
 
 	private static final boolean NOP_MODE = false; // no-op mode for testing
 
 	public final String id;
 	public final boolean hasDuration;
 	private final boolean hasDeactivation;
-	private final String actionDesc;
-	private final String revActionDesc;
+	private final boolean notificationBarrier;
 	public final boolean hasDedicatedCommand;
 
-	UserActionType(String id, boolean hasDuration, String actionDesc, String revActionDesc) {
-		this(id, hasDuration, actionDesc, revActionDesc, false);
+	UserActionType(String id, boolean hasDuration) {
+		this(id, hasDuration, false, false);
 	}
 
-	UserActionType(String id, boolean hasDuration, String actionDesc, String revActionDesc, boolean hasDedicatedCommand) {
-		if (revActionDesc == null && hasDuration) throw new NullPointerException("null reverse action desc for reversible action");
-
+	UserActionType(String id, boolean hasDuration, boolean notificationBarrier, boolean hasDedicatedCommand) {
 		this.id = id;
 		this.hasDuration = hasDuration;
 		this.hasDeactivation = isMethodOverridden(getClass(), "deactivate", Server.class, long.class, String.class, DiscordBot.class);
-		this.actionDesc = actionDesc;
-		this.revActionDesc = revActionDesc;
+		this.notificationBarrier = notificationBarrier;
 		this.hasDedicatedCommand = hasDedicatedCommand;
 	}
 
@@ -257,8 +254,8 @@ public enum UserActionType implements ActionType {
 	}
 
 	@Override
-	public final String getDesc(boolean reversal) {
-		return reversal ? revActionDesc : actionDesc;
+	public boolean isNotificationBarrier() {
+		return notificationBarrier;
 	}
 
 	@Override

@@ -36,6 +36,7 @@ import net.fabricmc.discord.bot.command.filter.FilterCommand;
 import net.fabricmc.discord.bot.command.filter.FilterGroupCommand;
 import net.fabricmc.discord.bot.command.mod.ActionCommand;
 import net.fabricmc.discord.bot.command.mod.CleanCommand;
+import net.fabricmc.discord.bot.command.mod.DeleteCommand;
 import net.fabricmc.discord.bot.command.mod.DeleteRangeCommand;
 import net.fabricmc.discord.bot.command.mod.GenericUserActionCommand;
 import net.fabricmc.discord.bot.command.mod.LockCommand;
@@ -90,6 +91,7 @@ final class BuiltinModule implements Module, MessageCreateListener {
 		// mod/action
 		bot.registerCommand(new ActionCommand());
 		bot.registerCommand(new CleanCommand());
+		bot.registerCommand(new DeleteCommand());
 		bot.registerCommand(new DeleteRangeCommand());
 		bot.registerCommand(new LockCommand());
 		bot.registerCommand(new UnlockCommand());

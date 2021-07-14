@@ -41,6 +41,7 @@ import net.fabricmc.discord.bot.database.query.FilterQueries;
 import net.fabricmc.discord.bot.database.query.FilterQueries.FilterData;
 import net.fabricmc.discord.bot.database.query.FilterQueries.FilterEntry;
 import net.fabricmc.discord.bot.filter.FilterType.MessageMatcher;
+import net.fabricmc.discord.bot.util.DiscordUtil;
 
 public final class FilterHandler implements MessageCreateListener, MessageEditListener {
 	private static final Logger LOGGER = LogManager.getLogger(FilterHandler.class);
@@ -125,7 +126,7 @@ public final class FilterHandler implements MessageCreateListener, MessageEditLi
 	}
 
 	private void handleMessage(Message message, boolean isEdit) {
-		if (!message.getChannel().canYouManageMessages()) return;
+		if (!DiscordUtil.canDeleteMessages(message.getChannel())) return;
 		if (bot.getUserHandler().hasImmunity(message.getAuthor(), bot.getUserHandler().getBotUserId(), false)) return;
 
 		String lcContent = message.getContent().toLowerCase(Locale.ENGLISH);

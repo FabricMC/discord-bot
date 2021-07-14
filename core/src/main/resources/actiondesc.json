@@ -1,0 +1,68 @@
+{
+	"generic": {
+		"2p-enable": "you have been %s",
+		"2p-disable": "you have been %s",
+		"3p-enable": "%s has been %s",
+		"3p-disable": "%s has been %s"
+	},
+	"user.ban": {
+		"enable": "banned",
+		"disable": "unbanned"
+	},
+	"user.kick": {
+		"enable": "kicked"
+	},
+	"user.mute": {
+		"enable": "muted",
+		"disable": "unmuted"
+	},
+	"user.metaMute": {
+		"enable": "muted in meta channels",
+		"disable": "unmuted in meta channels"
+	},
+	"user.reactionMute": {
+		"enable": "reactions disabled",
+		"disable": "reactions enabled",
+		"2p-enable": "your ability to use reactions was disabled",
+		"2p-disable": "your ability to use reactions was enabled",
+		"3p-enable": "%s %s",
+		"3p-disable": "%s %s"
+	},
+	"user.requestsMute": {
+		"enable": "muted in requests channels",
+		"disable": "unmuted in requests channels"
+	},
+	"user.supportMute": {
+		"enable": "muted in support channels",
+		"disable": "unmuted in support channels"
+	},
+	"user.nickLock": {
+		"enable": "nick locked",
+		"disable": "nick unlocked"
+	},
+	"user.warn": {
+		"enable": "warned"
+	},
+	"user.deleteMessage": {
+		"enable": "message deleted",
+		"2p-enable": "Your message has been deleted",
+		"3p-enable": "%s %s"
+	},
+	"user.rename": {
+		"enable": "renamed"
+	},
+	"channel.lock": {
+		"enable": "banned",
+		"disable": "unbanned"
+	},
+	"channel.lock": {
+		"enable": "locked",
+		"disable": "unlocked"
+	},
+	"channel.slowmode": {
+		"enable": "slowmode enabled",
+		"disable": "slowmode disabled",
+		"3p-enable": "%s %s",
+		"3p-disable": "%s %s"
+	}
+}

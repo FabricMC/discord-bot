@@ -20,13 +20,14 @@ import org.javacord.api.entity.server.Server;
 import org.javacord.api.exception.DiscordException;
 
 import net.fabricmc.discord.bot.DiscordBot;
+import net.fabricmc.discord.bot.util.FormatUtil;
 
 public interface ActionType {
 	Kind getKind();
 	String getId();
 	boolean hasDuration();
 	boolean hasDeactivation();
-	String getDesc(boolean reversal);
+	boolean isNotificationBarrier();
 
 	default boolean canRevertBeyondBotDb() {
 		return true;
@@ -73,11 +74,13 @@ public interface ActionType {
 		USER("user", true, UserActionType.values());
 
 		public final String id;
+		public final String capitalized;
 		public final boolean useEncodedTargetId;
 		final ActionType[] values;
 
 		Kind(String id, boolean encodeTargetId, ActionType[] values) {
 			this.id = id;
+			this.capitalized = FormatUtil.capitalize(id);
 			this.useEncodedTargetId = encodeTargetId;
 			this.values = values;
 		}

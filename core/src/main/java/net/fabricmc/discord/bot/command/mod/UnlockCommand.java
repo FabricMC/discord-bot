@@ -39,7 +39,7 @@ public final class UnlockCommand extends Command {
 
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
-		ActionUtil.suspendAction(ChannelActionType.LOCK, getChannel(context, arguments.get("channel")).getId(), arguments.get("reason"), context);
+		ActionUtil.suspendAction(ChannelActionType.LOCK, getChannel(context, arguments.get("channel")).getId(), arguments.get("reason"), false, context);
 		return true;
 	}
 }

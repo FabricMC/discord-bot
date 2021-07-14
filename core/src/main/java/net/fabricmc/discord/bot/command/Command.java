@@ -23,12 +23,14 @@ import java.util.Optional;
 
 import org.javacord.api.entity.channel.ServerChannel;
 import org.javacord.api.entity.channel.ServerTextChannel;
+import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.exception.DiscordException;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.CachedMessage;
 import net.fabricmc.discord.bot.config.ConfigKey;
+import net.fabricmc.discord.bot.util.DiscordUtil;
 
 public abstract class Command {
 	/**
@@ -196,6 +198,14 @@ public abstract class Command {
 		if (context.bot().getUserHandler().hasImmunity(targetDiscordUserId, context.userId(), allowBotTarget)) {
 			throw new CommandException("The target has immunity");
 		}
+	}
+
+	public static void checkMessageDeleteAccess(CommandContext context, TextChannel channel) throws CommandException {
+		if (!hasMessageDeleteAccess(context, channel)) throw new CommandException("Inaccessible channel");
+	}
+
+	public static boolean hasMessageDeleteAccess(CommandContext context, TextChannel channel) {
+		return DiscordUtil.canDeleteMessages(channel) && channel.canSee(context.user());
 	}
 
 	public static <V> V getConfig(CommandContext context, ConfigKey<V> key) {

@@ -51,6 +51,10 @@ public final class DiscordUtil {
 		return new MessageBuilder().append(message).setAllowedMentions(NO_MENTIONS).send(target);
 	}
 
+	public static boolean canDeleteMessages(TextChannel channel) {
+		return channel.canYouSee() && channel.canYouReadMessageHistory() && channel.canYouManageMessages();
+	}
+
 	public static boolean canRemoveReactions(TextChannel channel) {
 		ChannelType type = channel.getType();
 

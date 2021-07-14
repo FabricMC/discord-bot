@@ -40,9 +40,9 @@ public final class GenericUserActionCommand extends Command {
 	@Override
 	public String usage() {
 		if (type.hasDuration && activate) {
-			return "<user/message> <duration> <reason...> ([--keep] | [--clean] | [--cleanLocal])";
+			return "<user/message> <duration> <reason...> ([--keep] | [--clean] | [--cleanLocal]) [--silent]";
 		} else {
-			return "<user/message> <reason...> ([--keep] | [--clean] | [--cleanLocal])";
+			return "<user/message> <reason...> ([--keep] | [--clean] | [--cleanLocal]) [--silent]";
 		}
 	}
 
@@ -67,15 +67,17 @@ public final class GenericUserActionCommand extends Command {
 			targetMessageAction = UserMessageAction.DELETE;
 		}
 
+		boolean notifyTarget = !arguments.containsKey("silent");
+
 		if (activate) {
 			checkSelfTarget(context, target.userId());
 			checkImmunity(context, target.userId(), false);
 
 			String duration = type.hasDuration ? arguments.get("duration") : null;
 
-			ActionUtil.applyUserAction(type, 0, target.userId(), duration, reason, target.message(), targetMessageAction, context);
+			ActionUtil.applyUserAction(type, 0, target.userId(), duration, reason, target.message(), targetMessageAction, notifyTarget, context);
 		} else {
-			ActionUtil.suspendAction(type, target.userId(), reason, context);
+			ActionUtil.suspendAction(type, target.userId(), reason, notifyTarget, context);
 		}
 
 		return true;

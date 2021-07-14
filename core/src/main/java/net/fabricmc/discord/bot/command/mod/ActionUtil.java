@@ -94,9 +94,9 @@ public final class ActionUtil {
 	 * @param context command context
 	 * @return true if the action was executed successfully
 	 */
-	static void applyUserAction(ActionType type, int data, int targetUserId, String duration, String reason,
+	static void applyUserAction(ActionType type, int data, int targetUserId, @Nullable String duration, String reason,
 			@Nullable CachedMessage targetMessage, UserMessageAction targetMessageAction,
-			CommandContext context) throws Exception {
+			boolean notifyTarget, CommandContext context) throws Exception {
 		String extraBodyDesc;
 
 		if (targetMessage == null || targetMessageAction == UserMessageAction.NONE) {
@@ -107,7 +107,7 @@ public final class ActionUtil {
 
 		int actionId = applyAction(type, data, targetUserId, duration, reason,
 				targetMessage,
-				extraBodyDesc, context);
+				extraBodyDesc, notifyTarget, context);
 
 		if (targetMessageAction != UserMessageAction.NONE && targetMessage != null) {
 			String deleteReason = "Action %d".formatted(actionId);
@@ -153,12 +153,12 @@ public final class ActionUtil {
 
 	static void applyChannelAction(ActionType type, int data, long targetChannelId, String duration, String reason,
 			@Nullable String extraBodyDesc, CommandContext context) throws Exception {
-		applyAction(type, data, targetChannelId, duration, reason, null, extraBodyDesc, context);
+		applyAction(type, data, targetChannelId, duration, reason, null, extraBodyDesc, false, context);
 	}
 
-	private static int applyAction(ActionType type, int data, long targetId, String duration, String reason,
+	private static int applyAction(ActionType type, int data, long targetId, @Nullable String duration, String reason,
 			CachedMessage targetMessageContext,
-			@Nullable String extraBodyDesc, CommandContext context) throws Exception {
+			@Nullable String extraBodyDesc, boolean notifyTarget, CommandContext context) throws Exception {
 		// check for conflict
 
 		int prevId = -1;
@@ -171,9 +171,9 @@ public final class ActionUtil {
 				int cmp = existingAction.data() != null ? type.compareData(existingAction.data().data(), data) : 0;
 
 				if (cmp == 0) { // same action is already active
-					throw new CommandException("The %s is already %s", type.getKind().id, type.getDesc(false));
+					throw new CommandException("The %s is already %s", type.getKind().id, ActionDesc.getShort(type, false));
 				} else if (cmp > 0 && !type.checkData(data, existingAction.data().resetData())) { // downgrade to or below the prev action's reset level, just suspend with no new action
-					suspendAction(type, targetId, reason, context);
+					suspendAction(type, targetId, reason, notifyTarget, context);
 					return existingAction.id();
 				}
 
@@ -183,7 +183,7 @@ public final class ActionUtil {
 					prevResetData = existingAction.data().resetData();
 				}
 			} else if (type.getKind() == Kind.CHANNEL && type.isActive(context.server(), targetId, data, context.bot())) { // channel already set to a higher level outside the bot
-				throw new CommandException("The %s is already %s", type.getKind().id, type.getDesc(false));
+				throw new CommandException("The %s is already %s", type.getKind().id, ActionDesc.getShort(type, false));
 			}
 		}
 
@@ -203,7 +203,7 @@ public final class ActionUtil {
 
 		// message target user (done first since it may no longer be possible after applying the discord action)
 
-		if (type.getKind() == Kind.USER) {
+		if (notifyTarget && type.isNotificationBarrier()) {
 			// TODO: allocate action id first?
 			notifyTarget(type, false, null, extraBodyDesc, targetId, creationTime, expirationTime, reason, -1, context.bot(), context.server());
 		}
@@ -252,7 +252,7 @@ public final class ActionUtil {
 				entry.id(), targetMessageContext,
 				context.channel(), context.user(),
 				context.bot(), context.server(),
-				false);
+				notifyTarget && !type.isNotificationBarrier());
 
 		// record action for expiration
 
@@ -261,7 +261,7 @@ public final class ActionUtil {
 		return entry.id();
 	}
 
-	static void suspendAction(ActionType type, long targetId, String reason, CommandContext context) throws Exception {
+	static void suspendAction(ActionType type, long targetId, String reason, boolean notifyTarget, CommandContext context) throws Exception {
 		if (!type.hasDuration()) throw new RuntimeException("Actions without a duration can't be suspended");
 
 		// determine action to suspend
@@ -283,9 +283,9 @@ public final class ActionUtil {
 		if (entry == null
 				|| !ActionQueries.suspendAction(context.bot().getDatabase(), entry.id(), context.userId(), reason)) { // action wasn't applied through the bot, determine direct applications (directly through discord)
 			if (!type.canRevertBeyondBotDb()) {
-				throw new CommandException("%s %d is not %s through the bot.", type.getKind().id, targetId, type.getDesc(false));
+				throw new CommandException("%s %d is not %s through the bot.", type.getKind().id, targetId, ActionDesc.getShort(type, false));
 			} else if (!type.isActive(context.server(), targetId, 0, context.bot())) {
-				throw new CommandException("%s %d is not %s.", type.getKind().id, targetId, type.getDesc(false));
+				throw new CommandException("%s %d is not %s.", type.getKind().id, targetId, ActionDesc.getShort(type, false));
 			}
 		} else { // action was applied through the bot, update db record and remove from action sync handler
 			context.bot().getActionSyncHandler().onActionSuspension(entry.id());
@@ -307,7 +307,7 @@ public final class ActionUtil {
 				actionId, null,
 				context.channel(), context.user(),
 				context.bot(), context.server(),
-				true);
+				notifyTarget);
 	}
 
 	public static void expireAction(ExpiringActionEntry entry, DiscordBot bot, Server server) throws SQLException {
@@ -339,38 +339,35 @@ public final class ActionUtil {
 		// log to original channel
 
 		List<Long> targetDiscordIds;
-		String targetType, targetName;
+		String targetName;
 		CharSequence targetListSuffix;
 
 		if (type.getKind() == Kind.USER) {
 			int targetUserId = (int) targetId;
 			targetDiscordIds = bot.getUserHandler().getDiscordUserIds(targetUserId);
 
-			targetType = "User";
 			targetName = Integer.toString(targetUserId);
 			targetListSuffix = FormatUtil.formatUserList(targetDiscordIds, bot, server);
 		} else {
 			ServerChannel targetChannel = server.getChannelById(targetId).orElse(null);
 			targetDiscordIds = null;
 
-			targetType = "Channel";
 			targetName = targetChannel != null ? targetChannel.getName() : "(unknown)";
 			targetListSuffix = "";
 		}
 
-		String actionDesc = type.getDesc(reversal);
-		String title = String.format("%s %s%s", // e.g. 'User' 'unbanned'' (expiration)'
-				targetType, actionDesc, formatOptionalSuffix(extraTitleDesc));
-		String description = String.format("%s %s has been %s%s%s:%s\n%s%s", // e.g. 'User' '123' has been 'unbanned'' automatically' +exp/target/reason
-				targetType, targetName,
-				actionDesc, formatOptionalSuffix(extraBodyDesc),
+		String title = String.format("%s %s%s", // e.g. 'User unbanned'' (expiration)'
+				type.getKind().capitalized, ActionDesc.getShort(type, reversal), formatOptionalSuffix(extraTitleDesc));
+		String description = String.format("%s%s%s%s:%s\n%s%s", // e.g. 'User 123 has been unbanned'' automatically'' without notification' +exp/target/reason
+				FormatUtil.capitalize(ActionDesc.getThirdPerson(type, reversal, "%s %s".formatted(type.getKind().id, targetName))),
+				formatOptionalSuffix(extraBodyDesc), (notifyTarget ? "" : " without notification"),
 				formatExpirationSuffix(reversal, expiration),
 				targetListSuffix,
 				formatDurationSuffix(type, reversal, creation, expiration),
 				formatReasonSuffix(reason))
 				.trim(); // to remove trailing \n if there's neither duration nor reason
 
-		String actionRef = actionId >= 0 ? "%s Action ID: %d".formatted(targetType, actionId) : "Unknown action";
+		String actionRef = formatActionRef(type.getKind(), actionId);
 		TextChannel logChannel = bot.getLogHandler().getLogChannel();
 
 		EmbedBuilder msg = new EmbedBuilder()
@@ -421,14 +418,14 @@ public final class ActionUtil {
 		List<Long> targetDiscordIds = bot.getUserHandler().getDiscordUserIds((int) targetId);
 		if (targetDiscordIds.isEmpty()) return false;
 
-		String actionDesc = type.getDesc(reversal);
 		String appealSuffix = !reversal ? "\n\n%s".formatted(bot.getConfigEntry(APPEAL_MESSAGE)) : "";
 
 		EmbedBuilder userMsg = new EmbedBuilder()
 				.setTitle(String.format("%s%s!", // e.g. 'Unbanned'' (expiration)'!
-						actionDesc, formatOptionalSuffix(extraTitleDesc)))
-				.setDescription(String.format("You have been %s%s%s.%s%s", // e.g. You have been 'unbanned'' automatically' +exp/reason/appeal
-						actionDesc, formatOptionalSuffix(extraBodyDesc),
+						FormatUtil.capitalize(ActionDesc.getShort(type, reversal)), formatOptionalSuffix(extraTitleDesc)))
+				.setDescription(String.format("%s%s%s.%s%s", // e.g. 'You have been unbanned'' automatically' +exp/reason/appeal
+						FormatUtil.capitalize(ActionDesc.getSecondPerson(type, reversal)),
+						formatOptionalSuffix(extraBodyDesc),
 						formatExpirationSuffix(reversal, expiration),
 						formatReasonSuffix(reason),
 						appealSuffix))
@@ -491,6 +488,6 @@ public final class ActionUtil {
 	}
 
 	private static String formatActionRef(ActionType.Kind kind, int actionId) {
-		return actionId >= 0 ? "%s Action ID: %d".formatted(kind.name(), actionId) : "Unknown action";
+		return actionId >= 0 ? "%s Action ID: %d".formatted(kind.capitalized, actionId) : "Unknown action";
 	}
 }

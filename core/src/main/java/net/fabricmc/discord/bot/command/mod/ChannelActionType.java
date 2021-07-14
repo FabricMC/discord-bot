@@ -28,7 +28,7 @@ import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.util.DiscordUtil;
 
 public enum ChannelActionType implements ActionType {
-	LOCK("lock", true, "locked", "unlocked") {
+	LOCK("lock", true) {
 		@Override
 		protected Integer activate(Server server, ServerChannel target, int data, String reason, DiscordBot bot) throws DiscordException {
 			if (NOP_MODE) return 0;
@@ -70,7 +70,7 @@ public enum ChannelActionType implements ActionType {
 
 		private final int restrictedPerms = PermissionType.ADD_REACTIONS.getValue() | PermissionType.SEND_MESSAGES.getValue();
 	},
-	SLOWMODE("slowmode", true, "slowmode enabled", "slowmode disabled") {
+	SLOWMODE("slowmode", true) {
 		@Override
 		protected Integer activate(Server server, ServerChannel target, int data, String reason, DiscordBot bot) throws DiscordException {
 			assert data > 0;
@@ -125,15 +125,11 @@ public enum ChannelActionType implements ActionType {
 	public final String id;
 	public final boolean hasDuration;
 	private final boolean hasDeactivation;
-	private final String actionDesc;
-	private final String revActionDesc;
 
-	ChannelActionType(String id, boolean hasDuration, String actionDesc, String revActionDesc) {
+	ChannelActionType(String id, boolean hasDuration) {
 		this.id = id;
 		this.hasDuration = hasDuration;
 		this.hasDeactivation = UserActionType.isMethodOverridden(getClass(), "deactivate", Server.class, ServerChannel.class, Integer.class, String.class, DiscordBot.class);
-		this.actionDesc = actionDesc;
-		this.revActionDesc = revActionDesc;
 	}
 
 	@Override
@@ -157,8 +153,8 @@ public enum ChannelActionType implements ActionType {
 	}
 
 	@Override
-	public final String getDesc(boolean reversal) {
-		return reversal ? revActionDesc : actionDesc;
+	public boolean isNotificationBarrier() {
+		return false;
 	}
 
 	@Override
