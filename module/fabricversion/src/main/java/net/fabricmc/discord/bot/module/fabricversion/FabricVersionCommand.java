@@ -22,6 +22,8 @@ import java.io.InputStreamReader;
 import java.net.URISyntaxException;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -173,10 +175,10 @@ public final class FabricVersionCommand extends Command {
 			reader.endObject();
 		}
 
-		String apiBranch = getApiBranch(mcVersion);
+		List<String> apiBranches = getApiBranch(mcVersion);
 		//String apiMavenGroupName = apiBranch.startsWith("1.14") ? "net.fabricmc.fabric" : "net.fabricmc.fabric-api:fabric-api";
 		String apiMavenGroupName = "net.fabricmc.fabric-api:fabric-api";
-		String apiVersion = null;
+		String[] apiVersions = new String[apiBranches.size() * 2]; // ordered by match quality (exact matches, then prefix matches)
 
 		response = HttpUtil.makeRequest(HttpUtil.toUri(mavenHost, "/%s/maven-metadata.xml".formatted(apiMavenGroupName.replace('.', '/').replace(':', '/'))));
 		if (response.statusCode() != 200) throw new IOException("maven request failed with code "+response.statusCode());
@@ -191,22 +193,44 @@ public final class FabricVersionCommand extends Command {
 
 			for (int i = 0, max = list.getLength(); i < max; i++) {
 				String version = list.item(i).getTextContent();
-				char prev;
+				int pos = Math.max(version.lastIndexOf('+'), version.lastIndexOf('-'));
+				if (pos < 0) continue;
 
-				if (version.endsWith(apiBranch)
-						&& version.length() > apiBranch.length()
-						&& ((prev = version.charAt(version.length() - apiBranch.length() - 1)) == '+' || prev == '-')) {
-					apiVersion = version;
+				int suffixStart = pos + 1;
+				int suffixLen = version.length() - suffixStart;
+
+				for (int j = 0; j < apiBranches.size(); j++) {
+					String apiBranch = apiBranches.get(j);
+
+					if (version.startsWith(apiBranch, suffixStart)) {
+						// overwriting the prev apiVersions entry assumes the latest version being last in the metadata xml
+
+						if (apiBranch.length() == suffixLen) { // exact match
+							apiVersions[j] = version;
+							break; // match won't get better
+						} else { // prefix match
+							apiVersions[j + apiBranches.size()] = version;
+						}
+					}
 				}
 			}
 		} catch (ParserConfigurationException | SAXException e) {
 			e.printStackTrace(); // TODO: log properly
 		}
 
+		String apiVersion = null;
+
+		for (String version : apiVersions) {
+			if (version != null) {
+				apiVersion = version;
+				break;
+			}
+		}
+
 		return new VersionData(mcVersion, yarnVersion, loaderVersion, apiVersion, apiMavenGroupName);
 	}
 
-	private static String getApiBranch(String mcVersion) {
+	private static List<String> getApiBranch(String mcVersion) {
 		Matcher matcher = RELEASE_PATTERN.matcher(mcVersion);
 
 		if (matcher.find()) {
@@ -214,33 +238,34 @@ public final class FabricVersionCommand extends Command {
 			int minor = Integer.parseInt(matcher.group(2));
 			int patch = matcher.group(3) != null ? Integer.parseInt(matcher.group(3)) : 0;
 
-			if (major == 1 && (minor < 16 || minor == 16 && patch != 1) || patch == 0) {
-				return String.format("%d.%d", major, minor);
-			} else {
-				return String.format("%d.%d.%s", major, minor, patch);
-			}
+			return Arrays.asList(String.format("%d.%d.%s", major, minor, patch), String.format("%d.%d", major, minor));
 		}
 
 		matcher = SNAPSHOT_PATTERN.matcher(mcVersion);
+		String version;
 
 		if (matcher.find()) {
 			int year = Integer.parseInt(matcher.group(1));
 			int week = Integer.parseInt(matcher.group(2));
 
-			if (year >= 21 || year == 20 && week >= 45) {
-				return "1.17";
+			if (year > 21 || year == 21 && week >= 28) {
+				version = "1.18";
+			} else if (year == 21 && week <= 20 || year == 20 && week >= 45) {
+				version = "1.17";
 			} else if (year == 20 && week >= 6) {
-				return "1.16";
+				version = "1.16";
 			} else if (year == 19 && week >= 34) {
-				return "1.15";
+				version = "1.15";
 			} else if (year == 18 && week >= 43 || year == 19 && week <= 14) {
-				return "1.14";
+				version = "1.14";
 			} else {
-				return "1.13";
+				version = "1.13";
 			}
+		} else {
+			version = "1.18";
 		}
 
-		return "1.17";
+		return Collections.singletonList(version);
 	}
 
 	private record VersionData(String mcVersion, String yarnVersion, String loaderVersion, String apiVersion, String apiMavenName) { }
