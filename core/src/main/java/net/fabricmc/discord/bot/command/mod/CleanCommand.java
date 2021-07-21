@@ -101,7 +101,7 @@ public final class CleanCommand extends Command {
 		int count = 0;
 
 		for (ServerTextChannel channel : targetChannels) {
-			if (!hasMessageDeleteAccess(context, targetChannel)) continue;
+			if (!hasMessageDeleteAccess(context, channel)) continue;
 
 			Collection<CachedMessage> messages = context.bot().getMessageIndex().getAllIdsByAuthors(channel, targetDiscordUserIds, false);
 
