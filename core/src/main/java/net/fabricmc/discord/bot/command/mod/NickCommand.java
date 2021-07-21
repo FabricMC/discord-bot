@@ -95,7 +95,7 @@ public final class NickCommand extends Command {
 				targetUserId, entry.creationTime(), entry.expirationTime(), entry.reason(),
 				entry.id(), null,
 				context.channel(), context.user(),
-				context.bot(), context.server(), true);
+				context.bot(), context.server(), true, false);
 
 		// update nick lock entries
 

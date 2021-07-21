@@ -41,6 +41,7 @@ import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.command.mod.ActionType.ActivateResult;
 import net.fabricmc.discord.bot.command.mod.ActionType.Kind;
+import net.fabricmc.discord.bot.command.mod.ActionUtil.UserMessageAction;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
 import net.fabricmc.discord.bot.database.query.ActionQueries;
@@ -203,7 +204,9 @@ public final class ActionUtil {
 
 		// message target user (done first since it may no longer be possible after applying the discord action)
 
-		if (notifyTarget && type.isNotificationBarrier()) {
+		boolean notifyEarly = notifyTarget && type.isNotificationBarrier();
+
+		if (notifyEarly) {
 			// TODO: allocate action id first?
 			notifyTarget(type, false, null, extraBodyDesc, targetId, creationTime, expirationTime, reason, -1, context.bot(), context.server());
 		}
@@ -252,7 +255,7 @@ public final class ActionUtil {
 				entry.id(), targetMessageContext,
 				context.channel(), context.user(),
 				context.bot(), context.server(),
-				notifyTarget && !type.isNotificationBarrier());
+				notifyTarget, notifyEarly);
 
 		// record action for expiration
 
@@ -307,7 +310,7 @@ public final class ActionUtil {
 				actionId, null,
 				context.channel(), context.user(),
 				context.bot(), context.server(),
-				notifyTarget);
+				notifyTarget, false);
 	}
 
 	public static void expireAction(ExpiringActionEntry entry, DiscordBot bot, Server server) throws SQLException {
@@ -326,7 +329,7 @@ public final class ActionUtil {
 				entry.id(), null,
 				null, null,
 				bot, server,
-				true);
+				true, false);
 	}
 
 	static void announceAction(ActionType type, boolean reversal, @Nullable String extraTitleDesc, @Nullable String extraBodyDesc,
@@ -335,7 +338,7 @@ public final class ActionUtil {
 			int actionId, CachedMessage targetMessageContext,
 			TextChannel actingChannel, User actor,
 			DiscordBot bot, Server server,
-			boolean notifyTarget) {
+			boolean notifyTarget, boolean alreadyNotified) {
 		// log to original channel
 
 		List<Long> targetDiscordIds;
@@ -403,7 +406,7 @@ public final class ActionUtil {
 
 		// message target user
 
-		if (type.getKind() == Kind.USER && notifyTarget) {
+		if (type.getKind() == Kind.USER && notifyTarget && !alreadyNotified) {
 			notifyTarget(type, reversal, extraTitleDesc, extraBodyDesc, targetId, creation, expiration, reason, actionId, bot, server);
 		}
 	}
