@@ -93,8 +93,9 @@ public final class CommandParser {
 
 				addToken(i + 1, end);
 				i = end;
-			} else if (c == '-' && i + 1 < inputEnd && input.charAt(i + 1) == '-') {
-				int start = i + 2;
+			} else if (c == '-' && i + 1 < inputEnd && input.charAt(i + 1) == '-' || c == '—') { // treat long dash the same as -- (common input substitution)
+				int len = c == '-' ? 2 : 1;
+				int start = i + len;
 				int end = start;
 
 				while (end < inputEnd && !Character.isWhitespace(c = input.charAt(end)) && c != '=') {
@@ -357,7 +358,7 @@ public final class CommandParser {
 		if (queuedNodes == null) {
 			queuedNodes = new Node[5 * QUEUE_NODE_STRIDE];
 			queuedData = new int[5 * QUEUE_DATA_STRIDE];
-		} else {
+		} else if (queueSize * QUEUE_NODE_STRIDE + QUEUE_NODE_STRIDE > queuedNodes.length) {
 			queuedNodes = Arrays.copyOf(queuedNodes, queuedNodes.length * 2);
 			queuedData = Arrays.copyOf(queuedData, queuedData.length * 2);
 		}

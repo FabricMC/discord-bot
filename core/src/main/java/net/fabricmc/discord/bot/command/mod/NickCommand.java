@@ -94,8 +94,8 @@ public final class NickCommand extends Command {
 		ActionUtil.announceAction(entry.type(), false, "", "from %s to %s".formatted(oldNick, newNick),
 				targetUserId, entry.creationTime(), entry.expirationTime(), entry.reason(),
 				entry.id(), null,
-				context.channel(), context.user(),
-				context.bot(), context.server(), true, false);
+				context.bot(), context.server(), context.channel(), context.user(),
+				true, false, null);
 
 		// update nick lock entries
 

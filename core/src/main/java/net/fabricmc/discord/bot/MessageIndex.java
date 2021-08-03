@@ -23,6 +23,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
@@ -92,6 +93,12 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		}
 	}
 
+	public @Nullable CachedMessage get(Message message) {
+		CachedMessage ret = globalIndex.get(message.getId());
+
+		return ret != null ? ret : new CachedMessage(message);
+	}
+
 	public @Nullable CachedMessage get(ServerTextChannel channel, long id) {
 		ChannelMessageCache cache = channelCaches.get(channel);
 		if (cache == null) return null;
@@ -115,7 +122,21 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		return ret;
 	}
 
-	public Collection<CachedMessage> getAllIdsByAuthors(ServerTextChannel channel, LongSet authorDiscordIds, boolean includeDeleted) {
+	public Collection<CachedMessage> getAllByAuthors(LongSet authorDiscordIds, boolean includeDeleted) {
+		List<CachedMessage> ret = new ArrayList<>();
+
+		synchronized (globalIndex) {
+			for (CachedMessage message : globalIndex.values()) {
+				if (authorDiscordIds.contains(message.getAuthorDiscordId()) && (includeDeleted || !message.isDeleted())) {
+					ret.add(message);
+				}
+			}
+		}
+
+		return ret;
+	}
+
+	public Collection<CachedMessage> getAllByAuthors(LongSet authorDiscordIds, ServerTextChannel channel, boolean includeDeleted) {
 		if (authorDiscordIds.isEmpty()) return Collections.emptyList();
 
 		List<CachedMessage> res = new ArrayList<>();
@@ -165,12 +186,37 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		return null;
 	}
 
+	public void accept(Visitor visitor, boolean includeDeleted) {
+		synchronized (globalIndex) {
+			for (CachedMessage message : globalIndex.values()) {
+				if (includeDeleted || !message.isDeleted()) {
+					visitor.visit(message);
+				}
+			}
+		}
+	}
+
 	public void accept(ServerTextChannel channel, Visitor visitor, boolean includeDeleted) {
+		Objects.requireNonNull(channel, "null channel");
+
 		ChannelMessageCache cache = channelCaches.get(channel);
 		if (cache == null) return;
 
 		synchronized (cache) {
 			cache.accept(visitor, includeDeleted);
+		}
+	}
+
+	public Collection<ServerTextChannel> getCachedChannels() {
+		return channelCaches.keySet();
+	}
+
+	public int getSize(ServerTextChannel channel) {
+		ChannelMessageCache cache = channelCaches.get(channel);
+		if (cache == null) return 0;
+
+		synchronized (cache) {
+			return cache.size();
 		}
 	}
 
@@ -403,6 +449,14 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 					if (!visitor.visit(message)) break;
 				}
 			} while (idx != writeIdx);
+		}
+
+		int size() {
+			if (messages[messages.length - 1] == null) {
+				return writeIdx;
+			} else {
+				return messages.length;
+			}
 		}
 	}
 

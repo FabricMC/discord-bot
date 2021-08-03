@@ -18,9 +18,9 @@ package net.fabricmc.discord.bot.command.mod;
 
 import java.time.Instant;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 
+import it.unimi.dsi.fastutil.longs.LongList;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 
 import net.fabricmc.discord.bot.command.Command;
@@ -32,7 +32,7 @@ import net.fabricmc.discord.bot.message.Paginator;
 import net.fabricmc.discord.bot.util.FormatUtil;
 
 public final class ActionCommand extends Command {
-	private static final int SUMMARY_PAGE_ENTRIES = 20;
+	private static final int LIST_PAGE_ENTRIES = 20;
 	private static final int REASON_PREVIEW_MAXLEN = 40;
 
 	@Override
@@ -42,7 +42,7 @@ public final class ActionCommand extends Command {
 
 	@Override
 	public String usage() {
-		return "list <user> | get <id>";
+		return "list <user> | (get|show) <id>";
 	}
 
 	@Override
@@ -65,7 +65,7 @@ public final class ActionCommand extends Command {
 				int count = 0;
 
 				for (ActionEntry action : actions) {
-					if (count % SUMMARY_PAGE_ENTRIES == 0 && count > 0) {
+					if (count % LIST_PAGE_ENTRIES == 0 && count > 0) {
 						builder.page(sb);
 						sb.setLength(0);
 					}
@@ -113,7 +113,8 @@ public final class ActionCommand extends Command {
 
 			return true;
 		}
-		case "get": {
+		case "get":
+		case "show": {
 			int actionId = Integer.parseInt(arguments.get("id"));
 			ActionEntry action = ActionQueries.getAction(context.bot().getDatabase(), actionId);
 			if (action == null) throw new CommandException("Unknown action");
@@ -169,7 +170,7 @@ public final class ActionCommand extends Command {
 				reasonSuffix = "\n**Reason:** %s".formatted(action.reason());
 			}
 
-			List<Long> targets = context.bot().getUserHandler().getDiscordUserIds((int) action.targetId());
+			LongList targets = context.bot().getUserHandler().getDiscordUserIds((int) action.targetId());
 
 			context.channel().sendMessage(new EmbedBuilder()
 					.setTitle("Action %d details".formatted(action.id()))

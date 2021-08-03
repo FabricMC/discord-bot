@@ -59,9 +59,12 @@ public final class SlowmodeCommand extends Command {
 
 		if (valueSec > 0) {
 			String extraBodyDesc = "with %s delay".formatted(FormatUtil.formatDuration(valueSec * 1000));
-			ActionUtil.applyChannelAction(ChannelActionType.SLOWMODE, valueSec, targetChannelId, duration, arguments.get("reason"), extraBodyDesc, context);
+			ActionUtil.applyChannelAction(ChannelActionType.SLOWMODE, valueSec, targetChannelId, duration, arguments.get("reason"), extraBodyDesc,
+					context.bot(), context.server(), context.channel(), context.user(), context.userId());
 		} else {
-			ActionUtil.suspendAction(ChannelActionType.SLOWMODE, targetChannelId, arguments.get("reason"), false, context);
+			ActionUtil.suspendAction(ChannelActionType.SLOWMODE, targetChannelId, arguments.get("reason"),
+					false, null,
+					context.bot(), context.server(), context.channel(), context.user(), context.userId());
 		}
 
 		return true;

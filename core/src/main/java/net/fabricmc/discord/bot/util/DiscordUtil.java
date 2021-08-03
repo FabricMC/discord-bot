@@ -26,6 +26,7 @@ import org.javacord.api.entity.message.MessageBuilder;
 import org.javacord.api.entity.message.Messageable;
 import org.javacord.api.entity.message.mention.AllowedMentions;
 import org.javacord.api.entity.message.mention.AllowedMentionsBuilder;
+import org.javacord.api.entity.server.Server;
 import org.javacord.api.exception.DiscordException;
 
 public final class DiscordUtil {
@@ -61,5 +62,12 @@ public final class DiscordUtil {
 		return channel.canYouRemoveReactionsOfOthers()
 				&& type != ChannelType.PRIVATE_CHANNEL
 				&& type != ChannelType.GROUP_CHANNEL; // no permissions in DMs
+	}
+
+	public static String getMessageLink(Server server, long channelId, long messageId) {
+		return String.format("https://discord.com/channels/%s/%d/%d",
+				(server != null ? Long.toUnsignedString(server.getId()) : "@me"),
+				channelId,
+				messageId);
 	}
 }

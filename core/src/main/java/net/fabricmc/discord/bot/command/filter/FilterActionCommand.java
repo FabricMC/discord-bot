@@ -64,7 +64,7 @@ public final class FilterActionCommand extends Command {
 			return true;
 		}
 		case "add": {
-			if (!FilterQueries.addAction(context.bot().getDatabase(), arguments.get("name"), arguments.get("description"), FilterAction.get(arguments.get("action")), arguments.get("actionData"))) {
+			if (!FilterQueries.addAction(context.bot().getDatabase(), arguments.get("name"), arguments.get("description"), FilterAction.parse(arguments.get("action")), arguments.get("actionData"))) {
 				throw new CommandException("Filter action addition failed, conflicting name");
 			}
 
@@ -81,7 +81,7 @@ public final class FilterActionCommand extends Command {
 
 			return true;
 		case "setaction":
-			if (!FilterQueries.setActionAction(context.bot().getDatabase(), arguments.get("name"), FilterAction.get(arguments.get("action")), arguments.get("actionData"))) {
+			if (!FilterQueries.setActionAction(context.bot().getDatabase(), arguments.get("name"), FilterAction.parse(arguments.get("action")), arguments.get("actionData"))) {
 				throw new CommandException("Filter action action update failed, unknown name");
 			}
 

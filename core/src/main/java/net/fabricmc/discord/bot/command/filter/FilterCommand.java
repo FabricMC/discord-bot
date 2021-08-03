@@ -16,8 +16,13 @@
 
 package net.fabricmc.discord.bot.command.filter;
 
-import java.util.Collection;
+import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
+
+import com.google.gson.stream.JsonReader;
 
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
@@ -25,8 +30,13 @@ import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.database.query.FilterQueries;
 import net.fabricmc.discord.bot.database.query.FilterQueries.FilterEntry;
 import net.fabricmc.discord.bot.filter.FilterType;
+import net.fabricmc.discord.bot.message.Paginator;
+import net.fabricmc.discord.bot.util.FormatUtil;
+import net.fabricmc.discord.bot.util.FormatUtil.OutputType;
 
 public final class FilterCommand extends Command {
+	private static final int LIST_PAGE_ENTRIES = 20;
+
 	@Override
 	public String name() {
 		return "filter";
@@ -34,7 +44,7 @@ public final class FilterCommand extends Command {
 
 	@Override
 	public String usage() {
-		return "list <group> | add <group> <type> <pattern> | remove <id> | setpattern <id> <pattern> | setgroup <id> <group>";
+		return "list <group> | add <group> <type> <pattern> | import <group> <type> [<contentUrl>] | remove <id> | clear <group> | setpattern <id> <pattern> | setgroup <id> <group>";
 	}
 
 	@Override
@@ -47,19 +57,35 @@ public final class FilterCommand extends Command {
 		switch (arguments.get("unnamed_0")) {
 		case "list": {
 			String group = arguments.get("group");
-			Collection<FilterEntry> filters = FilterQueries.getFilters(context.bot().getDatabase(), group);
+			List<FilterEntry> filters = new ArrayList<>(FilterQueries.getFilters(context.bot().getDatabase(), group));
 
 			if (filters.isEmpty()) {
 				context.channel().sendMessage(String.format("No filters in group %s", group));
 			} else {
-				StringBuilder sb = new StringBuilder(String.format("Filters in group %s:", group));
+				filters.sort(Comparator.comparing(FilterEntry::type).thenComparing(FilterEntry::pattern));
+
+				Paginator.Builder builder = new Paginator.Builder(context.user()).title("Group %s Filters".formatted(group));
+				StringBuilder sb = new StringBuilder();
+				int count = 0;
 
 				for (FilterEntry filter : filters) {
-					sb.append(String.format("\n%d: %s %s",
-							filter.id(), filter.type().id, filter.pattern()));
+					if (count % LIST_PAGE_ENTRIES == 0 && count > 0) {
+						builder.page(sb);
+						sb.setLength(0);
+					}
+
+					count++;
+
+					if (sb.length() > 0) sb.append('\n');
+					sb.append(String.format("`%d`: %s %s",
+							filter.id(), filter.type().id, FormatUtil.escape(filter.pattern(), OutputType.INLINE_CODE, true)));
 				}
 
-				context.channel().sendMessage(sb.toString());
+				if (sb.length() > 0) {
+					builder.page(sb);
+				}
+
+				builder.buildAndSend(context.channel());
 			}
 
 			return true;
@@ -67,6 +93,7 @@ public final class FilterCommand extends Command {
 		case "add": {
 			FilterType type = FilterType.get(arguments.get("type"));
 			String pattern = arguments.get("pattern");
+			if (pattern.isBlank()) throw new CommandException("blank pattern");
 			type.compile(pattern); // test-compile to catch errors before storing the pattern
 
 			if (!FilterQueries.addFilter(context.bot().getDatabase(), type, pattern, arguments.get("group"))) {
@@ -75,6 +102,52 @@ public final class FilterCommand extends Command {
 
 			context.bot().getFilterHandler().reloadFilters();
 			context.channel().sendMessage("Filter added");
+
+			return true;
+		}
+		case "import": {
+			FilterType type = FilterType.get(arguments.get("type"));
+			String content = retrieveContent(context, arguments.get("contentUrl")).trim();
+			List<String> patterns = new ArrayList<>();
+
+			if (content.startsWith("[")) {
+				try (JsonReader reader = new JsonReader(new StringReader(content))) {
+					reader.beginArray();
+
+					while (reader.hasNext()) {
+						String pattern = reader.nextString();
+						if (pattern.isBlank()) throw new CommandException("blank pattern");
+						type.compile(pattern); // test-compile to catch errors before storing the pattern
+						patterns.add(pattern);
+					}
+
+					reader.endArray();
+				}
+			} else {
+				for (String pattern : content.split("\\R")) {
+					if (pattern.isBlank()) throw new CommandException("blank pattern");
+					type.compile(pattern); // test-compile to catch errors before storing the pattern
+					patterns.add(pattern);
+				}
+			}
+
+			if (patterns.isEmpty()) throw new CommandException("no patterns");
+
+			String group = arguments.get("group");
+			int added = 0;
+
+			for (String pattern : patterns) {
+				if (FilterQueries.addFilter(context.bot().getDatabase(), type, pattern, group)) {
+					added++;
+				}
+			}
+
+			if (added == 0) {
+				throw new CommandException("Filter addition failed, invalid group or all conflicting with existing filters");
+			}
+
+			context.bot().getFilterHandler().reloadFilters();
+			context.channel().sendMessage("%d / %d filters added".formatted(added, patterns.size()));
 
 			return true;
 		}
@@ -87,6 +160,15 @@ public final class FilterCommand extends Command {
 			context.channel().sendMessage("Filter removed");
 
 			return true;
+		case "clear": {
+			int count = FilterQueries.removeFilters(context.bot().getDatabase(), arguments.get("group"));
+			if (count == 0) throw new CommandException("Filter removal failed, unknown/empty group");
+
+			context.bot().getFilterHandler().reloadFilters();
+			context.channel().sendMessage("%d filters removed".formatted(count));
+
+			return true;
+		}
 		case "setpattern": {
 			int id = Integer.parseInt(arguments.get("id"));
 			FilterEntry filter = FilterQueries.getFilter(context.bot().getDatabase(), id);

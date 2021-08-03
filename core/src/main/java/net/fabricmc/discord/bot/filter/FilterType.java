@@ -25,8 +25,15 @@ public enum FilterType {
 	CONTENT("content") {
 		@Override
 		public MessageMatcher compile(String pattern) {
+			String s = pattern.toLowerCase(Locale.ENGLISH);
+			return (msg, lcContent) -> lcContent.contains(s);
+		}
+	},
+	REGEX("regex") {
+		@Override
+		public MessageMatcher compile(String pattern) {
 			Pattern p = Pattern.compile(pattern, Pattern.CASE_INSENSITIVE);
-			return (msg, lcContent) -> p.matcher(lcContent).matches();
+			return (msg, lcContent) -> p.matcher(lcContent).find();
 		}
 	},
 	DOMAIN("domain") {

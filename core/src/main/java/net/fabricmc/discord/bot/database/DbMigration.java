@@ -69,6 +69,7 @@ final class DbMigration {
 			case 7: migrate_7_8(st);
 			case 8: migrate_8_9(st);
 			case 9: migrate_9_10(st);
+			case 10: migrate_10_11(st);
 			}
 
 			st.executeUpdate(String.format("REPLACE INTO `config` VALUES ('dbVersion', '%d')", Database.currentVersion));
@@ -277,5 +278,9 @@ final class DbMigration {
 		st.executeUpdate("CREATE INDEX `message_action_id` ON `message` (`action_id`)");
 		st.executeUpdate("CREATE TABLE `messageattachment` (`id` INTEGER PRIMARY KEY, `message_id` INTEGER, `url` TEXT, `filename` TEXT, `size` INTEGER, `data` BLOB)");
 		st.executeUpdate("CREATE INDEX `messageattachment_message_id` ON `messageattachment` (`message_id`)");
+	}
+
+	private static void migrate_10_11(Statement st) throws SQLException {
+		st.executeUpdate("CREATE UNIQUE INDEX `filter_type_pattern` ON `filter` (`type`, `pattern`)");
 	}
 }

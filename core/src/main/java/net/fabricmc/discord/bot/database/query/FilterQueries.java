@@ -68,7 +68,7 @@ public final class FilterQueries {
 				if (!res.next()) return null;
 
 				FilterData ret = new FilterData(res.getString(1), // groupName
-						FilterAction.get(res.getString(2)), // action
+						FilterAction.parse(res.getString(2)), // action
 						res.getString(3)); // actionData
 
 				conn.commit();
@@ -126,7 +126,7 @@ public final class FilterQueries {
 
 		try (Connection conn = db.getConnection();
 				PreparedStatement psGetGroupId = conn.prepareStatement("SELECT id FROM `filtergroup` WHERE name = ?");
-				PreparedStatement psAdd = conn.prepareStatement("INSERT INTO `filter` (type, pattern, filtergroup_id) VALUES (?, ?, ?)")) {
+				PreparedStatement psAdd = conn.prepareStatement("INSERT OR IGNORE INTO `filter` (type, pattern, filtergroup_id) VALUES (?, ?, ?)")) {
 			psGetGroupId.setString(1, group);
 			int rawGroupId;
 
@@ -154,6 +154,17 @@ public final class FilterQueries {
 			ps.setInt(1, rawId);
 
 			return ps.executeUpdate() > 0;
+		}
+	}
+
+	public static int removeFilters(Database db, String group) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement ps = conn.prepareStatement("DELETE FROM `filter` WHERE `filtergroup_id` IN (SELECT `id` FROM `filtergroup` WHERE `name` = ?)")) {
+			ps.setString(1, group);
+
+			return ps.executeUpdate();
 		}
 	}
 
@@ -318,7 +329,7 @@ public final class FilterQueries {
 				List<FilterActionEntry> ret = new ArrayList<>();
 
 				while (res.next()) {
-					ret.add(new FilterActionEntry(IdArmor.encode(res.getInt(1)), res.getString(2), res.getString(3), FilterAction.get(res.getString(4)), res.getString(5)));
+					ret.add(new FilterActionEntry(IdArmor.encode(res.getInt(1)), res.getString(2), res.getString(3), FilterAction.parse(res.getString(4)), res.getString(5)));
 				}
 
 				return ret;

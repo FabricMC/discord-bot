@@ -26,6 +26,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 
+import it.unimi.dsi.fastutil.longs.LongArrayList;
+import it.unimi.dsi.fastutil.longs.LongList;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.database.Database;
@@ -176,7 +178,7 @@ public final class UserQueries {
 		}
 	}
 
-	public static List<Long> getDiscordUserIds(Database db, int userId) throws SQLException {
+	public static LongList getDiscordUserIds(Database db, int userId) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 
 		int rawUserId = IdArmor.decodeOrThrow(userId, "user id");
@@ -186,7 +188,7 @@ public final class UserQueries {
 			ps.setInt(1, rawUserId);
 
 			try (ResultSet res = ps.executeQuery()) {
-				List<Long> ret = new ArrayList<>();
+				LongList ret = new LongArrayList();
 
 				while (res.next()) {
 					ret.add(res.getLong(1));

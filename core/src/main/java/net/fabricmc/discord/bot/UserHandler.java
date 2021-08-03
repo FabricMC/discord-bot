@@ -22,6 +22,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import it.unimi.dsi.fastutil.longs.LongList;
+import it.unimi.dsi.fastutil.longs.LongLists;
 import org.javacord.api.entity.message.MessageAuthor;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
@@ -70,6 +72,10 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 
 	public long getBotDiscordUserId() {
 		return botDiscordUserId;
+	}
+
+	public User getBotDiscordUser(Server server) {
+		return server.getMemberById(botDiscordUserId).orElse(null);
 	}
 
 	public boolean hasPermission(int userId, @Nullable Server server, String permission) {
@@ -147,13 +153,13 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		}
 	}
 
-	public long getDiscordUserId(String user, @Nullable  Server server, boolean unique) {
+	public long getDiscordUserId(String user, @Nullable Server server, boolean unique) {
 		long ret = parseUserId(user, server, unique, true);
 
 		if (ret == -1 || isDiscordUserId(ret)) {
 			return ret;
 		} else {
-			List<Long> matches = getDiscordUserIds((int) ret);
+			LongList matches = getDiscordUserIds((int) ret);
 
 			return matches.isEmpty() || unique && matches.size() > 1 ? -1 : matches.get(matches.size() - 1);
 		}
@@ -180,6 +186,18 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 	}
 
 	public record UserEntry(int id, List<User> discordUsers) { }*/
+
+	public LongList getDiscordUserIds(String user, @Nullable Server server) {
+		long ret = parseUserId(user, server, true, true);
+
+		if (ret < 0) {
+			return LongLists.emptyList();
+		} else if (isDiscordUserId(ret)) {
+			return LongLists.singleton(ret);
+		} else {
+			return getDiscordUserIds((int) ret);
+		}
+	}
 
 	private long parseUserId(String user, @Nullable Server server, boolean unique, boolean searchOffline) {
 		// find by id if applicable
@@ -255,7 +273,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		}
 	}
 
-	public List<Long> getDiscordUserIds(int userId) {
+	public LongList getDiscordUserIds(int userId) {
 		try {
 			return UserQueries.getDiscordUserIds(bot.getDatabase(), userId);
 		} catch (SQLException e) {
@@ -264,7 +282,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 	}
 
 	public List<User> getDiscordUsers(int userId, Server server) {
-		List<Long> ids = getDiscordUserIds(userId);
+		LongList ids = getDiscordUserIds(userId);
 		if (ids.isEmpty()) return Collections.emptyList();
 
 		List<User> ret = new ArrayList<>(ids.size());
@@ -298,7 +316,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 	}
 
 	public String formatUser(int userId, @Nullable Server server) {
-		List<Long> ids = getDiscordUserIds(userId);
+		LongList ids = getDiscordUserIds(userId);
 		if (ids.isEmpty()) return Integer.toString(userId);
 
 		if (server != null) {

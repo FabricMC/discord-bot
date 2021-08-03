@@ -31,10 +31,13 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import org.javacord.api.entity.channel.ServerTextChannel;
 import org.javacord.api.entity.message.Message;
+import org.javacord.api.entity.server.Server;
+import org.javacord.api.entity.user.User;
 import org.javacord.api.exception.DiscordException;
 import org.javacord.api.exception.NotFoundException;
 
 import net.fabricmc.discord.bot.CachedMessage;
+import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
@@ -68,7 +71,7 @@ public final class CleanCommand extends Command {
 			ServerTextChannel targetChannel = targetChannelName != null ? getTextChannel(context, targetChannelName) : null;
 
 			List<ChannelEntry> actions = new ArrayList<>();
-			int count = gatherActions(LongSet.of(targetDiscordUserId), targetChannel, context, actions);
+			int count = gatherActions(LongSet.of(targetDiscordUserId), targetChannel, context.bot(), context.server(), context.user(), actions);
 
 			if (count == 0) {
 				throw new CommandException("No messages");
@@ -96,14 +99,14 @@ public final class CleanCommand extends Command {
 		return true;
 	}
 
-	private static int gatherActions(LongSet targetDiscordUserIds, ServerTextChannel targetChannel, CommandContext context, List<ChannelEntry> actions) {
-		Collection<ServerTextChannel> targetChannels = targetChannel != null ? Collections.singletonList(targetChannel) : context.server().getTextChannels();
+	private static int gatherActions(LongSet targetDiscordUserIds, ServerTextChannel targetChannel, DiscordBot bot, Server server, User actor, List<ChannelEntry> actions) {
+		Collection<ServerTextChannel> targetChannels = targetChannel != null ? Collections.singletonList(targetChannel) : server.getTextChannels();
 		int count = 0;
 
 		for (ServerTextChannel channel : targetChannels) {
-			if (!hasMessageDeleteAccess(context, channel)) continue;
+			if (!hasMessageDeleteAccess(actor, channel)) continue;
 
-			Collection<CachedMessage> messages = context.bot().getMessageIndex().getAllIdsByAuthors(channel, targetDiscordUserIds, false);
+			Collection<CachedMessage> messages = bot.getMessageIndex().getAllByAuthors(targetDiscordUserIds, channel, false);
 
 			if (!messages.isEmpty()) {
 				actions.add(new ChannelEntry(channel, messages));
@@ -149,11 +152,11 @@ public final class CleanCommand extends Command {
 		}
 	}
 
-	static Collection<CachedMessage> clean(int targetUserId, ServerTextChannel targetChannel, String reason, CommandContext context) throws DiscordException {
-		LongSet targetDiscordUserIds = new LongOpenHashSet(context.bot().getUserHandler().getDiscordUserIds(targetUserId));
+	static Collection<CachedMessage> clean(int targetUserId, ServerTextChannel targetChannel, String reason, DiscordBot bot, Server server, User actor) throws DiscordException {
+		LongSet targetDiscordUserIds = new LongOpenHashSet(bot.getUserHandler().getDiscordUserIds(targetUserId));
 
 		List<ChannelEntry> actions = new ArrayList<>();
-		int count = gatherActions(targetDiscordUserIds, targetChannel, context, actions);
+		int count = gatherActions(targetDiscordUserIds, targetChannel, bot, server, actor, actions);
 		applyActions(actions, reason);
 
 		List<CachedMessage> ret = new ArrayList<>(count);

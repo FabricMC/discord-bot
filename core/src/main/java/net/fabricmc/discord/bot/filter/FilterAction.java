@@ -16,13 +16,22 @@
 
 package net.fabricmc.discord.bot.filter;
 
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.Locale;
+
+import com.google.gson.stream.JsonReader;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.message.MessageBuilder;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
+import org.javacord.api.entity.server.Server;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.UserHandler;
+import net.fabricmc.discord.bot.command.mod.ActionUtil;
+import net.fabricmc.discord.bot.command.mod.ActionUtil.UserMessageAction;
+import net.fabricmc.discord.bot.command.mod.UserActionType;
 import net.fabricmc.discord.bot.database.query.FilterQueries.FilterData;
 import net.fabricmc.discord.bot.database.query.FilterQueries.FilterEntry;
 import net.fabricmc.discord.bot.util.DiscordUtil;
@@ -59,18 +68,66 @@ public enum FilterAction {
 		public void apply(Message message, FilterEntry filter, FilterData filterData, FilterHandler filterHandler) {
 			deleteAndLog(message, filter, filterData, filterHandler.getBot());
 		}
+	},
+
+	ACTION("action") {
+		@Override
+		public void apply(Message message, FilterEntry filter, FilterData filterData, FilterHandler filterHandler) throws Exception {
+			DiscordBot bot = filterHandler.getBot();
+			Server server = message.getServer().orElseThrow();
+			int userId = bot.getUserHandler().getUserId(message.getAuthor().asUser().orElseThrow());
+
+			String data = filterData.actionData();
+			UserActionType actionType = UserActionType.BAN;
+			int actionData = 0;
+			String duration = "perm";
+			UserMessageAction messageAction = UserMessageAction.DELETE;
+
+			if (data != null && !data.isEmpty()) {
+				try (JsonReader reader = new JsonReader(new StringReader(data))) {
+					reader.beginObject();
+
+					while (reader.hasNext()) {
+						String key = reader.nextName().toLowerCase(Locale.ENGLISH);
+
+						switch (key) {
+						case "type" -> actionType = UserActionType.parse(reader.nextString());
+						case "data" -> actionData = reader.nextInt();
+						case "duration" -> duration = reader.nextString();
+						case "messageaction" -> messageAction = UserMessageAction.parse(reader.nextString());
+						default -> throw new IOException("invalid action filter data key: "+key);
+						}
+					}
+
+					reader.endObject();
+				} catch (Throwable t) {
+					throw new RuntimeException("parsing data for filter "+filter.id()+" failed", t);
+				}
+			}
+
+			ActionUtil.applyUserAction(actionType, actionData, userId, duration, "auto-mod filter %d hit".formatted(filter.id()),
+					bot.getMessageIndex().get(message), messageAction,
+					true, "(group %s, type %s, pattern `%s`)".formatted(filterData.groupName(), filter.type().id, filter.pattern()),
+					bot, server, null, bot.getUserHandler().getBotDiscordUser(server), bot.getUserHandler().getBotUserId());
+		}
+
+		@Override
+		protected int compare(String dataA, String dataB) {
+			// TODO: implement action severity comparison (type, duration)
+			return 0;
+		}
 	};
 
 	public final String id;
 
-	public static FilterAction get(String id) {
-		for (FilterAction type : values()) {
-			if (type.id.equals(id)) {
-				return type;
+	public static FilterAction parse(String id) {
+		for (FilterAction action : values()) {
+			if (action.id.equals(id)) {
+				return action;
 			}
 		}
 
-		throw new IllegalArgumentException("invalid type: "+id);
+		throw new IllegalArgumentException("invalid filter action: "+id);
 	}
 
 	/**
@@ -108,7 +165,7 @@ public enum FilterAction {
 		this.id = id;
 	}
 
-	public abstract void apply(Message message, FilterEntry filter, FilterData filterData, FilterHandler filterHandler);
+	public abstract void apply(Message message, FilterEntry filter, FilterData filterData, FilterHandler filterHandler) throws Exception;
 
 	protected int compare(String dataA, String dataB) {
 		return 0;

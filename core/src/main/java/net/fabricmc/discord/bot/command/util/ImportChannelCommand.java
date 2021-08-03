@@ -23,14 +23,8 @@ import static net.fabricmc.discord.bot.util.FormatUtil.MAX_MESSAGE_LENGTH;
 
 import java.awt.Color;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.StringReader;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -40,20 +34,15 @@ import java.util.Map;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.javacord.api.entity.channel.ServerTextChannel;
-import org.javacord.api.entity.message.MessageAttachment;
 import org.javacord.api.entity.message.MessageBuilder;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
-import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.util.DiscordUtil;
-import net.fabricmc.discord.bot.util.HttpUtil;
 
 public final class ImportChannelCommand extends Command {
-	private static final int MAX_SIZE_BYTES = 2_000_000;
-
 	@Override
 	public String name() {
 		return "importChannel";
@@ -72,7 +61,7 @@ public final class ImportChannelCommand extends Command {
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
 		ServerTextChannel channel = getTextChannel(context, arguments.get("channel"));
-		String content = retrieveContent(context, arguments);
+		String content = retrieveContent(context, arguments.get("contentUrl"));
 
 		List<Tag> tags = new ArrayList<>();
 		content = extractTags(content, tags);
@@ -145,40 +134,6 @@ public final class ImportChannelCommand extends Command {
 		context.channel().sendMessage("Imported %d messages".formatted(msgCount));
 
 		return true;
-	}
-
-	private static String retrieveContent(CommandContext context, Map<String, String> arguments) throws IOException, URISyntaxException, InterruptedException, CommandException {
-		if (arguments.containsKey("contentUrl")) {
-			URI uri = new URI(arguments.get("contentUrl"));
-			HttpResponse<InputStream> response = HttpUtil.makeRequest(uri);
-
-			if (response.statusCode() != 200) {
-				response.body().close();
-				throw new CommandException("Fetching content failed with status %d", response.statusCode());
-			}
-
-			StringBuilder sb = new StringBuilder(MAX_MESSAGE_LENGTH + MSG_BOUNDARY.length());
-
-			try (InputStreamReader reader = new InputStreamReader(response.body(), StandardCharsets.UTF_8)) {
-				char[] buf = new char[8192];
-				int len;
-
-				while ((len = reader.read(buf)) >= 0) {
-					sb.append(buf, 0, len);
-				}
-			}
-
-			return sb.toString();
-		} else {
-			List<MessageAttachment> attachments = context.message().getAttachments();
-			if (attachments.isEmpty()) throw new CommandException("Missing content attachment");
-			if (attachments.size() > 1) throw new CommandException("Multiple content attachments");
-
-			MessageAttachment attachment = attachments.get(0);
-			if (attachment.getSize() > MAX_SIZE_BYTES) throw new CommandException("Oversized content attachment");
-
-			return new String(attachment.downloadAsByteArray().join(), StandardCharsets.UTF_8).replace("\r\n", "\n");
-		}
 	}
 
 	private static String extractTags(String content, List<Tag> tags) {

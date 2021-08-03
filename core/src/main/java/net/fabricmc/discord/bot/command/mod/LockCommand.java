@@ -39,7 +39,8 @@ public final class LockCommand extends Command {
 
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
-		ActionUtil.applyChannelAction(ChannelActionType.LOCK, 0, getChannel(context, arguments.get("channel")).getId(), arguments.get("duration"), arguments.get("reason"), null, context);
+		ActionUtil.applyChannelAction(ChannelActionType.LOCK, 0, getChannel(context, arguments.get("channel")).getId(), arguments.get("duration"), arguments.get("reason"), null,
+				context.bot(), context.server(), context.channel(), context.user(), context.userId());
 		return true;
 	}
 }

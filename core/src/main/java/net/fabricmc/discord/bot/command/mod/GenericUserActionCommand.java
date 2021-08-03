@@ -75,9 +75,13 @@ public final class GenericUserActionCommand extends Command {
 
 			String duration = type.hasDuration ? arguments.get("duration") : null;
 
-			ActionUtil.applyUserAction(type, 0, target.userId(), duration, reason, target.message(), targetMessageAction, notifyTarget, context);
+			ActionUtil.applyUserAction(type, 0, target.userId(), duration, reason, target.message(), targetMessageAction,
+					notifyTarget, null,
+					context.bot(), context.server(), context.channel(), context.user(), context.userId());
 		} else {
-			ActionUtil.suspendAction(type, target.userId(), reason, notifyTarget, context);
+			ActionUtil.suspendAction(type, target.userId(), reason,
+					notifyTarget, null,
+					context.bot(), context.server(), context.channel(), context.user(), context.userId());
 		}
 
 		return true;

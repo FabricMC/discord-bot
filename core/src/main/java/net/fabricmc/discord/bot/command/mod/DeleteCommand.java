@@ -63,7 +63,9 @@ public final class DeleteCommand extends Command {
 		DiscordUtil.join(message.delete(reason));
 
 		if (userId != context.bot().getUserHandler().getBotUserId()) {
-			ActionUtil.applyUserAction(UserActionType.DELETE_MESSAGE, 0, userId, null, reason, cachedMessage, UserMessageAction.NONE, !arguments.containsKey("silent"), context);
+			ActionUtil.applyUserAction(UserActionType.DELETE_MESSAGE, 0, userId, null, reason, cachedMessage, UserMessageAction.NONE,
+					!arguments.containsKey("silent"), null,
+					context.bot(), context.server(), context.channel(), context.user(), context.userId());
 		} else {
 			context.channel().sendMessage("Message deleted");
 		}

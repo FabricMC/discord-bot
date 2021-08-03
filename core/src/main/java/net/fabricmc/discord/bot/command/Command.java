@@ -16,6 +16,13 @@
 
 package net.fabricmc.discord.bot.command;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -24,13 +31,16 @@ import java.util.Optional;
 import org.javacord.api.entity.channel.ServerChannel;
 import org.javacord.api.entity.channel.ServerTextChannel;
 import org.javacord.api.entity.channel.TextChannel;
+import org.javacord.api.entity.message.MessageAttachment;
 import org.javacord.api.entity.server.Server;
+import org.javacord.api.entity.user.User;
 import org.javacord.api.exception.DiscordException;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.CachedMessage;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.bot.util.HttpUtil;
 
 public abstract class Command {
 	/**
@@ -91,6 +101,15 @@ public abstract class Command {
 
 		long ret = context.bot().getUserHandler().getDiscordUserId(user, context.server(), true);
 		if (ret < 0) throw new CommandException("Unknown or ambiguous user");
+
+		return ret;
+	}
+
+	public static List<Long> getDiscordUserIds(CommandContext context, String user) throws CommandException {
+		Objects.requireNonNull(user, "null user");
+
+		List<Long> ret = context.bot().getUserHandler().getDiscordUserIds(user, context.server());
+		if (ret.isEmpty()) throw new CommandException("Unknown or ambiguous user");
 
 		return ret;
 	}
@@ -205,7 +224,11 @@ public abstract class Command {
 	}
 
 	public static boolean hasMessageDeleteAccess(CommandContext context, TextChannel channel) {
-		return DiscordUtil.canDeleteMessages(channel) && channel.canSee(context.user());
+		return hasMessageDeleteAccess(context.user(), channel);
+	}
+
+	public static boolean hasMessageDeleteAccess(User user, TextChannel channel) {
+		return DiscordUtil.canDeleteMessages(channel) && channel.canSee(user);
 	}
 
 	public static <V> V getConfig(CommandContext context, ConfigKey<V> key) {
@@ -226,5 +249,39 @@ public abstract class Command {
 
 	public static boolean removeUserConfig(CommandContext context, ConfigKey<?> key) {
 		return context.bot().removeUserConfig(context.userId(), key);
+	}
+
+	public static String retrieveContent(CommandContext context, String contentUrl) throws IOException, URISyntaxException, InterruptedException, CommandException {
+		if (contentUrl != null) {
+			URI uri = new URI(contentUrl);
+			HttpResponse<InputStream> response = HttpUtil.makeRequest(uri);
+
+			if (response.statusCode() != 200) {
+				response.body().close();
+				throw new CommandException("Fetching content failed with status %d", response.statusCode());
+			}
+
+			StringBuilder sb = new StringBuilder(1200);
+
+			try (InputStreamReader reader = new InputStreamReader(response.body(), StandardCharsets.UTF_8)) {
+				char[] buf = new char[8192];
+				int len;
+
+				while ((len = reader.read(buf)) >= 0) {
+					sb.append(buf, 0, len);
+				}
+			}
+
+			return sb.toString();
+		} else {
+			List<MessageAttachment> attachments = context.message().getAttachments();
+			if (attachments.isEmpty()) throw new CommandException("Missing content attachment / contentUrl");
+			if (attachments.size() > 1) throw new CommandException("Multiple content attachments");
+
+			MessageAttachment attachment = attachments.get(0);
+			if (attachment.getSize() > 20_000_000) throw new CommandException("Oversized content attachment");
+
+			return new String(attachment.downloadAsByteArray().join(), StandardCharsets.UTF_8).replace("\r\n", "\n");
+		}
 	}
 }

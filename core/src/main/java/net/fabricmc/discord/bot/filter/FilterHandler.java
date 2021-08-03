@@ -126,6 +126,7 @@ public final class FilterHandler implements MessageCreateListener, MessageEditLi
 	}
 
 	private void handleMessage(Message message, boolean isEdit) {
+		if (!message.getAuthor().isUser()) return;
 		if (!DiscordUtil.canDeleteMessages(message.getChannel())) return;
 		if (bot.getUserHandler().hasImmunity(message.getAuthor(), bot.getUserHandler().getBotUserId(), false)) return;
 
@@ -147,13 +148,18 @@ public final class FilterHandler implements MessageCreateListener, MessageEditLi
 					}
 				}
 			}
-		} catch (SQLException e) {
-			throw new RuntimeException(e);
+		} catch (Throwable t) {
+			LOGGER.warn("Filter matching failed", t);
+			return;
 		}
 
 		if (bestFilter == null) return;
 
-		bestFilterData.action().apply(message, bestFilter, bestFilterData, this);
+		try {
+			bestFilterData.action().apply(message, bestFilter, bestFilterData, this);
+		} catch (Throwable t) {
+			LOGGER.warn("Filter {} application failed", bestFilter.id(), t);
+		}
 	}
 
 	private record CompiledFilter(MessageMatcher matcher, FilterEntry filter) { }

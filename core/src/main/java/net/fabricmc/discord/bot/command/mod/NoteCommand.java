@@ -18,9 +18,9 @@ package net.fabricmc.discord.bot.command.mod;
 
 import java.time.Instant;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 
+import it.unimi.dsi.fastutil.longs.LongList;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 
@@ -55,7 +55,7 @@ public final class NoteCommand extends Command {
 			int targetUserId = getUserId(context, arguments.get("user"));
 			NoteEntry entry = NoteQueries.create(context.bot().getDatabase(), targetUserId, context.userId(), arguments.get("note"));
 
-			List<Long> targets = context.bot().getUserHandler().getDiscordUserIds(targetUserId);
+			LongList targets = context.bot().getUserHandler().getDiscordUserIds(targetUserId);
 			Instant creationTime = Instant.ofEpochMilli(entry.creationTime());
 			String description = "User %d has been noted:%s\n\n**Note:** %s".formatted(targetUserId, FormatUtil.formatUserList(targets, context), entry.content());
 			TextChannel logChannel = context.bot().getLogHandler().getLogChannel();
@@ -108,11 +108,11 @@ public final class NoteCommand extends Command {
 
 			return true;
 		}
-		case "get":
+		case "get": {
 			NoteEntry note = NoteQueries.get(context.bot().getDatabase(), Integer.parseInt(arguments.get("id")));
 			if (note == null) throw new CommandException("Unknown note");
 
-			List<Long> targets = context.bot().getUserHandler().getDiscordUserIds(note.targetUserId());
+			LongList targets = context.bot().getUserHandler().getDiscordUserIds(note.targetUserId());
 
 			context.channel().sendMessage(new EmbedBuilder()
 					.setTitle("Note %d details".formatted(note.id()))
@@ -124,6 +124,7 @@ public final class NoteCommand extends Command {
 							note.content())));
 
 			return true;
+		}
 		case "set":
 			if (!NoteQueries.setContent(context.bot().getDatabase(), Integer.parseInt(arguments.get("id")), arguments.get("note"))) {
 				throw new CommandException("Unknown note");

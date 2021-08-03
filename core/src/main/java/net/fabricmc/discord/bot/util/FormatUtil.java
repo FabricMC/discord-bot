@@ -21,6 +21,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 
+import it.unimi.dsi.fastutil.longs.LongList;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
 
@@ -194,11 +195,11 @@ public final class FormatUtil {
 		return ret;
 	}
 
-	public static CharSequence formatUserList(List<Long> targets, CommandContext context) {
+	public static CharSequence formatUserList(LongList targets, CommandContext context) {
 		return formatUserList(targets, context.bot(), context.server());
 	}
 
-	public static CharSequence formatUserList(List<Long> targets, DiscordBot bot, Server server) {
+	public static CharSequence formatUserList(LongList targets, DiscordBot bot, Server server) {
 		StringBuilder ret = new StringBuilder();
 
 		for (long targetDiscordId : targets) {

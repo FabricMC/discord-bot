@@ -19,6 +19,7 @@ package net.fabricmc.discord.bot.command.mod;
 import java.sql.SQLException;
 import java.util.List;
 
+import it.unimi.dsi.fastutil.longs.LongList;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
 import org.javacord.api.exception.DiscordException;
@@ -205,6 +206,14 @@ public enum UserActionType implements ActionType {
 	private final boolean notificationBarrier;
 	public final boolean hasDedicatedCommand;
 
+	public static UserActionType parse(String id) {
+		for (UserActionType type : UserActionType.values()) {
+			if (type.id.equals(id)) return type;
+		}
+
+		throw new IllegalArgumentException("invalid user action type: "+id);
+	}
+
 	UserActionType(String id, boolean hasDuration) {
 		this(id, hasDuration, false, false);
 	}
@@ -291,7 +300,7 @@ public enum UserActionType implements ActionType {
 	public final void deactivate(Server server, long targetId, Integer resetData, String reason, DiscordBot bot) throws DiscordException {
 		if (!hasDeactivation) return;
 
-		List<Long> targets = bot.getUserHandler().getDiscordUserIds((int) targetId);
+		LongList targets = bot.getUserHandler().getDiscordUserIds((int) targetId);
 
 		for (long discordUserId : targets) {
 			try {
@@ -306,7 +315,7 @@ public enum UserActionType implements ActionType {
 
 	@Override
 	public final boolean isActive(Server server, long targetId, int data, DiscordBot bot) {
-		List<Long> targets = bot.getUserHandler().getDiscordUserIds((int) targetId);
+		LongList targets = bot.getUserHandler().getDiscordUserIds((int) targetId);
 		boolean ret = false;
 
 		for (long discordUserId : targets) {
