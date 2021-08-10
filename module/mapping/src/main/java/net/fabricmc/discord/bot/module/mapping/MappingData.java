@@ -124,7 +124,14 @@ final class MappingData {
 				int pkgEnd = name.lastIndexOf('/');
 				if (pkgEnd >= 0) name = name.substring(pkgEnd + 1);
 
-				writeNameEntry(name, cls, classByName[ns - MIN_NAMESPACE_ID]);
+				Map<String, Object> map = classByName[ns - MIN_NAMESPACE_ID];
+				writeNameEntry(name, cls, map);
+
+				int nestedEnd = -1;
+
+				while ((nestedEnd = name.indexOf('$', nestedEnd + 2)) >= 0 && nestedEnd + 1 < name.length()) { // add nested class suffixes (b$c and c for a$b$c) - skips leading/trailing $
+					writeNameEntry(name.substring(nestedEnd + 1), cls, map);
+				}
 			}
 
 			for (FieldMapping field : cls.getFields()) {
@@ -217,7 +224,7 @@ final class MappingData {
 
 	public Set<ClassMapping> findClasses(String name, int[] namespaces) {
 		Set<ClassMapping> ret = new ObjectOpenHashSet<>();
-		boolean potentiallyNested = isPotentiallyNestedClass(name);
+		boolean potentiallyNested = isPotentiallyNestedAsPackage(name);
 		name = parseClassName(name);
 
 		for (int ns : namespaces) {
@@ -232,7 +239,7 @@ final class MappingData {
 		if (ns == NULL_NAMESPACE_ID) return Collections.emptySet();
 
 		Set<ClassMapping> ret = new ObjectOpenHashSet<>();
-		findClasses0(parseClassName(name), isPotentiallyNestedClass(name), ns, ret);
+		findClasses0(parseClassName(name), isPotentiallyNestedAsPackage(name), ns, ret);
 
 		return ret;
 	}
@@ -357,7 +364,7 @@ final class MappingData {
 	private void findFields0(MemberRef ref, int namespace, Collection<FieldMapping> out) {
 		if (ref.owner() != null) { // owner/package present
 			Set<ClassMapping> owners = new ObjectOpenHashSet<>();
-			findClasses0(ref.owner(), ref.potentiallyNestedClass(), namespace, owners);
+			findClasses0(ref.owner(), ref.potentiallyNestedAsPackage(), namespace, owners);
 
 			if (!owners.isEmpty()) {
 				if (hasWildcard(ref.name())) {
@@ -426,7 +433,7 @@ final class MappingData {
 	private void findMethods0(MemberRef ref, int namespace, Collection<MethodMapping> out) {
 		if (ref.owner() != null) { // owner/package present
 			Set<ClassMapping> owners = new ObjectOpenHashSet<>();
-			findClasses0(ref.owner(), ref.potentiallyNestedClass(), namespace, owners);
+			findClasses0(ref.owner(), ref.potentiallyNestedAsPackage(), namespace, owners);
 
 			if (!owners.isEmpty()) {
 				if (hasWildcard(ref.name())) {
@@ -528,11 +535,11 @@ final class MappingData {
 		out.put(key, newEntry);
 	}
 
-	private static boolean isPotentiallyNestedClass(String name) {
-		return isPotentiallyNestedClass(name, 0, name.length());
+	private static boolean isPotentiallyNestedAsPackage(String name) {
+		return isPotentiallyNestedAsPackage(name, 0, name.length());
 	}
 
-	private static boolean isPotentiallyNestedClass(String name, int start, int end) {
+	private static boolean isPotentiallyNestedAsPackage(String name, int start, int end) {
 		return name.lastIndexOf('.', end - 1) > start && name.lastIndexOf('$', end - 1) < start; // contains . (not at start), but not $
 	}
 
@@ -590,7 +597,7 @@ final class MappingData {
 			mname = name.substring(0, nameEnd);
 		} else {
 			owner = name.substring(ownerStart, ownerEnd);
-			potentiallyNestedClass = isPotentiallyNestedClass(origName, ownerStart, ownerEnd);
+			potentiallyNestedClass = isPotentiallyNestedAsPackage(origName, ownerStart, ownerEnd);
 			mname = name.substring(ownerEnd + 1, nameEnd);
 		}
 
@@ -599,7 +606,7 @@ final class MappingData {
 		return new MemberRef(owner, potentiallyNestedClass, mname, desc);
 	}
 
-	private record MemberRef(String owner, boolean potentiallyNestedClass, String name, String desc) { }
+	private record MemberRef(String owner, boolean potentiallyNestedAsPackage, String name, String desc) { }
 
 	public URI getJavadocUrl(ElementMapping element) {
 		ClassMapping cls;

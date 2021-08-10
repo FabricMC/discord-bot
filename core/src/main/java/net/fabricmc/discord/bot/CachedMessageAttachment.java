@@ -51,6 +51,10 @@ public final class CachedMessageAttachment {
 		return size;
 	}
 
+	public boolean hasDataCached() {
+		return data != null;
+	}
+
 	public @Nullable byte[] getData(boolean cache) throws IOException, InterruptedException, URISyntaxException {
 		byte[] ret = data;
 		if (ret != null) return ret;

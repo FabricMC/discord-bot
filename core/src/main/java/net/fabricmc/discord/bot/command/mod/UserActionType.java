@@ -30,7 +30,7 @@ import net.fabricmc.discord.bot.database.query.ActionQueries;
 import net.fabricmc.discord.bot.util.DiscordUtil;
 
 public enum UserActionType implements ActionType {
-	BAN("ban", true, true, false) {
+	BAN("ban", true, true, true, false) {
 		@Override
 		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) DiscordUtil.join(server.banUser(target, 0, reason));
@@ -46,13 +46,13 @@ public enum UserActionType implements ActionType {
 			return server.getBans().thenApply(bans -> bans.stream().anyMatch(ban -> ban.getUser().getId() == targetDiscordUserId)).join();
 		}
 	},
-	KICK("kick", false, true, false) {
+	KICK("kick", false, false, true, false) {
 		@Override
 		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) DiscordUtil.join(server.kickUser(target, reason));
 		}
 	},
-	MUTE("mute", true) {
+	MUTE("mute", true, true, false, false) {
 		@Override
 		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.MUTE, reason, bot);
@@ -195,13 +195,14 @@ public enum UserActionType implements ActionType {
 		}
 	},
 	WARN("warn", false),
-	DELETE_MESSAGE("deleteMessage", false, false, true),
-	RENAME("rename", false, false, true);
+	DELETE_MESSAGE("deleteMessage", false, false, false, true),
+	RENAME("rename", false, false, false, true);
 
 	private static final boolean NOP_MODE = false; // no-op mode for testing
 
 	public final String id;
 	public final boolean hasDuration;
+	private final boolean blocksMessages;
 	private final boolean hasDeactivation;
 	private final boolean notificationBarrier;
 	public final boolean hasDedicatedCommand;
@@ -215,12 +216,13 @@ public enum UserActionType implements ActionType {
 	}
 
 	UserActionType(String id, boolean hasDuration) {
-		this(id, hasDuration, false, false);
+		this(id, hasDuration, false, false, false);
 	}
 
-	UserActionType(String id, boolean hasDuration, boolean notificationBarrier, boolean hasDedicatedCommand) {
+	UserActionType(String id, boolean hasDuration, boolean blocksMessages, boolean notificationBarrier, boolean hasDedicatedCommand) {
 		this.id = id;
 		this.hasDuration = hasDuration;
+		this.blocksMessages = blocksMessages;
 		this.hasDeactivation = isMethodOverridden(getClass(), "deactivate", Server.class, long.class, String.class, DiscordBot.class);
 		this.notificationBarrier = notificationBarrier;
 		this.hasDedicatedCommand = hasDedicatedCommand;
@@ -255,6 +257,11 @@ public enum UserActionType implements ActionType {
 	@Override
 	public final boolean hasDuration() {
 		return hasDuration;
+	}
+
+	@Override
+	public boolean blocksMessages() {
+		return blocksMessages;
 	}
 
 	@Override

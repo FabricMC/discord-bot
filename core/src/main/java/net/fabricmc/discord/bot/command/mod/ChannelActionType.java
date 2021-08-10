@@ -153,6 +153,11 @@ public enum ChannelActionType implements ActionType {
 	}
 
 	@Override
+	public boolean blocksMessages() {
+		return false;
+	}
+
+	@Override
 	public boolean isNotificationBarrier() {
 		return false;
 	}

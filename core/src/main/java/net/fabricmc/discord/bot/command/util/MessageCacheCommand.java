@@ -29,6 +29,7 @@ import org.javacord.api.entity.channel.ServerTextChannel;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 
 import net.fabricmc.discord.bot.CachedMessage;
+import net.fabricmc.discord.bot.CachedMessageAttachment;
 import net.fabricmc.discord.bot.MessageIndex;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
@@ -51,7 +52,7 @@ public final class MessageCacheCommand extends Command {
 
 	@Override
 	public String usage() {
-		return "list <user> | (get|show) <id> | stats";
+		return "list <user/channel> | (get|show) <id> | stats";
 	}
 
 	@Override
@@ -63,16 +64,31 @@ public final class MessageCacheCommand extends Command {
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
 		switch (arguments.get("unnamed_0")) {
 		case "list": {
-			int userId = getUserId(context, arguments.get("user"));
-			List<Long> discordUserIds = context.bot().getUserHandler().getDiscordUserIds(userId);
-			List<CachedMessage> messages = new ArrayList<>(context.bot().getMessageIndex().getAllByAuthors(new LongOpenHashSet(discordUserIds), true));
+			String target = arguments.get("user/channel");
+			String targetDesc;
+			List<CachedMessage> messages;
+
+			try {
+				ServerTextChannel channel = getTextChannel(context, target);
+				targetDesc = "channel #%s".formatted(channel.getName());
+				messages = new ArrayList<>(context.bot().getMessageIndex().getAll(channel, true));
+			} catch (CommandException e) {
+				try {
+					int userId = getUserId(context, target);
+					targetDesc = "user %d".formatted(userId);
+					List<Long> discordUserIds = context.bot().getUserHandler().getDiscordUserIds(userId);
+					messages = new ArrayList<>(context.bot().getMessageIndex().getAllByAuthors(new LongOpenHashSet(discordUserIds), true));
+				} catch (CommandException f) {
+					throw new CommandException("Unknown or ambiguous user/channel");
+				}
+			}
 
 			if (messages.isEmpty()) {
-				context.channel().sendMessage(String.format("No messages for user %d", userId));
+				context.channel().sendMessage(String.format("No messages for %s", targetDesc));
 			} else {
 				messages.sort(Comparator.comparing(CachedMessage::getCreationTime));
 
-				Paginator.Builder builder = new Paginator.Builder(context.user()).title("User %d Messages".formatted(userId));
+				Paginator.Builder builder = new Paginator.Builder(context.user()).title("%s Messages".formatted(FormatUtil.capitalize(targetDesc)));
 				StringBuilder sb = new StringBuilder();
 				int count = 0;
 
@@ -114,18 +130,27 @@ public final class MessageCacheCommand extends Command {
 			CachedMessage message = context.bot().getMessageIndex().get(messageId);
 			if (message == null) throw new CommandException("Unknown message");
 
-			message.getAuthorDiscordId();
+			StringBuilder attachmentsSuffix = new StringBuilder();
+
+			for (CachedMessageAttachment attachment : message.getAttachments()) {
+				attachmentsSuffix.append(String.format("\n`%d`: %.1f kB, [link](%s)%s",
+						attachment.getId(),
+						attachment.getSize() * 1e-3,
+						attachment.getUrl(),
+						(attachment.hasDataCached() ? ", cached" : "")));
+			}
 
 			context.channel().sendMessage(new EmbedBuilder()
 					.setTitle("Message %d details".formatted(message.getId()))
-					.setDescription(String.format("**User %d:** %s\n**Channel:** <#%d>\n**Creation:** %s\n**Status:** %s\n**Content:**%s\n**Attachments:** %d",
+					.setDescription(String.format("**User %d:** %s\n**Channel:** <#%d>\n**Creation:** %s\n**Status:** %s\n**Content:**%s\n**Attachments:** %d%s",
 							context.bot().getUserHandler().getUserId(message.getAuthorDiscordId()),
 							context.bot().getUserHandler().formatDiscordUser(message.getAuthorDiscordId(), context.server()),
 							message.getChannelId(),
 							FormatUtil.dateTimeFormatter.format(message.getCreationTime()),
 							(message.isDeleted() ? "deleted" : "normal"),
 							FormatUtil.escape(FormatUtil.truncateMessage(message.getContent(), 600), OutputType.CODE, true),
-							message.getAttachments().length)));
+							message.getAttachments().length,
+							attachmentsSuffix)));
 
 			return true;
 		}

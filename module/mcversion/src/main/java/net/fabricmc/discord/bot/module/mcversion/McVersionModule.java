@@ -61,7 +61,7 @@ public final class McVersionModule implements Module {
 	private static final int UPDATE_DELAY = 30; // in s
 	private static final int NEWS_UPDATE_CYCLES = 4; // check news every n updates
 
-	private static final String NESSAGE = "A new Minecraft %s is out: %s"; // args: kind, version
+	private static final String MESSAGE = "A new Minecraft %s is out: %s"; // args: kind, version
 	static final String KIND_RELEASE = "release";
 	static final String KIND_SNAPSHOT = "snapshot";
 	static final String KIND_PENDING = "pending";
@@ -141,6 +141,7 @@ public final class McVersionModule implements Module {
 		bot.getActiveHandler().registerReadyHandler(this::onReady);
 		bot.getActiveHandler().registerGoneHandler(this::onGone);
 
+		bot.registerCommand(new McVersionCommand(repo));
 		bot.registerCommand(new SetMcVersionCommand(repo));
 	}
 
@@ -227,7 +228,7 @@ public final class McVersionModule implements Module {
 
 		LOGGER.info("Announcing MC {} {} -> {}", kind, oldVersion, latestVersion);
 
-		String msgText = NESSAGE.formatted(kind, latestVersion);
+		String msgText = MESSAGE.formatted(kind, latestVersion);
 
 		if (sendAnnouncement(announceChannel, msgText)
 				| sendAnnouncement(updateChannel, msgText)) { // deliberate | to force eval both

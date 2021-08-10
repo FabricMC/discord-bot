@@ -23,6 +23,8 @@ import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
 import org.javacord.api.event.server.member.ServerMemberJoinEvent;
@@ -45,6 +47,8 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 	private static final int expirationWindowMinutes = 120; // only schedule tasks for the near future in Java
 	private static final int retryDelayMinutes = 5;
 
+	private static final Logger LOGGER = LogManager.getLogger("actionSync");
+
 	private final DiscordBot bot;
 	private Server server;
 	private Future<?> expirationsUpdateFuture; // task for periodically scheduling expirations
@@ -55,6 +59,7 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 
 		bot.getActiveHandler().registerReadyHandler(this::onReady);
 		bot.getActiveHandler().registerGoneHandler(this::onGone);
+		bot.getMessageIndex().registerCreateHandler(this::onMessage);
 	}
 
 	private synchronized void onReady(Server server, long prevActive) {
@@ -71,8 +76,7 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 					try {
 						action.type().activate(server, action.targetId(), true, action.data() != null ? action.data().data() : 0, action.reason(), bot);
 					} catch (Exception e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
+						LOGGER.warn("Error re-activating action on ready", e);
 					}
 				}
 			}
@@ -110,8 +114,7 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 				addEntry(entry, time);
 			}
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			LOGGER.warn("Error updating expiration", e);
 		}
 	}
 
@@ -135,8 +138,7 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 				addEntry(expEntry, time);
 			}
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			LOGGER.warn("Error checking new action for expiration", e);
 		}
 	}
 
@@ -159,8 +161,7 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 		try {
 			ActionUtil.expireAction(entry, bot, server);
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			LOGGER.warn("Error expiring action", e);
 
 			if (server != null) {
 				scheduledExpirations.put(entry.id(), bot.getScheduledExecutor().schedule(() -> expireAction(entry, true), retryDelayMinutes, TimeUnit.MINUTES)); // retry after 5 min
@@ -195,15 +196,13 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 						try {
 							action.type().activate(server, user.getId(), true, action.data() != null ? action.data().data() : 0, action.reason(), bot);
 						} catch (Exception e) {
-							// TODO Auto-generated catch block
-							e.printStackTrace();
+							LOGGER.warn("Error re-activating action on join", e);
 						}
 					}
 				}
 			}
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			LOGGER.warn("Error checking existing actions on join", e);
 		}
 	}
 
@@ -225,9 +224,30 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 
 			return true;
 		} catch (Exception e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			LOGGER.warn("Error applying nicklock", e);
 			return false;
+		}
+	}
+
+	private void onMessage(CachedMessage message, Server server) {
+		if (message.isDeleted()) return;
+
+		try {
+			Collection<ActiveActionEntry> actions = ActionQueries.getActiveDiscordUserActions(bot.getDatabase(), message.getAuthorDiscordId());
+			if (actions.isEmpty()) return;
+
+			long time = System.currentTimeMillis();
+
+			for (ActiveActionEntry action : actions) {
+				if ((action.expirationTime() < 0 || action.expirationTime() > time)
+						&& action.type().blocksMessages()) {
+					message.delete(server, "blocked by action %d".formatted(action.id()));
+					break;
+				}
+			}
+
+		} catch (Exception e) {
+			LOGGER.warn("Error checking message against actions", e);
 		}
 	}
 }

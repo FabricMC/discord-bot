@@ -104,12 +104,16 @@ final class MappingCommandUtil {
 		}
 
 		// trim to allowed only
+		boolean removedPrivateNs = false;
+
 		if (checkPublic && !context.isPrivateMessage()) {
 			List<String> privateNs = getPrivateNamespaces(context, ret);
 
 			if (!privateNs.isEmpty()) {
+				int prevSize = ret.size();
 				ret = new ArrayList<>(ret);
 				ret.removeAll(privateNs);
+				removedPrivateNs = ret.size() < prevSize;
 			}
 		}
 
@@ -119,7 +123,7 @@ final class MappingCommandUtil {
 			ret.retainAll(MappingModule.supportedNamespaces);
 		}
 
-		if (ret.isEmpty()) throw new CommandException("no valid namespaces");
+		if (ret.isEmpty()) throw new CommandException(removedPrivateNs ? "all selected namespaces are DM only" : "no valid namespaces");
 
 		return ret;
 	}

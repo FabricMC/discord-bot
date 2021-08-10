@@ -124,17 +124,17 @@ final class RedditFetcher {
 
 						do {
 							Result result = parsePost(reader);
-							if (before == null) before = result.postName();
+							if (before == null) before = result.postId();
 
-							if (result.id() != null) {
+							if (result.versionId() != null) {
 								if (McVersionModule.KIND_RELEASE.equals(result.type()) && latestRelease == lastRelease) {
-									latestRelease = result.id();
+									latestRelease = result.versionId();
 								} else if (McVersionModule.KIND_SNAPSHOT.equals(result.type()) && latestSnapshot == lastSnapshot) {
-									latestSnapshot = result.id();
+									latestSnapshot = result.versionId();
 								} else if (McVersionModule.KIND_PENDING.equals(result.type()) && latestPending == lastPending) {
-									latestPending = result.id();
+									latestPending = result.versionId();
 								} else {
-									LOGGER.warn("Unknown release type for {}: {}", result.id(), result.type());
+									LOGGER.warn("Unknown release type for {}: {}", result.versionId(), result.type());
 								}
 							}
 
@@ -155,7 +155,7 @@ final class RedditFetcher {
 	}
 
 	private Result parsePost(JsonReader reader) throws IOException {
-		String name = null;
+		String id = null;
 		String author = null;
 		boolean hasMojangFlair = false;
 		String title = null;
@@ -173,8 +173,8 @@ final class RedditFetcher {
 
 			while (reader.hasNext()) {
 				switch (reader.nextName()) {
-				case "name":
-					name = reader.nextString();
+				case "id":
+					id = reader.nextString();
 					break;
 				case "selftext":
 					selftext = reader.nextString();
@@ -208,7 +208,7 @@ final class RedditFetcher {
 
 		if (!hasMojangFlair ||
 				title.toLowerCase(Locale.ENGLISH).contains("bedrock")) {
-			return new Result(name, null, null, null, null);
+			return new Result(id, null, null, null, null);
 		}
 
 		Matcher matcher = ARTICLE_PATTERN.matcher(selftext);
@@ -218,8 +218,8 @@ final class RedditFetcher {
 			if (article == null) {
 				article = matcher.group(1);
 			} else {
-				LOGGER.debug("Skipping {} by {} with multiple articles", name, author);
-				return new Result(name, null, null, null, null);
+				LOGGER.debug("Skipping {} by {} with multiple articles", id, author);
+				return new Result(id, null, null, null, null);
 			}
 		}
 
@@ -233,7 +233,7 @@ final class RedditFetcher {
 				HttpResponse<InputStream> response = HttpUtil.makeRequest(new URI(link));
 
 				if (response.statusCode() != 200) {
-					LOGGER.info("Link {} in {} by {} request failed: {}", link, name, author, response.statusCode());
+					LOGGER.info("Link {} in {} by {} request failed: {}", link, id, author, response.statusCode());
 					continue;
 				}
 
@@ -246,25 +246,25 @@ final class RedditFetcher {
 								Result partialResult = processJson(zis);
 
 								if (partialResult == null) {
-									LOGGER.debug("JSON {}:{} in {} by {} doesn't appear to be a MC version JSON", link, entry.getName(), name, author);
+									LOGGER.debug("JSON {}:{} in {} by {} doesn't appear to be a MC version JSON", link, entry.getName(), id, author);
 								} else if (result != null) {
-									LOGGER.debug("Skipping {} by {} with multiple version jsons", name, author);
-									return new Result(name, null, null, null, null);
+									LOGGER.debug("Skipping {} by {} with multiple version jsons", id, author);
+									return new Result(id, null, null, null, null);
 								} else {
-									result = new Result(name, article, partialResult.id, partialResult.type, link);
+									result = new Result(id, article, partialResult.versionId(), partialResult.type(), link);
 								}
 							} catch (IOException e) {
-								LOGGER.info("Json {}:{} in {} by {} processing failed: {}", link, entry.getName(), name, author, e);
+								LOGGER.info("Json {}:{} in {} by {} processing failed: {}", link, entry.getName(), id, author, e);
 							}
 						}
 					}
 				}
 			} catch (IOException | InterruptedException | URISyntaxException e) {
-				LOGGER.info("Link {} in {} by {} processing failed: {}", link, name, author, e);
+				LOGGER.info("Link {} in {} by {} processing failed: {}", link, id, author, e);
 			}
 		}
 
-		if (result == null) result = new Result(name, article, null, null, null);
+		if (result == null) result = new Result(id, article, null, null, null);
 
 		return result;
 	}
@@ -296,5 +296,5 @@ final class RedditFetcher {
 		return id != null && type != null && missingKeys.isEmpty() ? new Result(null, null, id, type, null) : null;
 	}
 
-	private record Result(String postName, String article, String id, String type, String link) { }
+	private record Result(String postId, String article, String versionId, String type, String link) { }
 }

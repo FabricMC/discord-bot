@@ -35,6 +35,7 @@ import org.javacord.api.exception.DiscordException;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.CachedMessage;
+import net.fabricmc.discord.bot.CachedMessageAttachment;
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.CommandException;
@@ -408,11 +409,25 @@ public final class ActionUtil {
 			description = description.concat(formatReasonSuffix(formatReason(reason, privateReason)));
 
 			if (targetMessageContext != null) {
+				StringBuilder attachmentsSuffix = new StringBuilder();
+
+				if (targetMessageContext.getAttachments().length > 0) {
+					attachmentsSuffix.append("\n**Context Message Attachments:** %d".formatted(targetMessageContext.getAttachments().length));
+
+					for (CachedMessageAttachment attachment : targetMessageContext.getAttachments()) {
+						attachmentsSuffix.append(String.format("\n`%d`: %.1f kB, [link](%s)",
+								attachment.getId(),
+								attachment.getSize() * 1e-3,
+								attachment.getUrl()));
+					}
+				}
+
 				// include target message context
-				description = String.format("%s\n**Context Channel:** <#%d>\n**Context Message:**%s",
+				description = String.format("%s\n**Context Channel:** <#%d>\n**Context Message:**%s%s",
 						description,
 						targetMessageContext.getChannelId(),
-						FormatUtil.escape(FormatUtil.truncateMessage(targetMessageContext.getContent(), 600), OutputType.CODE, true)); // assume 600 chars of non-context-msg content
+						FormatUtil.escape(FormatUtil.truncateMessage(targetMessageContext.getContent(), 600), OutputType.CODE, true),
+						attachmentsSuffix); // assume 600 chars of non-context-msg content
 			}
 
 			if (actor != null) {

@@ -108,6 +108,18 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		}
 	}
 
+	public Collection<CachedMessage> getAll(ServerTextChannel channel, boolean includeDeleted) {
+		List<CachedMessage> res = new ArrayList<>();
+
+		accept(channel, msg -> {
+			res.add(msg);
+
+			return true;
+		}, includeDeleted);
+
+		return res;
+	}
+
 	public Collection<CachedMessage> getAllByAuthor(long authorId, boolean includeDeleted) {
 		List<CachedMessage> ret = new ArrayList<>();
 
@@ -323,7 +335,9 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 			cache.add(msg);
 		}
 
-		createHandlers.forEach(h -> h.onMessageCreated(server, msg));
+		for (MessageCreateHandler handler : createHandlers) {
+			handler.onMessageCreated(msg, server);
+		}
 	}
 
 	@Override
@@ -361,8 +375,9 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 
 		msg.setDeleted();
 
-		CachedMessage finalMsg = msg;
-		deleteHandlers.forEach(h -> h.onMessageDeleted(server, finalMsg));
+		for (MessageDeleteHandler handler : deleteHandlers) {
+			handler.onMessageDeleted(msg, server);
+		}
 	}
 
 	private final class ChannelMessageCache {
@@ -473,10 +488,10 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 	}
 
 	public interface MessageCreateHandler {
-		void onMessageCreated(Server server, CachedMessage message);
+		void onMessageCreated(CachedMessage message, Server server);
 	}
 
 	public interface MessageDeleteHandler {
-		void onMessageDeleted(Server server, CachedMessage message);
+		void onMessageDeleted(CachedMessage message, Server server);
 	}
 }

@@ -134,12 +134,8 @@ public final class Paginator implements ReactionAddListener {
 	public CompletableFuture<Boolean> nextPage(boolean repost) {
 		Message message = this.message;
 
-		if (message != null) {
-			if (this.getCurrentPage() + 1 >= pages.size()) {
-				return CompletableFuture.completedFuture(false);
-			}
-
-			this.currentPage++;
+		if (message != null && pages.size() > 1) {
+			currentPage = (currentPage + 1) % pages.size();
 
 			return update(repost);
 		}
@@ -155,12 +151,10 @@ public final class Paginator implements ReactionAddListener {
 	public CompletableFuture<Boolean> previousPage(boolean repost) {
 		Message message = this.message;
 
-		if (message != null) {
-			if (this.getCurrentPage() > 0) {
-				this.currentPage--;
+		if (message != null && pages.size() > 1) {
+			currentPage = (currentPage + pages.size() - 1) % pages.size();
 
-				return update(repost);
-			}
+			return update(repost);
 		}
 
 		return CompletableFuture.completedFuture(false);

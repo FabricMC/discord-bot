@@ -130,6 +130,7 @@ public final class CachedMessage {
 
 		try {
 			DiscordUtil.join(Message.delete(server.getApi(), channelId, id, reason));
+			deleted = true;
 			return true;
 		} catch (NotFoundException e) {
 			return false;

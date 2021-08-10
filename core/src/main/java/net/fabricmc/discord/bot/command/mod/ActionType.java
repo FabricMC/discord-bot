@@ -26,6 +26,7 @@ public interface ActionType {
 	Kind getKind();
 	String getId();
 	boolean hasDuration();
+	boolean blocksMessages();
 	boolean hasDeactivation();
 	boolean isNotificationBarrier();
 

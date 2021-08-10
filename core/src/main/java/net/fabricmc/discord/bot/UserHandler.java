@@ -161,7 +161,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 		} else {
 			LongList matches = getDiscordUserIds((int) ret);
 
-			return matches.isEmpty() || unique && matches.size() > 1 ? -1 : matches.get(matches.size() - 1);
+			return matches.isEmpty() || unique && matches.size() > 1 ? -1 : matches.getLong(matches.size() - 1);
 		}
 	}
 
@@ -326,7 +326,7 @@ public final class UserHandler implements ServerMemberJoinListener, ServerMember
 			}
 		}
 
-		return formatDiscordUser(ids.get(0), server);
+		return formatDiscordUser(ids.getLong(0), server);
 	}
 
 	public String formatDiscordUser(long discordUserId, @Nullable Server server) {
