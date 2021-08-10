@@ -226,61 +226,9 @@ public final class MappingRepository {
 	}
 
 	private static boolean downloadMcMappings(String mcVersion, Path out) throws URISyntaxException, IOException, InterruptedException {
-		URI jsonUrl = null;
-
-		try {
-			HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri("launchermeta.mojang.com", "/mc/game/version_manifest_v2.json"));
-
-			if (response.statusCode() != 200) {
-				response.body().close();
-				return false;
-			}
-
-			try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
-				reader.beginObject();
-
-				while (reader.hasNext()) {
-					if (!reader.nextName().equals("versions")) {
-						reader.skipValue();
-						continue;
-					}
-
-					reader.beginArray();
-
-					while (reader.hasNext()) {
-						reader.beginObject();
-
-						String id = null;
-						String url = null;
-
-						while (reader.hasNext()) {
-							switch (reader.nextName()) {
-							case "id" -> id = reader.nextString();
-							case "url" -> url = reader.nextString();
-							default -> reader.skipValue();
-							}
-						}
-
-						reader.endObject();
-
-						if (id == null) throw new IOException("missing id");
-						if (url == null) throw new IOException("missing url");
-
-						if (id.equals(mcVersion)) {
-							jsonUrl = new URI(url);
-							break;
-						}
-					}
-
-					break;
-				}
-			}
-
-			if (jsonUrl == null) return false;
-		} catch (IOException e) {
-			HttpUtil.logError("fetching/parsing mc launchermeta failed", e, LOGGER);
-			return false;
-		}
+		URI jsonUrl = queryVersionJsonUrl(mcVersion, "launchermeta.mojang.com", "/mc/game/version_manifest_v2.json");
+		if (jsonUrl == null) jsonUrl = queryVersionJsonUrl(mcVersion, "maven.fabricmc.net", "/net/minecraft/experimental_versions.json");
+		if (jsonUrl == null) return false;
 
 		URI mappingsUrl = null;
 
@@ -353,6 +301,64 @@ public final class MappingRepository {
 		}
 
 		return true;
+	}
+
+	private static URI queryVersionJsonUrl(String mcVersion, String host, String path) throws InterruptedException, URISyntaxException {
+		try {
+			HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(host, path));
+
+			if (response.statusCode() != 200) {
+				response.body().close();
+				return null;
+			}
+
+			URI jsonUrl = null;
+
+			try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+				reader.beginObject();
+
+				while (reader.hasNext()) {
+					if (!reader.nextName().equals("versions")) {
+						reader.skipValue();
+						continue;
+					}
+
+					reader.beginArray();
+
+					while (reader.hasNext()) {
+						reader.beginObject();
+
+						String id = null;
+						String url = null;
+
+						while (reader.hasNext()) {
+							switch (reader.nextName()) {
+							case "id" -> id = reader.nextString();
+							case "url" -> url = reader.nextString();
+							default -> reader.skipValue();
+							}
+						}
+
+						reader.endObject();
+
+						if (id == null) throw new IOException("missing id");
+						if (url == null) throw new IOException("missing url");
+
+						if (id.equals(mcVersion)) {
+							jsonUrl = new URI(url);
+							break;
+						}
+					}
+
+					break;
+				}
+			}
+
+			return jsonUrl;
+		} catch (IOException e) {
+			HttpUtil.logError("fetching/parsing version json url from "+host+" failed", e, LOGGER);
+			return null;
+		}
 	}
 
 	private static boolean retrieveSrgMappings(String mcVersion, Path mappingsDir, MemoryMappingTree visitor) throws URISyntaxException, IOException, InterruptedException {
