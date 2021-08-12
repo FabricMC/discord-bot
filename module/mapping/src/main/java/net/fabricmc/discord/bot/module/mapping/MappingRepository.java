@@ -164,7 +164,7 @@ public final class MappingRepository {
 				return null;
 			}
 
-			return new MappingData(mcVersion, intermediaryMavenId, yarnMavenId, mappingTree);
+			return new MappingData(mcVersion, intermediaryMavenId, yarnMavenId, mappingTree, hasYarnJavadoc(yarnMavenId));
 		} catch (IOException | InterruptedException | URISyntaxException e) {
 			throw new RuntimeException(e);
 		}
@@ -572,6 +572,36 @@ public final class MappingRepository {
 			HttpUtil.logError("fetching/saving mcp mappings %s failed".formatted(mcpVersion), e, LOGGER);
 			return false;
 		}
+	}
+
+	private static boolean hasYarnJavadoc(String yarnMavenId) throws InterruptedException, URISyntaxException {
+		String id = getYarnJavadocDir(yarnMavenId);
+
+		try {
+			HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(mavenHost, "/jdlist.txt"));
+
+			if (response.statusCode() != 200) {
+				LOGGER.warn("Yarn jdlist.txt request failed: {}", response.statusCode());
+				response.body().close();
+				return false;
+			}
+
+			try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+				String line;
+
+				while ((line = reader.readLine()) != null) {
+					if (line.equals(id)) return true;
+				}
+			}
+		} catch (IOException e) {
+			HttpUtil.logError("fetching/parsing yarn jdlist.txt failed", e, LOGGER);
+		}
+
+		return false;
+	}
+
+	static String getYarnJavadocDir(String yarnMavenId) {
+		return yarnMavenId.substring(yarnMavenId.indexOf(':') + 1).replace(':', '-'); // net.fabricmc:yarn:1.16.5+build.9 -> yarn-1.16.5+build.9
 	}
 
 	private static String getMavenPath(String id, String classifier, String extension) {

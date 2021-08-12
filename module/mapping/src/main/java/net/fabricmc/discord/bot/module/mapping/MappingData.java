@@ -59,6 +59,8 @@ final class MappingData {
 	public final String intermediaryMavenId;
 	public final String yarnMavenId;
 	private final MappingTree mappingTree;
+	public final boolean hasYarnJavadoc;
+
 	private final int maxNsId;
 	private final int intermediaryNs;
 	private final Int2ObjectMap<ClassMapping> classByIntermediaryId;
@@ -69,11 +71,12 @@ final class MappingData {
 	private final Map<String, Object>[] methodByName;
 
 	@SuppressWarnings("unchecked")
-	public MappingData(String mcVersion, String intermediaryMavenId, String yarnMavenId, MappingTree mappingTree) {
+	public MappingData(String mcVersion, String intermediaryMavenId, String yarnMavenId, MappingTree mappingTree, boolean hasYarnJavadoc) {
 		this.mcVersion = mcVersion;
 		this.intermediaryMavenId = intermediaryMavenId;
 		this.yarnMavenId = yarnMavenId;
 		this.mappingTree = mappingTree;
+		this.hasYarnJavadoc = hasYarnJavadoc;
 
 		this.classByIntermediaryId = new Int2ObjectOpenHashMap<>(mappingTree.getClasses().size());
 		intermediaryNs = mappingTree.getNamespaceId("intermediary");
@@ -609,6 +612,8 @@ final class MappingData {
 	private record MemberRef(String owner, boolean potentiallyNestedAsPackage, String name, String desc) { }
 
 	public URI getJavadocUrl(ElementMapping element) {
+		if (!hasYarnJavadoc) return null;
+
 		ClassMapping cls;
 		MemberMapping member;
 
@@ -652,7 +657,7 @@ final class MappingData {
 			return new URI("https", null,
 					"maven.fabricmc.net", -1,
 					String.format("/docs/%s/%s.html",
-							yarnMavenId.substring(yarnMavenId.indexOf(':') + 1).replace(':', '-'), // net.fabricmc:yarn:1.16.5+build.9 -> yarn-1.16.5+build.9
+							MappingRepository.getYarnJavadocDir(yarnMavenId), // net.fabricmc:yarn:1.16.5+build.9 -> yarn-1.16.5+build.9
 							clsName.replace('$', '.')),
 					null, fragment);
 		} catch (URISyntaxException e) {
