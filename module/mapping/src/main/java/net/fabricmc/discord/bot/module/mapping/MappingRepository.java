@@ -29,6 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -144,6 +145,10 @@ public final class MappingRepository {
 		System.out.println(data.findFields("class_1338/field_6393", data.getAllNamespaces()));
 	}
 
+	Collection<String> getLoadedVersions() {
+		return mcVersionToMappingMap.keySet();
+	}
+
 	public MappingData getMappingData(String mcVersion) {
 		return mcVersionToMappingMap.computeIfAbsent(mcVersion, v -> createMappingData(v, mappingsDir));
 	}
@@ -155,16 +160,19 @@ public final class MappingRepository {
 
 			String intermediaryMavenId = getMavenId(mcVersion, KIND_INTERMEDIARY);
 			MemoryMappingTree mappingTree = new MemoryMappingTree(true);
+			String mcpVersion;
 
 			if ((!retrieveYarnMappings(yarnMavenId, "mergedv2", true, mappingTree)
 					&& !retrieveYarnMappings(yarnMavenId, null, false, mappingTree))
 					|| !retrieveMcMappings(mcVersion, mappingsDir, mappingTree)
 					|| !retrieveSrgMappings(mcVersion, mappingsDir, mappingTree)
-					|| !retrieveMcpMappings(mcVersion, mappingsDir, mappingTree)) {
+					|| (mcpVersion = retrieveMcpMappings(mcVersion, mappingsDir, mappingTree)) == null) {
 				return null;
 			}
 
-			return new MappingData(mcVersion, intermediaryMavenId, yarnMavenId, mappingTree, hasYarnJavadoc(yarnMavenId));
+			if (mcpVersion.isEmpty()) mcpVersion = null;
+
+			return new MappingData(mcVersion, intermediaryMavenId, yarnMavenId, mcpVersion, mappingTree, hasYarnJavadoc(yarnMavenId));
 		} catch (IOException | InterruptedException | URISyntaxException e) {
 			throw new RuntimeException(e);
 		}
@@ -422,17 +430,27 @@ public final class MappingRepository {
 		}
 	}
 
-	private static boolean retrieveMcpMappings(String mcVersion, Path mappingsDir, MemoryMappingTree visitor) throws URISyntaxException, IOException, InterruptedException {
-		if (!visitor.getDstNamespaces().contains("srg")) return true; // worthless without srg mappings
+	private static String retrieveMcpMappings(String mcVersion, Path mappingsDir, MemoryMappingTree visitor) throws URISyntaxException, IOException, InterruptedException {
+		if (!visitor.getDstNamespaces().contains("srg")) return ""; // worthless without srg mappings
+
+		String majorMinorMcVersion;
+		int lastSegmentPos = mcVersion.lastIndexOf('.');
+
+		if (lastSegmentPos >= 0 && mcVersion.lastIndexOf('.', lastSegmentPos - 2) > 0) { // at least a.b.
+			majorMinorMcVersion = mcVersion.substring(0, lastSegmentPos); // a.b.c -> a.b
+		} else {
+			majorMinorMcVersion = null;
+		}
 
 		String mcpVersion = null;
+		String mcpVersionFuzzy = null;
 
 		try {
 			HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri("maven.minecraftforge.net", "/de/oceanlabs/mcp/mcp_snapshot/maven-metadata.xml"));
 
 			if (response.statusCode() != 200) {
 				response.body().close();
-				return false;
+				return null;
 			}
 
 			try (InputStream is = response.body()) {
@@ -444,26 +462,32 @@ public final class MappingRepository {
 
 				for (int i = 0, max = list.getLength(); i < max; i++) {
 					String version = list.item(i).getTextContent();
+					int pos = version.lastIndexOf('-') + 1;
 
-					if (version.endsWith(mcVersion)
-							&& version.length() > mcVersion.length()
-							&& version.charAt(version.length() - mcVersion.length() - 1) == '-') {
+					if (version.length() == mcVersion.length() + pos
+							&& version.startsWith(mcVersion, pos)) {
 						mcpVersion = version;
 						break;
+					} else if (majorMinorMcVersion != null
+							&& mcpVersionFuzzy == null
+							&& version.startsWith(majorMinorMcVersion, pos)) {
+						mcpVersionFuzzy = version;
 					}
 				}
 			} catch (ParserConfigurationException | SAXException e) {
 				LOGGER.warn("Error parsing mcp_snapshot maven metadata", e);
-				return false;
+				return null;
 			}
 		} catch (IOException e) {
 			HttpUtil.logError("fetching/parsing mcp_snapshot maven metadata failed", e, LOGGER);
-			return false;
+			return null;
 		}
+
+		if (mcpVersion == null) mcpVersion = mcpVersionFuzzy;
 
 		if (mcpVersion == null) {
 			LOGGER.warn("can't find mcp_snapshot for {}", mcVersion);
-			return true;
+			return "";
 		}
 
 		if (mcpVersion.indexOf('/') >= 0) throw new IllegalArgumentException("invalid mcp_snapshot version: "+mcpVersion);
@@ -472,7 +496,7 @@ public final class MappingRepository {
 
 		if (!Files.exists(file)) {
 			if (!downloadMcpMappings(mcpVersion, file)) {
-				return false;
+				return null;
 			}
 		}
 
@@ -550,7 +574,7 @@ public final class MappingRepository {
 			}
 		}
 
-		return true;
+		return mcpVersion;
 	}
 
 	private static boolean downloadMcpMappings(String mcpVersion, Path out) throws URISyntaxException, InterruptedException {

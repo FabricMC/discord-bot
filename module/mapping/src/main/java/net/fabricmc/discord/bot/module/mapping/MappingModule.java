@@ -63,6 +63,7 @@ public final class MappingModule implements Module {
 	public void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
 		repo = new MappingRepository(bot, dataDir);
 
+		bot.registerCommand(new MappingStatusCommand(repo));
 		bot.registerCommand(new YarnClassCommand(repo));
 		bot.registerCommand(new YarnFieldCommand(repo));
 		bot.registerCommand(new YarnMethodCommand(repo));

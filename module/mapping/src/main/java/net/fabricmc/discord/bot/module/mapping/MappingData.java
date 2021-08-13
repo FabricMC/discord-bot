@@ -58,7 +58,8 @@ final class MappingData {
 	public final String mcVersion;
 	public final String intermediaryMavenId;
 	public final String yarnMavenId;
-	private final MappingTree mappingTree;
+	public final String mcpVersion;
+	final MappingTree mappingTree;
 	public final boolean hasYarnJavadoc;
 
 	private final int maxNsId;
@@ -71,10 +72,11 @@ final class MappingData {
 	private final Map<String, Object>[] methodByName;
 
 	@SuppressWarnings("unchecked")
-	public MappingData(String mcVersion, String intermediaryMavenId, String yarnMavenId, MappingTree mappingTree, boolean hasYarnJavadoc) {
+	public MappingData(String mcVersion, String intermediaryMavenId, String yarnMavenId, String mcpVersion, MappingTree mappingTree, boolean hasYarnJavadoc) {
 		this.mcVersion = mcVersion;
 		this.intermediaryMavenId = intermediaryMavenId;
 		this.yarnMavenId = yarnMavenId;
+		this.mcpVersion = mcpVersion;
 		this.mappingTree = mappingTree;
 		this.hasYarnJavadoc = hasYarnJavadoc;
 
