@@ -17,5 +17,5 @@ Please run the `spotlessApply` task to update license headers before submitting 
 
 # Testing
 
-You need to set the token, database url, guild id and command prefix to start the bot.
+You need to set the token, database URL, guild ID and command prefix to start the bot.
 Other configuration settings may be set at runtime using the `config` command. There are no external dependencies outside Discord, the database is self contained in the sqlite-jdbc library.
