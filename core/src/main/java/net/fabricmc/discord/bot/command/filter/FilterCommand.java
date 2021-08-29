@@ -16,19 +16,18 @@
 
 package net.fabricmc.discord.bot.command.filter;
 
-import java.io.StringReader;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-
-import com.google.gson.stream.JsonReader;
 
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.database.query.FilterQueries;
 import net.fabricmc.discord.bot.database.query.FilterQueries.FilterEntry;
+import net.fabricmc.discord.bot.filter.FilterHandler.FilterImportResult;
 import net.fabricmc.discord.bot.filter.FilterType;
 import net.fabricmc.discord.bot.message.Paginator;
 import net.fabricmc.discord.bot.util.FormatUtil;
@@ -77,8 +76,11 @@ public final class FilterCommand extends Command {
 					count++;
 
 					if (sb.length() > 0) sb.append('\n');
-					sb.append(String.format("`%d`: %s %s",
-							filter.id(), filter.type().id, FormatUtil.escape(filter.pattern(), OutputType.INLINE_CODE, true)));
+					sb.append(String.format("`%d`: %s %s (%dx)",
+							filter.id(),
+							filter.type().id,
+							FormatUtil.escape(filter.pattern(), OutputType.INLINE_CODE, true),
+							filter.hits()));
 				}
 
 				if (sb.length() > 0) {
@@ -92,62 +94,32 @@ public final class FilterCommand extends Command {
 		}
 		case "add": {
 			FilterType type = FilterType.get(arguments.get("type"));
-			String pattern = arguments.get("pattern");
+			String pattern = type.normalizePattern(arguments.get("pattern"));
 			if (pattern.isBlank()) throw new CommandException("blank pattern");
 			type.compile(pattern); // test-compile to catch errors before storing the pattern
 
-			if (!FilterQueries.addFilter(context.bot().getDatabase(), type, pattern, arguments.get("group"))) {
-				throw new CommandException("Filter addition failed, invalid group or conflicting with another filter");
-			}
+			int id = FilterQueries.addFilter(context.bot().getDatabase(), type, pattern, arguments.get("group"));
+			if (id < 0) throw new CommandException("Filter addition failed, invalid group or conflicting with another filter");
 
 			context.bot().getFilterHandler().reloadFilters();
-			context.channel().sendMessage("Filter added");
+			context.channel().sendMessage("Filter %d added".formatted(id));
 
 			return true;
 		}
 		case "import": {
 			FilterType type = FilterType.get(arguments.get("type"));
 			String content = retrieveContent(context, arguments.get("contentUrl")).trim();
-			List<String> patterns = new ArrayList<>();
+			FilterImportResult result = context.bot().getFilterHandler().importFilters(content, type, arguments.get("group"), Collections.emptySet());
 
-			if (content.startsWith("[")) {
-				try (JsonReader reader = new JsonReader(new StringReader(content))) {
-					reader.beginArray();
-
-					while (reader.hasNext()) {
-						String pattern = reader.nextString();
-						if (pattern.isBlank()) throw new CommandException("blank pattern");
-						type.compile(pattern); // test-compile to catch errors before storing the pattern
-						patterns.add(pattern);
-					}
-
-					reader.endArray();
-				}
-			} else {
-				for (String pattern : content.split("\\R")) {
-					if (pattern.isBlank()) throw new CommandException("blank pattern");
-					type.compile(pattern); // test-compile to catch errors before storing the pattern
-					patterns.add(pattern);
-				}
-			}
-
-			if (patterns.isEmpty()) throw new CommandException("no patterns");
-
-			String group = arguments.get("group");
-			int added = 0;
-
-			for (String pattern : patterns) {
-				if (FilterQueries.addFilter(context.bot().getDatabase(), type, pattern, group)) {
-					added++;
-				}
-			}
-
-			if (added == 0) {
+			if (result.totalPatterns() == 0) {
+				throw new CommandException("no patterns");
+			} else if (result.newPatterns() == 0 && result.invalidPatterns().isEmpty()) {
 				throw new CommandException("Filter addition failed, invalid group or all conflicting with existing filters");
+			} else if (result.invalidPatterns().isEmpty()) {
+				context.channel().sendMessage("%d / %d filters added".formatted(result.newPatterns(), result.totalPatterns()));
+			} else {
+				context.channel().sendMessage("%d / %d filters added, invalid: %s".formatted(result.newPatterns(), result.totalPatterns(), result.invalidPatterns()));
 			}
-
-			context.bot().getFilterHandler().reloadFilters();
-			context.channel().sendMessage("%d / %d filters added".formatted(added, patterns.size()));
 
 			return true;
 		}

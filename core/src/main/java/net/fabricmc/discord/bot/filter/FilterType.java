@@ -38,6 +38,39 @@ public enum FilterType {
 	},
 	DOMAIN("domain") {
 		@Override
+		public String normalizePattern(String pattern) {
+			String normalizedPattern = pattern;
+
+			// strip scheme
+			int pos = normalizedPattern.indexOf("://");
+			if (pos > 0) normalizedPattern = normalizedPattern.substring(pos + 3);
+
+			// stream www.
+			if (normalizedPattern.regionMatches(true, 0, "www.", 0, 4)) normalizedPattern = normalizedPattern.substring(4);
+
+			// strip trailing / or throw if there's a path too
+			pos = normalizedPattern.indexOf('/');
+
+			if (pos >= 0) {
+				if (pos == normalizedPattern.length() - 1) { // trailing /
+					normalizedPattern = normalizedPattern.substring(0, normalizedPattern.length() - 1);
+				} else {
+					throw new IllegalArgumentException("invalid domain pattern, extraneous path: "+pattern);
+				}
+			}
+
+			// strip port (with ipv6 [a::b]:port support)
+			pos = normalizedPattern.indexOf(':', normalizedPattern.indexOf(']') + 1);
+			if (pos >= 0) normalizedPattern = normalizedPattern.substring(0, pos);
+
+			if (normalizedPattern.indexOf('.') < 0 && normalizedPattern.indexOf(':') < 0) {
+				throw new IllegalArgumentException("invalid domain pattern, tld only: "+pattern);
+			}
+
+			return normalizedPattern;
+		}
+
+		@Override
 		public MessageMatcher compile(String pattern) {
 			String domain = pattern.toLowerCase(Locale.ENGLISH);
 
@@ -80,6 +113,10 @@ public enum FilterType {
 
 	FilterType(String id) {
 		this.id = id;
+	}
+
+	public String normalizePattern(String pattern) {
+		return pattern;
 	}
 
 	public abstract MessageMatcher compile(String pattern);

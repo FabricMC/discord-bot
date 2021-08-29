@@ -70,6 +70,7 @@ final class DbMigration {
 			case 8: migrate_8_9(st);
 			case 9: migrate_9_10(st);
 			case 10: migrate_10_11(st);
+			case 11: migrate_11_12(st);
 			}
 
 			st.executeUpdate(String.format("REPLACE INTO `config` VALUES ('dbVersion', '%d')", Database.currentVersion));
@@ -282,5 +283,15 @@ final class DbMigration {
 
 	private static void migrate_10_11(Statement st) throws SQLException {
 		st.executeUpdate("CREATE UNIQUE INDEX `filter_type_pattern` ON `filter` (`type`, `pattern`)");
+	}
+
+	private static void migrate_11_12(Statement st) throws SQLException {
+		st.executeUpdate("CREATE TABLE `filterlist` (`id` INTEGER PRIMARY KEY, `type` TEXT, `url` TEXT UNIQUE, `filtergroup_id` INTEGER)");
+
+		st.executeUpdate("CREATE TABLE `filterlistexception` (`id` INTEGER PRIMARY KEY, `filterlist_id` INTEGER, `pattern` TEXT, `reason` TEXT)");
+		st.executeUpdate("CREATE INDEX `filterlistexception_filterlist_id` ON `filterlistexception` (`filterlist_id`)");
+		st.executeUpdate("CREATE UNIQUE INDEX `filterlistexception_filterlist_id_pattern` ON `filterlistexception` (`filterlist_id`, `pattern`)");
+
+		st.executeUpdate("CREATE TABLE `globalfilterlistexception` (`id` INTEGER PRIMARY KEY, `type` TEXT, `pattern` TEXT, `reason` TEXT, UNIQUE(`type`, `pattern`))");
 	}
 }

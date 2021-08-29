@@ -16,10 +16,13 @@
 
 package net.fabricmc.discord.bot.database.query;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -34,12 +37,12 @@ public final class FilterQueries {
 		if (db == null) throw new NullPointerException("null db");
 
 		try (Connection conn = db.getConnection();
-				PreparedStatement ps = conn.prepareStatement("SELECT id, type, pattern, filtergroup_id FROM `filter`")) {
+				PreparedStatement ps = conn.prepareStatement("SELECT id, type, pattern, filtergroup_id, hits FROM `filter`")) {
 			try (ResultSet res = ps.executeQuery()) {
 				List<FilterEntry> ret = new ArrayList<>();
 
 				while (res.next()) {
-					ret.add(new FilterEntry(IdArmor.encode(res.getInt(1)), FilterType.get(res.getString(2)), res.getString(3), IdArmor.encode(res.getInt(4))));
+					ret.add(new FilterEntry(IdArmor.encode(res.getInt(1)), FilterType.get(res.getString(2)), res.getString(3), IdArmor.encode(res.getInt(4)), res.getInt(5)));
 				}
 
 				return ret;
@@ -78,7 +81,7 @@ public final class FilterQueries {
 		}
 	}
 
-	public record FilterEntry(int id, FilterType type, String pattern, int groupId) { }
+	public record FilterEntry(int id, FilterType type, String pattern, int groupId, int hits) { }
 	public record FilterData(String groupName, FilterAction action, String actionData) { }
 
 	public static FilterEntry getFilter(Database db, int id) throws SQLException {
@@ -87,13 +90,13 @@ public final class FilterQueries {
 		int rawId = IdArmor.decodeOrThrow(id, "filter id");
 
 		try (Connection conn = db.getConnection();
-				PreparedStatement ps = conn.prepareStatement("SELECT type, pattern, filtergroup_id FROM `filter` WHERE id = ?")) {
+				PreparedStatement ps = conn.prepareStatement("SELECT type, pattern, filtergroup_id, hits FROM `filter` WHERE id = ?")) {
 			ps.setInt(1, rawId);
 
 			try (ResultSet res = ps.executeQuery()) {
 				if (!res.next()) return null;
 
-				return new FilterEntry(id, FilterType.get(res.getString(1)), res.getString(2), IdArmor.encode(res.getInt(3)));
+				return new FilterEntry(id, FilterType.get(res.getString(1)), res.getString(2), IdArmor.encode(res.getInt(3)), res.getInt(4));
 			}
 		}
 	}
@@ -103,14 +106,14 @@ public final class FilterQueries {
 		if (group == null) throw new NullPointerException("null group");
 
 		try (Connection conn = db.getConnection();
-				PreparedStatement ps = conn.prepareStatement("SELECT f.id, f.type, f.pattern, f.filtergroup_id FROM `filtergroup` g, `filter` f WHERE g.name = ? AND f.filtergroup_id = g.id")) {
+				PreparedStatement ps = conn.prepareStatement("SELECT f.id, f.type, f.pattern, f.filtergroup_id, f.hits FROM `filtergroup` g, `filter` f WHERE g.name = ? AND f.filtergroup_id = g.id")) {
 			ps.setString(1, group);
 
 			try (ResultSet res = ps.executeQuery()) {
 				List<FilterEntry> ret = new ArrayList<>();
 
 				while (res.next()) {
-					ret.add(new FilterEntry(IdArmor.encode(res.getInt(1)), FilterType.get(res.getString(2)), res.getString(3), IdArmor.encode(res.getInt(4))));
+					ret.add(new FilterEntry(IdArmor.encode(res.getInt(1)), FilterType.get(res.getString(2)), res.getString(3), IdArmor.encode(res.getInt(4)), res.getInt(5)));
 				}
 
 				return ret;
@@ -118,7 +121,7 @@ public final class FilterQueries {
 		}
 	}
 
-	public static boolean addFilter(Database db, FilterType type, String pattern, String group) throws SQLException {
+	public static int addFilter(Database db, FilterType type, String pattern, String group) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
 		if (type == null) throw new NullPointerException("null type");
 		if (pattern == null) throw new NullPointerException("null pattern");
@@ -126,12 +129,12 @@ public final class FilterQueries {
 
 		try (Connection conn = db.getConnection();
 				PreparedStatement psGetGroupId = conn.prepareStatement("SELECT id FROM `filtergroup` WHERE name = ?");
-				PreparedStatement psAdd = conn.prepareStatement("INSERT OR IGNORE INTO `filter` (type, pattern, filtergroup_id) VALUES (?, ?, ?)")) {
+				PreparedStatement psAdd = conn.prepareStatement("INSERT OR IGNORE INTO `filter` (type, pattern, filtergroup_id) VALUES (?, ?, ?)", Statement.RETURN_GENERATED_KEYS)) {
 			psGetGroupId.setString(1, group);
 			int rawGroupId;
 
 			try (ResultSet res = psGetGroupId.executeQuery()) {
-				if (!res.next()) return false;
+				if (!res.next()) return -1;
 
 				rawGroupId = res.getInt(1);
 			}
@@ -140,7 +143,12 @@ public final class FilterQueries {
 			psAdd.setString(2, pattern);
 			psAdd.setInt(3, rawGroupId);
 
-			return psAdd.executeUpdate() > 0;
+			if (psAdd.executeUpdate() == 0) return -1;
+
+			try (ResultSet res = psAdd.getGeneratedKeys()) {
+				if (!res.next()) throw new IllegalStateException();
+				return IdArmor.encode(res.getInt(1));
+			}
 		}
 	}
 
@@ -256,6 +264,8 @@ public final class FilterQueries {
 		try (Connection conn = db.getConnection();
 				PreparedStatement psGetGroupId = conn.prepareStatement("SELECT id FROM `filtergroup` WHERE name = ?");
 				PreparedStatement psFilter = conn.prepareStatement("DELETE FROM `filter` WHERE filtergroup_id = ?");
+				PreparedStatement psListException = conn.prepareStatement("DELETE FROM `filterlistexception` WHERE `filtergroup_id` IN (SELECT `id` FROM `filtergroup` WHERE `filtergroup_id` = ?)");
+				PreparedStatement psList = conn.prepareStatement("DELETE FROM `filterlist` WHERE filtergroup_id = ?");
 				PreparedStatement psGroup = conn.prepareStatement("DELETE FROM `filtergroup` WHERE id = ?")) {
 			conn.setAutoCommit(false);
 
@@ -270,6 +280,12 @@ public final class FilterQueries {
 
 			psFilter.setInt(1, rawGroupId);
 			psFilter.executeUpdate();
+
+			psListException.setInt(1, rawGroupId);
+			psListException.executeUpdate();
+
+			psList.setInt(1, rawGroupId);
+			psList.executeUpdate();
 
 			psGroup.setInt(1, rawGroupId);
 			boolean ret = psGroup.executeUpdate() > 0;
@@ -428,4 +444,215 @@ public final class FilterQueries {
 	}
 
 	public record FilterActionEntry(int id, String name, String description, FilterAction action, String actionData) { }
+
+	public static Collection<FilterListEntry> getFilterLists(Database db) throws SQLException, URISyntaxException {
+		if (db == null) throw new NullPointerException("null db");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement ps = conn.prepareStatement("SELECT f.id, f.type, f.url, f.filtergroup_id, g.name FROM `filterlist` f, `filtergroup` g WHERE g.id = f.filtergroup_id")) {
+			try (ResultSet res = ps.executeQuery()) {
+				List<FilterListEntry> ret = new ArrayList<>();
+
+				while (res.next()) {
+					ret.add(new FilterListEntry(IdArmor.encode(res.getInt(1)), FilterType.get(res.getString(2)), new URI(res.getString(3)), IdArmor.encode(res.getInt(4)), res.getString(5)));
+				}
+
+				return ret;
+			}
+		}
+	}
+
+	public record FilterListEntry(int id, FilterType type, URI url, int groupId, String group) { }
+
+	public static int addFilterList(Database db, FilterType type, URI url, String group) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+		if (type == null) throw new NullPointerException("null type");
+		if (url == null) throw new NullPointerException("null url");
+		if (group == null) throw new NullPointerException("null group");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement psGetGroupId = conn.prepareStatement("SELECT id FROM `filtergroup` WHERE name = ?");
+				PreparedStatement psAdd = conn.prepareStatement("INSERT OR IGNORE INTO `filterlist` (type, url, filtergroup_id) VALUES (?, ?, ?)", Statement.RETURN_GENERATED_KEYS)) {
+			psGetGroupId.setString(1, group);
+			int rawGroupId;
+
+			try (ResultSet res = psGetGroupId.executeQuery()) {
+				if (!res.next()) return -1;
+
+				rawGroupId = res.getInt(1);
+			}
+
+			psAdd.setString(1, type.id);
+			psAdd.setString(2, url.toString());
+			psAdd.setInt(3, rawGroupId);
+
+			if (psAdd.executeUpdate() == 0) return -1;
+
+			try (ResultSet res = psAdd.getGeneratedKeys()) {
+				if (!res.next()) throw new IllegalStateException();
+				return IdArmor.encode(res.getInt(1));
+			}
+		}
+	}
+
+	public static boolean removeFilterList(Database db, int id) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+
+		int rawId = IdArmor.decodeOrThrow(id, "filter list id");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement psException = conn.prepareStatement("DELETE FROM `filterlistexception` WHERE filterlist_id = ?");
+				PreparedStatement ps = conn.prepareStatement("DELETE FROM `filterlist` WHERE id = ?")) {
+			conn.setAutoCommit(false);
+
+			psException.setInt(1, rawId);
+			psException.executeUpdate();
+
+			ps.setInt(1, rawId);
+			boolean ret = ps.executeUpdate() > 0;
+
+			conn.commit();
+
+			return ret;
+		}
+	}
+
+	public static Collection<FilterListExceptionEntry> getFilterListExceptions(Database db, int filterListId) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+
+		int rawFilterListId = IdArmor.decodeOrThrow(filterListId, "filter list id");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement ps = conn.prepareStatement("SELECT id, pattern, reason FROM `filterlistexception` WHERE filterlist_id = ?")) {
+			ps.setInt(1, rawFilterListId);
+
+			try (ResultSet res = ps.executeQuery()) {
+				List<FilterListExceptionEntry> ret = new ArrayList<>();
+
+				while (res.next()) {
+					ret.add(new FilterListExceptionEntry(IdArmor.encode(res.getInt(1)), filterListId, res.getString(2), res.getString(3)));
+				}
+
+				return ret;
+			}
+		}
+	}
+
+	public record FilterListExceptionEntry(int id, int filterListId, String pattern, String reason) { }
+
+	public static int addFilterListException(Database db, int filterListId, String pattern, String reason) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+		if (pattern == null) throw new NullPointerException("null pattern");
+		if (reason == null) throw new NullPointerException("null reason");
+
+		int rawFilterListId = IdArmor.decodeOrThrow(filterListId, "filter list id");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement psAdd = conn.prepareStatement("INSERT OR IGNORE INTO `filterlistexception` (filterlist_id, pattern, reason) VALUES (?, ?, ?)", Statement.RETURN_GENERATED_KEYS);
+				PreparedStatement psDeleteFilter = conn.prepareStatement("DELETE FROM `filter` WHERE pattern = ? AND `filtergroup_id` IN (SELECT `filtergroup_id` FROM `filterlist` WHERE `id` = ?)")) {
+			conn.setAutoCommit(false);
+
+			psAdd.setInt(1, rawFilterListId);
+			psAdd.setString(2, pattern);
+			psAdd.setString(3, reason);
+
+			if (psAdd.executeUpdate() == 0) return -1;
+
+			int exceptionId;
+
+			try (ResultSet res = psAdd.getGeneratedKeys()) {
+				if (!res.next()) throw new IllegalStateException();
+
+				exceptionId = IdArmor.encode(res.getInt(1));
+			}
+
+			psDeleteFilter.setString(1, pattern);
+			psDeleteFilter.setInt(2, rawFilterListId);
+			psDeleteFilter.executeUpdate();
+
+			conn.commit();
+
+			return exceptionId;
+		}
+	}
+
+	public static boolean removeFilterListException(Database db, int exceptionId) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+
+		int rawExceptionId = IdArmor.decodeOrThrow(exceptionId, "filter list exception id");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement ps = conn.prepareStatement("DELETE FROM `filterlistexception` WHERE id = ?")) {
+			ps.setInt(1, rawExceptionId);
+
+			return ps.executeUpdate() > 0;
+		}
+	}
+
+	public static Collection<GlobalFilterListExceptionEntry> getGlobalFilterListExceptions(Database db) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement ps = conn.prepareStatement("SELECT id, type, pattern, reason FROM `globalfilterlistexception`")) {
+			try (ResultSet res = ps.executeQuery()) {
+				List<GlobalFilterListExceptionEntry> ret = new ArrayList<>();
+
+				while (res.next()) {
+					ret.add(new GlobalFilterListExceptionEntry(IdArmor.encode(res.getInt(1)), FilterType.get(res.getString(2)), res.getString(3), res.getString(4)));
+				}
+
+				return ret;
+			}
+		}
+	}
+
+	public record GlobalFilterListExceptionEntry(int id, FilterType type, String pattern, String reason) { }
+
+	public static int addGlobalFilterListException(Database db, FilterType type, String pattern, String reason) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+		if (type == null) throw new NullPointerException("null type");
+		if (pattern == null) throw new NullPointerException("null pattern");
+		if (reason == null) throw new NullPointerException("null reason");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement psAdd = conn.prepareStatement("INSERT OR IGNORE INTO `globalfilterlistexception` (type, pattern, reason) VALUES (?, ?, ?)", Statement.RETURN_GENERATED_KEYS);
+				PreparedStatement psDeleteFilter = conn.prepareStatement("DELETE FROM `filter` WHERE pattern = ? AND `filtergroup_id` IN (SELECT `filtergroup_id` FROM `filterlist` WHERE `type` = ?)")) {
+			conn.setAutoCommit(false);
+
+			psAdd.setString(1, type.id);
+			psAdd.setString(2, pattern);
+			psAdd.setString(3, reason);
+
+			if (psAdd.executeUpdate() == 0) return -1;
+
+			int exceptionId;
+
+			try (ResultSet res = psAdd.getGeneratedKeys()) {
+				if (!res.next()) throw new IllegalStateException();
+
+				exceptionId = IdArmor.encode(res.getInt(1));
+			}
+
+			psDeleteFilter.setString(1, pattern);
+			psDeleteFilter.setString(2, type.id);
+			psDeleteFilter.executeUpdate();
+
+			conn.commit();
+
+			return exceptionId;
+		}
+	}
+
+	public static boolean removeGlobalFilterListException(Database db, int exceptionId) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+
+		int rawExceptionId = IdArmor.decodeOrThrow(exceptionId, "global filter list exception id");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement ps = conn.prepareStatement("DELETE FROM `globalfilterlistexception` WHERE id = ?")) {
+			ps.setInt(1, rawExceptionId);
+
+			return ps.executeUpdate() > 0;
+		}
+	}
 }
