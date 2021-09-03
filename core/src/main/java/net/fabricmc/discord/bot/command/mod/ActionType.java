@@ -18,6 +18,7 @@ package net.fabricmc.discord.bot.command.mod;
 
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.exception.DiscordException;
+import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.util.FormatUtil;
@@ -34,7 +35,7 @@ public interface ActionType {
 		return true;
 	}
 
-	ActivateResult activate(Server server, long targetId, boolean isDirect, int data, String reason, DiscordBot bot) throws DiscordException;
+	ActivateResult activate(Server server, long targetId, boolean isDirect, int data, @Nullable String reason, DiscordBot bot) throws DiscordException;
 	void deactivate(Server server, long targetId, Integer resetData, String reason, DiscordBot bot) throws DiscordException;
 	boolean isActive(Server server, long targetId, int data, DiscordBot bot);
 

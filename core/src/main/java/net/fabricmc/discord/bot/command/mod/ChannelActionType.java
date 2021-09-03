@@ -23,6 +23,7 @@ import org.javacord.api.entity.permission.Permissions;
 import org.javacord.api.entity.permission.Role;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.exception.DiscordException;
+import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.util.DiscordUtil;
@@ -30,7 +31,7 @@ import net.fabricmc.discord.bot.util.DiscordUtil;
 public enum ChannelActionType implements ActionType {
 	LOCK("lock", true) {
 		@Override
-		protected Integer activate(Server server, ServerChannel target, int data, String reason, DiscordBot bot) throws DiscordException {
+		protected Integer activate(Server server, ServerChannel target, int data, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (NOP_MODE) return 0;
 
 			Role role = server.getEveryoneRole();
@@ -47,7 +48,7 @@ public enum ChannelActionType implements ActionType {
 		}
 
 		@Override
-		protected void deactivate(Server server, ServerChannel target, Integer resetData, String reason, DiscordBot bot) throws DiscordException {
+		protected void deactivate(Server server, ServerChannel target, Integer resetData, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (NOP_MODE) return;
 			if (resetData == null) resetData = restrictedPerms;
 
@@ -72,7 +73,7 @@ public enum ChannelActionType implements ActionType {
 	},
 	SLOWMODE("slowmode", true) {
 		@Override
-		protected Integer activate(Server server, ServerChannel target, int data, String reason, DiscordBot bot) throws DiscordException {
+		protected Integer activate(Server server, ServerChannel target, int data, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			assert data > 0;
 
 			if (!(target instanceof ServerTextChannel)) return null;
@@ -90,7 +91,7 @@ public enum ChannelActionType implements ActionType {
 		}
 
 		@Override
-		protected void deactivate(Server server, ServerChannel target, Integer resetData, String reason, DiscordBot bot) throws DiscordException {
+		protected void deactivate(Server server, ServerChannel target, Integer resetData, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (NOP_MODE) return;
 			if (!(target instanceof ServerTextChannel)) return;
 			if (resetData == null) resetData = 0;
@@ -168,7 +169,7 @@ public enum ChannelActionType implements ActionType {
 	}
 
 	@Override
-	public final ActivateResult activate(Server server, long targetId, boolean isDirect, int data, String reason, DiscordBot bot) throws DiscordException {
+	public final ActivateResult activate(Server server, long targetId, boolean isDirect, int data, @Nullable String reason, DiscordBot bot) throws DiscordException {
 		ServerChannel channel = server.getChannelById(targetId).orElse(null);
 		if (channel == null) return new ActivateResult(true, 0, null);
 
@@ -177,12 +178,12 @@ public enum ChannelActionType implements ActionType {
 		return new ActivateResult(resetData != null, 1, resetData);
 	}
 
-	protected Integer activate(Server server, ServerChannel target, int data, String reason, DiscordBot bot) throws DiscordException {
+	protected Integer activate(Server server, ServerChannel target, int data, @Nullable String reason, DiscordBot bot) throws DiscordException {
 		return null;
 	}
 
 	@Override
-	public final void deactivate(Server server, long targetId, Integer resetData, String reason, DiscordBot bot) throws DiscordException {
+	public final void deactivate(Server server, long targetId, Integer resetData, @Nullable String reason, DiscordBot bot) throws DiscordException {
 		if (!hasDeactivation) return;
 
 		ServerChannel targetChannel = server.getChannelById(targetId).orElse(null);
@@ -191,7 +192,7 @@ public enum ChannelActionType implements ActionType {
 		deactivate(server, targetChannel, resetData, reason, bot);
 	}
 
-	protected void deactivate(Server server, ServerChannel target, Integer resetData, String reason, DiscordBot bot) throws DiscordException { }
+	protected void deactivate(Server server, ServerChannel target, Integer resetData, @Nullable String reason, DiscordBot bot) throws DiscordException { }
 
 	@Override
 	public final boolean isActive(Server server, long targetId, int data, DiscordBot bot) {

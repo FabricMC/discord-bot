@@ -24,6 +24,7 @@ import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
 import org.javacord.api.exception.DiscordException;
 import org.javacord.api.exception.NotFoundException;
+import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.database.query.ActionQueries;
@@ -32,12 +33,12 @@ import net.fabricmc.discord.bot.util.DiscordUtil;
 public enum UserActionType implements ActionType {
 	BAN("ban", true, true, true, false) {
 		@Override
-		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
+		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) DiscordUtil.join(server.banUser(target, 0, reason));
 		}
 
 		@Override
-		protected void deactivate(Server server, long targetDiscordUserId, String reason, DiscordBot bot) throws DiscordException {
+		protected void deactivate(Server server, long targetDiscordUserId, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) DiscordUtil.join(server.unbanUser(targetDiscordUserId, reason));
 		}
 
@@ -48,18 +49,18 @@ public enum UserActionType implements ActionType {
 	},
 	KICK("kick", false, false, true, false) {
 		@Override
-		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
+		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) DiscordUtil.join(server.kickUser(target, reason));
 		}
 	},
 	MUTE("mute", true, true, false, false) {
 		@Override
-		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
+		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.MUTE, reason, bot);
 		}
 
 		@Override
-		protected void deactivate(Server server, long targetDiscordUserId, String reason, DiscordBot bot) throws DiscordException {
+		protected void deactivate(Server server, long targetDiscordUserId, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (NOP_MODE) return;
 
 			User target = server.getMemberById(targetDiscordUserId).orElse(null);
@@ -76,12 +77,12 @@ public enum UserActionType implements ActionType {
 	},
 	META_MUTE("metaMute", true) {
 		@Override
-		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
+		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.META_MUTE, reason, bot);
 		}
 
 		@Override
-		protected void deactivate(Server server, long targetDiscordUserId, String reason, DiscordBot bot) throws DiscordException {
+		protected void deactivate(Server server, long targetDiscordUserId, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (NOP_MODE) return;
 
 			User target = server.getMemberById(targetDiscordUserId).orElse(null);
@@ -98,12 +99,12 @@ public enum UserActionType implements ActionType {
 	},
 	REACTION_MUTE("reactionMute", true) {
 		@Override
-		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
+		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.REACTION_MUTE, reason, bot);
 		}
 
 		@Override
-		protected void deactivate(Server server, long targetDiscordUserId, String reason, DiscordBot bot) throws DiscordException {
+		protected void deactivate(Server server, long targetDiscordUserId, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (NOP_MODE) return;
 
 			User target = server.getMemberById(targetDiscordUserId).orElse(null);
@@ -120,12 +121,12 @@ public enum UserActionType implements ActionType {
 	},
 	REQUESTS_MUTE("requestsMute", true) {
 		@Override
-		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
+		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.REQUESTS_MUTE, reason, bot);
 		}
 
 		@Override
-		protected void deactivate(Server server, long targetDiscordUserId, String reason, DiscordBot bot) throws DiscordException {
+		protected void deactivate(Server server, long targetDiscordUserId, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (NOP_MODE) return;
 
 			User target = server.getMemberById(targetDiscordUserId).orElse(null);
@@ -142,12 +143,12 @@ public enum UserActionType implements ActionType {
 	},
 	SUPPORT_MUTE("supportMute", true) {
 		@Override
-		protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException {
+		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.SUPPORT_MUTE, reason, bot);
 		}
 
 		@Override
-		protected void deactivate(Server server, long targetDiscordUserId, String reason, DiscordBot bot) throws DiscordException {
+		protected void deactivate(Server server, long targetDiscordUserId, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (NOP_MODE) return;
 
 			User target = server.getMemberById(targetDiscordUserId).orElse(null);
@@ -164,7 +165,7 @@ public enum UserActionType implements ActionType {
 	},
 	NICK_LOCK("nickLock", true) {
 		@Override
-		protected void activate(Server server, User target, String reason, DiscordBot bot) {
+		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) {
 			if (NOP_MODE) return;
 
 			try {
@@ -177,7 +178,7 @@ public enum UserActionType implements ActionType {
 		}
 
 		@Override
-		protected void deactivate(Server server, long targetDiscordUserId, String reason, DiscordBot bot) {
+		protected void deactivate(Server server, long targetDiscordUserId, @Nullable String reason, DiscordBot bot) {
 			try {
 				if (!NOP_MODE) ActionQueries.removeNickLock(bot.getDatabase(), targetDiscordUserId);
 			} catch (SQLException e) {
@@ -275,7 +276,7 @@ public enum UserActionType implements ActionType {
 	}
 
 	@Override
-	public final ActivateResult activate(Server server, long targetId, boolean isDirect, int data, String reason, DiscordBot bot) throws DiscordException {
+	public final ActivateResult activate(Server server, long targetId, boolean isDirect, int data, @Nullable String reason, DiscordBot bot) throws DiscordException {
 		int count = 0;
 
 		if (isDirect) {
@@ -301,10 +302,10 @@ public enum UserActionType implements ActionType {
 		return new ActivateResult(true, count, null);
 	}
 
-	protected void activate(Server server, User target, String reason, DiscordBot bot) throws DiscordException { }
+	protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException { }
 
 	@Override
-	public final void deactivate(Server server, long targetId, Integer resetData, String reason, DiscordBot bot) throws DiscordException {
+	public final void deactivate(Server server, long targetId, Integer resetData, @Nullable String reason, DiscordBot bot) throws DiscordException {
 		if (!hasDeactivation) return;
 
 		LongList targets = bot.getUserHandler().getDiscordUserIds((int) targetId);
@@ -318,7 +319,7 @@ public enum UserActionType implements ActionType {
 		}
 	}
 
-	protected void deactivate(Server server, long targetDiscordUserId, String reason, DiscordBot bot) throws DiscordException { }
+	protected void deactivate(Server server, long targetDiscordUserId, @Nullable String reason, DiscordBot bot) throws DiscordException { }
 
 	@Override
 	public final boolean isActive(Server server, long targetId, int data, DiscordBot bot) {

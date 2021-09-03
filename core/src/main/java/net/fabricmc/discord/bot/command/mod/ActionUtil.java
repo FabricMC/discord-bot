@@ -171,18 +171,18 @@ public final class ActionUtil {
 		public final boolean needsContext;
 	}
 
-	static void applyChannelAction(ActionType type, int data, long targetChannelId, String duration, String reason,
+	static void applyChannelAction(ActionType type, int data, long targetChannelId, String duration, @Nullable String reason,
 			@Nullable String extraBodyDesc,
-			DiscordBot bot, Server server, TextChannel actingChannel, User actor, int actorUserId) throws Exception {
+			DiscordBot bot, Server server, TextChannel actingChannel, @Nullable User actor, int actorUserId) throws Exception {
 		applyAction(type, data, targetChannelId, duration, reason, null,
 				extraBodyDesc, false, null,
 				bot, server, actingChannel, actor, actorUserId);
 	}
 
-	private static int applyAction(ActionType type, int data, long targetId, @Nullable String duration, String reason,
+	private static int applyAction(ActionType type, int data, long targetId, @Nullable String duration, @Nullable String reason,
 			CachedMessage targetMessageContext,
-			@Nullable String extraBodyDesc, boolean notifyTarget, String privateReason,
-			DiscordBot bot, Server server, TextChannel actingChannel, User actor, int actorUserId) throws Exception {
+			@Nullable String extraBodyDesc, boolean notifyTarget, @Nullable String privateReason,
+			DiscordBot bot, Server server, TextChannel actingChannel, @Nullable User actor, int actorUserId) throws Exception {
 		// check for conflict
 
 		int prevId = -1;
@@ -289,8 +289,8 @@ public final class ActionUtil {
 		return entry.id();
 	}
 
-	static void suspendAction(ActionType type, long targetId, String reason,
-			boolean notifyTarget, String privateReason,
+	static void suspendAction(ActionType type, long targetId, @Nullable String reason,
+			boolean notifyTarget, @Nullable String privateReason,
 			DiscordBot bot, Server server, @Nullable TextChannel actingChannel, @Nullable User actor, int actorUserId) throws Exception {
 		if (!type.hasDuration()) throw new RuntimeException("Actions without a duration can't be suspended");
 
@@ -311,7 +311,7 @@ public final class ActionUtil {
 		// suspend action in bot
 
 		if (entry == null
-				|| !ActionQueries.suspendAction(bot.getDatabase(), entry.id(), actorUserId, reason)) { // action wasn't applied through the bot, determine direct applications (directly through discord)
+				|| !ActionQueries.suspendAction(bot.getDatabase(), entry.id(), actorUserId, formatReason(reason, privateReason))) { // action wasn't applied through the bot, determine direct applications (directly through discord)
 			if (!type.canRevertBeyondBotDb()) {
 				throw new CommandException("%s %d is not %s through the bot.", type.getKind().id, targetId, ActionDesc.getShort(type, false));
 			} else if (!type.isActive(server, targetId, 0, bot)) {
@@ -359,10 +359,10 @@ public final class ActionUtil {
 
 	static void announceAction(ActionType type, boolean reversal, @Nullable String extraTitleDesc, @Nullable String extraBodyDesc,
 			long targetId,
-			long creation, long expiration, String reason,
+			long creation, long expiration, @Nullable String reason,
 			int actionId, CachedMessage targetMessageContext,
 			DiscordBot bot, Server server, @Nullable TextChannel actingChannel, @Nullable User actor,
-			boolean notifyTarget, boolean alreadyNotified, String privateReason) {
+			boolean notifyTarget, boolean alreadyNotified, @Nullable String privateReason) {
 		// log to original channel
 
 		String targetName;
@@ -449,7 +449,7 @@ public final class ActionUtil {
 
 	static boolean notifyTarget(ActionType type, boolean reversal, @Nullable String extraTitleDesc, @Nullable String extraBodyDesc,
 			long targetId,
-			long creation, long expiration, String reason,
+			long creation, long expiration, @Nullable String reason,
 			int actionId,
 			DiscordBot bot, Server server) {
 		if (type.getKind() != Kind.USER) return false;
@@ -518,7 +518,7 @@ public final class ActionUtil {
 		}
 	}
 
-	private static String formatReasonSuffix(String reason) {
+	private static String formatReasonSuffix(@Nullable String reason) {
 		if (reason == null || reason.isEmpty()) {
 			return "";
 		} else {
@@ -526,7 +526,7 @@ public final class ActionUtil {
 		}
 	}
 
-	private static String formatReason(String reason, String privateReason) {
+	private static @Nullable String formatReason(@Nullable String reason, @Nullable String privateReason) {
 		if (privateReason != null && !privateReason.isEmpty()) {
 			if (reason != null && !reason.isEmpty()) {
 				return reason+" "+privateReason;

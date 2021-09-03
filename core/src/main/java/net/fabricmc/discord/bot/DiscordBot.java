@@ -96,6 +96,7 @@ public final class DiscordBot {
 	 * A list of all enabled modules.
 	 */
 	private final List<Module> modules = new ArrayList<>();
+	private final ExecutorService executor = Executors.newCachedThreadPool(new DaemonThreadFactory("Pool execution thread"));
 	private final ExecutorService serialExecutor = Executors.newSingleThreadExecutor(new DaemonThreadFactory("Serial execution thread"));
 	private final ScheduledExecutorService scheduledExecutor = Executors.newScheduledThreadPool(1, new DaemonThreadFactory("Scheduled execution thread"));
 
@@ -130,7 +131,9 @@ public final class DiscordBot {
 
 		builder
 		.setWaitForUsersOnStartup(true)
-		.setIntents(Intent.GUILDS, Intent.GUILD_MEMBERS, Intent.GUILD_PRESENCES, Intent.GUILD_MESSAGES, Intent.GUILD_MESSAGE_REACTIONS, Intent.DIRECT_MESSAGES, Intent.DIRECT_MESSAGE_REACTIONS)
+		.setIntents(Intent.GUILDS, Intent.GUILD_MEMBERS, Intent.GUILD_PRESENCES,
+				Intent.GUILD_MESSAGES, Intent.GUILD_MESSAGE_REACTIONS, Intent.DIRECT_MESSAGES, Intent.DIRECT_MESSAGE_REACTIONS,
+				Intent.GUILD_BANS)
 		.setToken(this.config.getToken())
 		.login()
 		.thenAccept(api -> this.setup(api, dataDir))
@@ -184,6 +187,10 @@ public final class DiscordBot {
 		return Collections.unmodifiableCollection(this.modules);
 	}
 
+	public ExecutorService getExecutor() {
+		return executor;
+	}
+
 	/**
 	 * Gets the bot's serial executor.
 	 *
@@ -192,7 +199,7 @@ public final class DiscordBot {
 	 * @return the serial executor
 	 */
 	public Executor getSerialExecutor() {
-		return this.serialExecutor;
+		return serialExecutor;
 	}
 
 	public ScheduledExecutorService getScheduledExecutor() {

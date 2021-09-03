@@ -20,18 +20,28 @@ import java.sql.SQLException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.javacord.api.entity.auditlog.AuditLog;
+import org.javacord.api.entity.auditlog.AuditLogActionType;
+import org.javacord.api.entity.auditlog.AuditLogEntry;
+import org.javacord.api.entity.auditlog.AuditLogEntryTarget;
+import org.javacord.api.entity.server.Ban;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
+import org.javacord.api.event.server.member.ServerMemberBanEvent;
 import org.javacord.api.event.server.member.ServerMemberJoinEvent;
 import org.javacord.api.listener.ChainableGloballyAttachableListenerManager;
+import org.javacord.api.listener.server.member.ServerMemberBanListener;
 import org.javacord.api.listener.server.member.ServerMemberJoinListener;
 
 import net.fabricmc.discord.bot.command.mod.ActionUtil;
+import net.fabricmc.discord.bot.command.mod.ActionUtil.UserMessageAction;
+import net.fabricmc.discord.bot.command.mod.UserActionType;
 import net.fabricmc.discord.bot.database.query.ActionQueries;
 import net.fabricmc.discord.bot.database.query.ActionQueries.ActionEntry;
 import net.fabricmc.discord.bot.database.query.ActionQueries.ActiveActionEntry;
@@ -43,7 +53,7 @@ import net.fabricmc.discord.bot.database.query.ActionQueries.ExpiringActionEntry
  * <p>This handles time based expiration of temporary actions and re-application of actions that Discord doesn't
  * persistently enforce itself.
  */
-public final class ActionSyncHandler implements ServerMemberJoinListener {
+public final class ActionSyncHandler implements ServerMemberJoinListener, ServerMemberBanListener {
 	private static final int expirationWindowMinutes = 120; // only schedule tasks for the near future in Java
 	private static final int retryDelayMinutes = 5;
 
@@ -177,6 +187,7 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 
 	void registerEarlyHandlers(ChainableGloballyAttachableListenerManager src) {
 		src.addServerMemberJoinListener(this);
+		src.addServerMemberBanListener(this);
 	}
 
 	@Override
@@ -249,5 +260,66 @@ public final class ActionSyncHandler implements ServerMemberJoinListener {
 		} catch (Exception e) {
 			LOGGER.warn("Error checking message against actions", e);
 		}
+	}
+
+	@Override
+	public void onServerMemberBan(ServerMemberBanEvent event) {
+		Server server = event.getServer();
+		if (server.getId() != bot.getServerId()) return;
+
+		bot.getExecutor().execute(() -> {
+			try {
+				int targetUserId = bot.getUserHandler().getUserId(event.getUser());
+				if (targetUserId < 0) return; // unknown target user
+
+				if (ActionQueries.getActiveAction(bot.getDatabase(), targetUserId, UserActionType.BAN) != null) {
+					// action exists
+					return;
+				}
+
+				Ban ban = event.requestBan().join().orElse(null);
+				if (ban == null) return; // not banned
+
+				String reason = ban.getReason().orElse(null);
+				User actor = null;
+
+				if (server.canYouViewAuditLog()) {
+					for (int i = 0; i < 10; i++) {
+						if (i > 0) Thread.sleep(100 << (i - 1)); // retry with .1, .2, .4, .8, 1.6, 3.2, 6.4, 12.8, 25.6 s delay
+
+						AuditLog log = server.getAuditLog(10, AuditLogActionType.MEMBER_BAN_ADD).join();
+						long latestMatch = -1;
+
+						for (AuditLogEntry entry : log.getEntries()) {
+							if (entry.getId() <= latestMatch) continue; // the most significant bits of the id are a high resolution timestamp, so it can be compared directly
+
+							AuditLogEntryTarget target = entry.getTarget().orElse(null);
+							String curReason = entry.getReason().orElse(null);
+
+							if (target != null && target.getId() == ban.getUser().getId() && Objects.equals(reason, curReason)) {
+								actor = entry.getUser().join();
+							}
+						}
+
+						if (actor != null) break;
+					}
+				}
+
+				if (actor != null && actor.getId() == bot.getUserHandler().getBotDiscordUserId()) {
+					// banned by the bot
+					return;
+				}
+
+				int actorUserId = actor != null ? bot.getUserHandler().getUserId(actor.getId()) : bot.getUserHandler().getBotUserId();
+				reason = reason != null ? "discord import: ".concat(reason) : "discord import";
+
+				ActionUtil.applyUserAction(UserActionType.BAN, 0, targetUserId, "permanent", reason,
+						null, UserMessageAction.NONE,
+						false, null,
+						bot, server, null, actor, actorUserId);
+			} catch (Throwable t) {
+				LOGGER.warn("Error importing discord action", t);
+			}
+		});
 	}
 }
