@@ -268,6 +268,20 @@ public final class ActionQueries {
 		}
 	}
 
+	public static boolean setReason(Database db, int actionId, String reason) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+
+		int rawActionId = IdArmor.decodeOrThrow(actionId, "action id");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement ps = conn.prepareStatement("UPDATE `action` SET `reason` = ? WHERE id = ?")) {
+			ps.setString(1, reason);
+			ps.setInt(2, rawActionId);
+
+			return ps.executeUpdate() > 0;
+		}
+	}
+
 	public record ActionEntry(int id, ActionType type, ActionData data, long targetId, int actorUserId,
 			long creationTime, long expirationTime,
 			String reason, long contextMessageId, int prevId,

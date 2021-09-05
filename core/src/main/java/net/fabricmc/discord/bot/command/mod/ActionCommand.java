@@ -42,7 +42,7 @@ public final class ActionCommand extends Command {
 
 	@Override
 	public String usage() {
-		return "list <user> | (get|show) <id>";
+		return "list <user> | (get|show) <id> | (setreason|updatereason) <id> <reason...>";
 	}
 
 	@Override
@@ -185,6 +185,15 @@ public final class ActionCommand extends Command {
 
 			return true;
 		}
+		case "setreason":
+		case "updatereason":
+			if (!ActionQueries.setReason(context.bot().getDatabase(), Integer.parseInt(arguments.get("id")), arguments.get("reason"))) {
+				throw new CommandException("Unknown action");
+			} else {
+				context.channel().sendMessage("Action reason updated");
+			}
+
+			return true;
 		}
 
 		throw new IllegalStateException();
