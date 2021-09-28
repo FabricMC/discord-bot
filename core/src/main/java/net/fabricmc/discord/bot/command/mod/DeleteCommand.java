@@ -47,7 +47,6 @@ public final class DeleteCommand extends Command {
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
 		CachedMessage cachedMessage = getMessage(context, arguments.get("message"), false);
-		if (cachedMessage == null) throw new CommandException("can't find message");
 
 		int userId = context.bot().getUserHandler().getUserId(cachedMessage.getAuthorDiscordId());
 		if (userId < 0) throw new CommandException("Message from unknown user");

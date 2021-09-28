@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import it.unimi.dsi.fastutil.longs.Long2IntMap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
@@ -64,7 +65,9 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 	private static final int INIT_LIMIT = 1000;
 	private static final int MESSAGE_LIMIT = 10000;
 
-	private static final Pattern MESSAGE_LINK_PATTERN = Pattern.compile("https://discord.com/channels/(@me|\\d+)/(\\d+)/(\\d+)");
+	private static final String[] DISCORD_DOMAINS = { "discord.com", "discordapp.com" };
+	private static final Pattern MESSAGE_LINK_PATTERN = Pattern.compile(String.format("https://(?:%s)/channels/(@me|\\d+)/(\\d+)/(\\d+)",
+			Arrays.stream(DISCORD_DOMAINS).map(Pattern::quote).collect(Collectors.joining("|"))));
 
 	private final DiscordBot bot;
 	private final List<MessageCreateHandler> createHandlers = new CopyOnWriteArrayList<>();

@@ -177,7 +177,8 @@ public abstract class Command {
 		Objects.requireNonNull(message, "null message");
 
 		CachedMessage ret = context.bot().getMessageIndex().get(message, context.server());
-		if (ret == null || !includeDeleted && ret.isDeleted()) throw new CommandException("Unknown message");
+		if (ret == null) throw new CommandException("Unknown message");
+		if (!includeDeleted && ret.isDeleted()) throw new CommandException("Deleted message (requesting non-deleted)");
 
 		return ret;
 	}

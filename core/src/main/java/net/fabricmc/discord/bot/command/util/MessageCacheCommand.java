@@ -126,10 +126,7 @@ public final class MessageCacheCommand extends Command {
 		}
 		case "get":
 		case "show": {
-			long messageId = Long.parseLong(arguments.get("id"));
-			CachedMessage message = context.bot().getMessageIndex().get(messageId);
-			if (message == null) throw new CommandException("Unknown message");
-
+			CachedMessage message = getMessage(context, arguments.get("id"), true);
 			StringBuilder attachmentsSuffix = new StringBuilder();
 
 			for (CachedMessageAttachment attachment : message.getAttachments()) {
