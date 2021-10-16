@@ -42,7 +42,7 @@ allprojects {
 		if (project != rootProject.project(":tag-parser")) {
 			// Database
 			implementation("com.zaxxer:HikariCP:3.4.5")
-			implementation("org.xerial:sqlite-jdbc:3.34.0")
+			implementation("org.xerial:sqlite-jdbc:3.36.0.3")
 		}
 
 		// Logging
