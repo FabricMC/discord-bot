@@ -244,6 +244,7 @@ public final class McVersionModule implements Module {
 
 		if (response.statusCode() != 200) {
 			LOGGER.warn("MC version verification request against Fabric Meta failed: {}", response.statusCode());
+			response.body().close();
 			return false;
 		}
 

@@ -281,6 +281,8 @@ public final class ActionSyncHandler implements ServerMemberJoinListener, Server
 				if (ban == null) return; // not banned
 
 				String reason = ban.getReason().orElse(null);
+				if ("null".equals(reason)) reason = null; // appears to use "null" string value for unknown reasons..
+
 				User actor = null;
 
 				if (server.canYouViewAuditLog()) {

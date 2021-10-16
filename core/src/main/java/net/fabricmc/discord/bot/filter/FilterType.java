@@ -45,7 +45,7 @@ public enum FilterType {
 			int pos = normalizedPattern.indexOf("://");
 			if (pos > 0) normalizedPattern = normalizedPattern.substring(pos + 3);
 
-			// stream www.
+			// strip www.
 			if (normalizedPattern.regionMatches(true, 0, "www.", 0, 4)) normalizedPattern = normalizedPattern.substring(4);
 
 			// strip trailing / or throw if there's a path too

@@ -91,6 +91,7 @@ final class RedditFetcher {
 
 			if (response.statusCode() != 200) {
 				LOGGER.warn("Request failed: {}", response.statusCode());
+				response.body().close();
 				return;
 			}
 
@@ -234,6 +235,7 @@ final class RedditFetcher {
 
 				if (response.statusCode() != 200) {
 					LOGGER.info("Link {} in {} by {} request failed: {}", link, id, author, response.statusCode());
+					response.body().close();
 					continue;
 				}
 

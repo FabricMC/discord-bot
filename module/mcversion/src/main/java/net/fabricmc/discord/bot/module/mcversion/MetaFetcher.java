@@ -53,6 +53,7 @@ final class MetaFetcher {
 
 		if (response.statusCode() != 200) {
 			LOGGER.warn("Request failed: {}", response.statusCode());
+			response.body().close();
 			return;
 		}
 

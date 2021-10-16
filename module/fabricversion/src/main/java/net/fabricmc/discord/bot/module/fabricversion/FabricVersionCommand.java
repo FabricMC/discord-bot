@@ -139,7 +139,11 @@ public final class FabricVersionCommand extends Command {
 		String loaderVersion = null;
 
 		HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(metaHost, "/v1/versions/loader/%s".formatted(mcVersion), "limit=1"));
-		if (response.statusCode() != 200) throw new IOException("meta request failed with code "+response.statusCode());
+
+		if (response.statusCode() != 200) {
+			response.body().close();
+			throw new IOException("meta request failed with code "+response.statusCode());
+		}
 
 		try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
 			reader.beginArray();
@@ -181,7 +185,11 @@ public final class FabricVersionCommand extends Command {
 		String[] apiVersions = new String[apiBranches.size() * 2]; // ordered by match quality (exact matches, then prefix matches)
 
 		response = HttpUtil.makeRequest(HttpUtil.toUri(mavenHost, "/%s/maven-metadata.xml".formatted(apiMavenGroupName.replace('.', '/').replace(':', '/'))));
-		if (response.statusCode() != 200) throw new IOException("maven request failed with code "+response.statusCode());
+
+		if (response.statusCode() != 200) {
+			response.body().close();
+			throw new IOException("maven request failed with code "+response.statusCode());
+		}
 
 		try (InputStream is = response.body()) {
 			Element element = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(is).getDocumentElement();

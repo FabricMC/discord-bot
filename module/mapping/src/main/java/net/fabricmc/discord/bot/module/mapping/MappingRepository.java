@@ -109,7 +109,11 @@ public final class MappingRepository {
 		if (mcVersion.indexOf('/') >= 0) throw new IllegalArgumentException("invalid mc version: "+mcVersion);
 
 		HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(metaHost, "/v2/versions/%s/%s".formatted(kind, mcVersion), "limit=1"));
-		if (response.statusCode() != 200) throw new IOException("request failed with code "+response.statusCode());
+
+		if (response.statusCode() != 200) {
+			response.body().close();
+			throw new IOException("request failed with code "+response.statusCode());
+		}
 
 		String mavenId = null;
 

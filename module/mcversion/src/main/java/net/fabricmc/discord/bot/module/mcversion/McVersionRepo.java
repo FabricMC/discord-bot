@@ -77,7 +77,11 @@ public final class McVersionRepo {
 	private static boolean checkVersion(String version) {
 		try {
 			HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(metaHost, "/v2/versions/game"));
-			if (response.statusCode() != 200) throw new IOException("request failed with code "+response.statusCode());
+
+			if (response.statusCode() != 200) {
+				response.body().close();
+				throw new IOException("request failed with code "+response.statusCode());
+			}
 
 			try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
 				reader.beginArray();
@@ -135,7 +139,11 @@ public final class McVersionRepo {
 	private void update() {
 		try {
 			HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(metaHost, "/v2/versions/game"));
-			if (response.statusCode() != 200) throw new IOException("request failed with code "+response.statusCode());
+
+			if (response.statusCode() != 200) {
+				response.body().close();
+				throw new IOException("request failed with code "+response.statusCode());
+			}
 
 			String latest = null;
 			String latestStable = null;

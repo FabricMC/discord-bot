@@ -111,6 +111,7 @@ final class NewsFetcher {
 
 		if (response.statusCode() != 200) {
 			LOGGER.warn("Query request failed: {}", response.statusCode());
+			response.body().close();
 			return;
 		}
 
@@ -203,6 +204,7 @@ final class NewsFetcher {
 
 		if (response.statusCode() != 200) {
 			if (response.statusCode() != 404) LOGGER.warn("Poll request failed: {}", response.statusCode());
+			response.body().close();
 			return;
 		}
 
