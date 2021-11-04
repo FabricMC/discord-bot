@@ -131,7 +131,10 @@ final class BuiltinModule implements Module, MessageCreateListener {
 
 	@Override
 	public void onMessageCreate(MessageCreateEvent event) {
-		if (!event.getMessageContent().startsWith(this.bot.getCommandPrefix())) {
+		String content = event.getMessageContent();
+		String prefix = bot.getCommandPrefix();
+
+		if (content.length() <= prefix.length() || !content.startsWith(prefix)) {
 			return;
 		}
 
@@ -148,7 +151,7 @@ final class BuiltinModule implements Module, MessageCreateListener {
 				event.getMessage(),
 				user,
 				bot.getUserHandler().getUserId(user),
-				event.getMessageContent());
+				content);
 
 		this.bot.tryHandleCommand(context);
 	}

@@ -249,7 +249,10 @@ public final class TagModule implements Module, CommandStringHandler {
 		}
 
 		final String tagName = name.substring(1).toLowerCase(Locale.ENGLISH);
-		this.handleTag(context, tagName, arguments);
+
+		if (!tagName.isEmpty()) { // ignore but consume empty
+			this.handleTag(context, tagName, arguments);
+		}
 
 		return true;
 	}

@@ -245,7 +245,7 @@ public final class ActionUtil {
 			throw new CommandException("Action failed: "+e);
 		}
 
-		if (!type.hasDuration() && result.targets() == 0) {
+		if (type.requiresTargetPresence() && result.targets() == 0) {
 			throw new CommandException("Absent target");
 		}
 

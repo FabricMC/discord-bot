@@ -196,7 +196,12 @@ public enum UserActionType implements ActionType {
 		}
 	},
 	WARN("warn", false),
-	DELETE_MESSAGE("deleteMessage", false, false, false, true),
+	DELETE_MESSAGE("deleteMessage", false, false, false, true) {
+		@Override
+		public boolean requiresTargetPresence() {
+			return false;
+		}
+	},
 	RENAME("rename", false, false, false, true);
 
 	private static final boolean NOP_MODE = false; // no-op mode for testing

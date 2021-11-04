@@ -27,10 +27,32 @@ public interface ActionType {
 	Kind getKind();
 	String getId();
 	boolean hasDuration();
+
+	/**
+	 * Whether a target has to be present in order to apply the action.
+	 */
+	default boolean requiresTargetPresence() {
+		return !hasDuration();
+	}
+
+	/**
+	 * Whether the action normally prevents the (user) target from sending messages, used to bridge the time between action creation and discord applying it.
+	 */
 	boolean blocksMessages();
+
+	/**
+	 * Whether the action can be undone.
+	 */
 	boolean hasDeactivation();
+
+	/**
+	 * Whether activating the action itself prevents notifying the user afterwards (e.g. can't DM after kick/ban).
+	 */
 	boolean isNotificationBarrier();
 
+	/**
+	 * Whether the action can be deactivated even if it wasn't applied through the bot.
+	 */
 	default boolean canRevertBeyondBotDb() {
 		return true;
 	}
