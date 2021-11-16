@@ -49,8 +49,9 @@ final class RedditFetcher {
 
 	private static final String HOST = "www.reddit.com";
 	private static final String PATH = "/r/Minecraft/new.json";
-	private static final String QUERY = "limit="+PAGE_SIZE+"&raw_json=1&before=%s";
-	private static final Pattern ARTICLE_PATTERN = Pattern.compile("\\((https://www.minecraft.net/article/.+?)\\)");
+	private static final String QUERY_START = "limit="+PAGE_SIZE+"&raw_json=1";
+	private static final String QUERY_CONT = "limit="+PAGE_SIZE+"&raw_json=1&after=%s";
+	private static final Pattern ARTICLE_PATTERN = Pattern.compile("\\((https://www.minecraft.net/(?:en-us/)?article/.+?)\\)");
 	private static final Pattern DOWNLOAD_PATTERN = Pattern.compile("\\((https://launcher.mojang.com/.+?\\.zip)\\)");
 
 	private static final Logger LOGGER = LogManager.getLogger("mcversion/reddit");
@@ -83,17 +84,24 @@ final class RedditFetcher {
 	}
 
 	void update() throws IOException, URISyntaxException, InterruptedException {
-		String before = mcVersionModule.getBot().getConfigEntry(LAST_POST);
+		String initialRelease = latestRelease;
+		String initialSnapshot = latestSnapshot;
+		String initialPending = latestPending;
+
+		String lastPostId = mcVersionModule.getBot().getConfigEntry(LAST_POST);
+		String nextLastPostId = null;
+		String after = null;
 
 		pageLoop: for (int i = 0; i < MAX_PAGES; i++) {
-			HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(HOST, PATH, QUERY.formatted(before)));
-			if (i == 0) before = null;
+			HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(HOST, PATH, after == null ? QUERY_START : QUERY_CONT.formatted(after)));
 
 			if (response.statusCode() != 200) {
 				LOGGER.warn("Request failed: {}", response.statusCode());
 				response.body().close();
 				return;
 			}
+
+			after = null;
 
 			try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
 				reader.beginObject();
@@ -107,55 +115,64 @@ final class RedditFetcher {
 					reader.beginObject();
 
 					while (reader.hasNext()) {
-						if (!reader.nextName().equals("children")) {
+						switch (reader.nextName()) {
+						case "after":
+							after = reader.nextString();
+							break;
+						case "children":
+							reader.beginArray();
+							if (!reader.hasNext()) break pageLoop;
+
+							do {
+								String id = processPost(reader, lastPostId, initialRelease, initialSnapshot, initialPending);
+								if (id == null) break pageLoop; // at lastPostId
+								if (nextLastPostId == null) nextLastPostId = id;
+							} while (reader.hasNext());
+
+							reader.endArray();
+							break;
+						default:
 							reader.skipValue();
-							continue;
 						}
-
-						reader.beginArray();
-
-						if (!reader.hasNext()) {
-							break pageLoop;
-						}
-
-						before = null;
-						String lastRelease = latestRelease;
-						String lastSnapshot = latestSnapshot;
-						String lastPending = latestPending;
-
-						do {
-							Result result = parsePost(reader);
-							if (before == null) before = result.postId();
-
-							if (result.versionId() != null) {
-								if (McVersionModule.KIND_RELEASE.equals(result.type()) && latestRelease == lastRelease) {
-									latestRelease = result.versionId();
-								} else if (McVersionModule.KIND_SNAPSHOT.equals(result.type()) && latestSnapshot == lastSnapshot) {
-									latestSnapshot = result.versionId();
-								} else if (McVersionModule.KIND_PENDING.equals(result.type()) && latestPending == lastPending) {
-									latestPending = result.versionId();
-								} else {
-									LOGGER.warn("Unknown release type for {}: {}", result.versionId(), result.type());
-								}
-							}
-
-							if (result.article() != null) {
-								// TODO: send to NewsFetcher
-							}
-						} while (reader.hasNext());
-
-						break;
 					}
-
-					break;
 				}
+			}
+
+			if (after == null) break;
+		}
+
+		if (nextLastPostId != null) mcVersionModule.getBot().setConfigEntry(LAST_POST, nextLastPostId);
+	}
+
+	private String processPost(JsonReader reader, String endId,
+			String initialRelease, String initialSnapshot, String initialPending) throws IOException {
+		Result result = parsePost(reader, endId);
+		if (result == null) return null; // at endId
+
+		if (result.versionId() != null) {
+			if (McVersionModule.KIND_RELEASE.equals(result.type()) && latestRelease == initialRelease) {
+				latestRelease = result.versionId();
+			} else if (McVersionModule.KIND_SNAPSHOT.equals(result.type()) && latestSnapshot == initialSnapshot) {
+				latestSnapshot = result.versionId();
+			} else if (McVersionModule.KIND_PENDING.equals(result.type()) && latestPending == initialPending) {
+				latestPending = result.versionId();
+			} else {
+				LOGGER.warn("Unknown release type for {}: {}", result.versionId(), result.type());
 			}
 		}
 
-		if (before != null) mcVersionModule.getBot().setConfigEntry(LAST_POST, before);
+		if (result.article() != null) {
+			try {
+				mcVersionModule.newsFetcher.updateNewsByArticlePoll(result.article());
+			} catch (Throwable t) {
+				LOGGER.warn("Error updating news article from reddit post {} ", result.postId(), t);
+			}
+		}
+
+		return result.postId();
 	}
 
-	private Result parsePost(JsonReader reader) throws IOException {
+	private Result parsePost(JsonReader reader, String ignoredId) throws IOException {
 		String id = null;
 		String author = null;
 		boolean hasMojangFlair = false;
@@ -174,8 +191,9 @@ final class RedditFetcher {
 
 			while (reader.hasNext()) {
 				switch (reader.nextName()) {
-				case "id":
+				case "name":
 					id = reader.nextString();
+					if (id.equals(ignoredId)) return null; // ignored
 					break;
 				case "selftext":
 					selftext = reader.nextString();

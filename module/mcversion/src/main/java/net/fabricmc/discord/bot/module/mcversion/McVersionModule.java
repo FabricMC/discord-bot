@@ -92,7 +92,7 @@ public final class McVersionModule implements Module {
 	private final Set<String> announcedVersions = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
 	private final MetaFetcher metaFetcher = new MetaFetcher(this);
-	private final NewsFetcher newsFetcher = new NewsFetcher(this);
+	final NewsFetcher newsFetcher = new NewsFetcher(this);
 	private final RedditFetcher redditFetcher = new RedditFetcher(this);
 
 	@Override
