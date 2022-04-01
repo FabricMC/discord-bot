@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021 FabricMC
+ * Copyright (c) 2020, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -406,6 +406,7 @@ public final class DiscordBot {
 	private void setupModules() {
 		final BuiltinModule builtin = new BuiltinModule();
 		this.modules.add(builtin);
+		builtin.registerConfigEntries(this);
 
 		final ServiceLoader<Module> modules = ServiceLoader.load(Module.class);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -227,13 +227,20 @@ public final class CommandParser {
 					matched = true;
 				} else if (node instanceof OrNode) {
 					OrNode orNode = (OrNode) node;
+					boolean nestedOptional = false;
 
 					for (Node option : orNode) {
+						if (option.isOptional()) nestedOptional = true;
+
 						if (nested == null) {
 							nested = option;
 						} else {
 							queue(option, 0, token, tokensAvailable);
 						}
+					}
+
+					if (nested != null && node.isOptional() && !nestedOptional) { // allow skipping over optional or node with only non-optional nested
+						queue(EmptyNode.INSTANCE, 0, token, tokensAvailable); // TODO: this has to be dequeued if one of the options matched
 					}
 
 					matched = true;
@@ -243,7 +250,7 @@ public final class CommandParser {
 					matched = false;
 				} else if (node instanceof PlainNode) {
 					PlainNode plainNode = (PlainNode) node;
-					matched = plainNode.content.equals(getValue(token));
+					matched = plainNode.content.equalsIgnoreCase(getValue(token));
 				} else if (node instanceof VarNode) {
 					VarNode varNode = (VarNode) node;
 					// TODO: implement varNode value verification

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -251,7 +251,7 @@ public final class FilterHandler implements MessageCreateListener, MessageEditLi
 		long channelId = bot.getConfigEntry(ALERT_CHANNEL);
 
 		if (channelId >= 0) {
-			TextChannel channel = server.getTextChannelById(channelId).orElse(null);
+			TextChannel channel = DiscordUtil.getTextChannel(server, channelId);
 
 			if (channel == null) {
 				LOGGER.warn("invalid alert channel: {}", channelId);

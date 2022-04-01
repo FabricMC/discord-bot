@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,8 @@ import java.util.Locale;
 import java.util.Map;
 
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-import org.javacord.api.entity.channel.ServerTextChannel;
+import org.javacord.api.entity.Nameable;
+import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 
 import net.fabricmc.discord.bot.CachedMessage;
@@ -69,8 +70,8 @@ public final class MessageCacheCommand extends Command {
 			List<CachedMessage> messages;
 
 			try {
-				ServerTextChannel channel = getTextChannel(context, target);
-				targetDesc = "channel #%s".formatted(channel.getName());
+				TextChannel channel = getTextChannel(context, target);
+				targetDesc = "channel %s".formatted(channel instanceof Nameable ? "#%s".formatted(((Nameable) channel).getName()) : channel.getIdAsString());
 				messages = new ArrayList<>(context.bot().getMessageIndex().getAll(channel, true));
 			} catch (CommandException e) {
 				try {
@@ -153,13 +154,13 @@ public final class MessageCacheCommand extends Command {
 		}
 		case "stats": {
 			MessageIndex messageIndex = context.bot().getMessageIndex();
-			List<ServerTextChannel> channels = new ArrayList<>(messageIndex.getCachedChannels());
-			channels.sort(Comparator.comparing(ServerTextChannel::getName));
+			List<TextChannel> channels = new ArrayList<>(messageIndex.getCachedChannels());
+			DiscordUtil.sortTextChannelsByName(channels);
 
 			StringBuilder sb = new StringBuilder();
 			int total = 0;
 
-			for (ServerTextChannel channel : channels) {
+			for (TextChannel channel : channels) {
 				if (!channel.canSee(context.user()) || !channel.canReadMessageHistory(context.user())) continue;
 
 				int size = messageIndex.getSize(channel);

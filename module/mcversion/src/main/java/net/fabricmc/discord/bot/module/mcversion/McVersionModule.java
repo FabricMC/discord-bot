@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,7 @@ import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.Module;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
+import net.fabricmc.discord.bot.util.DiscordUtil;
 import net.fabricmc.discord.bot.util.HttpUtil;
 
 /**
@@ -124,7 +125,7 @@ public final class McVersionModule implements Module {
 	private static TextChannel getChannel(Server server, String type, long id) {
 		if (server == null || id <= 0) return null;
 
-		TextChannel channel = server.getTextChannelById(id).orElse(null);
+		TextChannel channel = DiscordUtil.getTextChannel(server, id);
 
 		if (channel == null) {
 			LOGGER.warn("invalid {} channel: {}", type, id);

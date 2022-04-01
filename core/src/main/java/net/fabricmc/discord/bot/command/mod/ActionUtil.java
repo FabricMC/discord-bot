@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import it.unimi.dsi.fastutil.longs.LongList;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.javacord.api.entity.channel.ServerChannel;
-import org.javacord.api.entity.channel.ServerTextChannel;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.javacord.api.entity.permission.Role;
@@ -94,7 +93,7 @@ public final class ActionUtil {
 	 * @param context command context
 	 * @return true if the action was executed successfully
 	 */
-	public static void applyUserAction(ActionType type, int data, int targetUserId, @Nullable String duration, String reason,
+	public static void applyUserAction(ActionType type, long data, int targetUserId, @Nullable String duration, String reason,
 			@Nullable CachedMessage targetMessage, UserMessageAction targetMessageAction,
 			boolean notifyTarget, String privateReason,
 			DiscordBot bot, Server server, @Nullable TextChannel actingChannel, User actor, int actorUserId) throws Exception {
@@ -125,10 +124,10 @@ public final class ActionUtil {
 			Collection<CachedMessage> extraDeleted = switch (targetMessageAction) {
 			case CLEAN -> CleanCommand.clean(targetUserId, null, deleteReason, bot, server, actor);
 			case CLEAN_LOCAL -> {
-				ServerTextChannel channel;
+				TextChannel channel;
 
 				if (targetMessage != null
-						&& (channel = server.getTextChannelById(targetMessage.getChannelId()).orElse(null)) != null) {
+						&& (channel = targetMessage.getChannel(server)) != null) {
 					yield CleanCommand.clean(targetUserId, channel, deleteReason, bot, server, actor);
 				} else {
 					yield Collections.emptyList();
@@ -171,7 +170,7 @@ public final class ActionUtil {
 		public final boolean needsContext;
 	}
 
-	static void applyChannelAction(ActionType type, int data, long targetChannelId, String duration, @Nullable String reason,
+	static void applyChannelAction(ActionType type, long data, long targetChannelId, String duration, @Nullable String reason,
 			@Nullable String extraBodyDesc,
 			DiscordBot bot, Server server, TextChannel actingChannel, @Nullable User actor, int actorUserId) throws Exception {
 		applyAction(type, data, targetChannelId, duration, reason, null,
@@ -179,14 +178,14 @@ public final class ActionUtil {
 				bot, server, actingChannel, actor, actorUserId);
 	}
 
-	private static int applyAction(ActionType type, int data, long targetId, @Nullable String duration, @Nullable String reason,
+	private static int applyAction(ActionType type, long data, long targetId, @Nullable String duration, @Nullable String reason,
 			CachedMessage targetMessageContext,
 			@Nullable String extraBodyDesc, boolean notifyTarget, @Nullable String privateReason,
 			DiscordBot bot, Server server, TextChannel actingChannel, @Nullable User actor, int actorUserId) throws Exception {
 		// check for conflict
 
 		int prevId = -1;
-		Integer prevResetData = null;
+		Long prevResetData = null;
 
 		if (type.hasDuration()) {
 			ActiveActionEntry existingAction = ActionQueries.getActiveAction(bot.getDatabase(), targetId, type);
@@ -253,7 +252,7 @@ public final class ActionUtil {
 			throw new CommandException("The action is not applicable to the "+type.getKind().id);
 		}
 
-		Integer resetData = prevId >= 0 ? prevResetData : result.resetData();
+		Long resetData = prevId >= 0 ? prevResetData : result.resetData();
 
 		// create db record
 
@@ -298,7 +297,7 @@ public final class ActionUtil {
 
 		ActiveActionEntry entry = ActionQueries.getActiveAction(bot.getDatabase(), targetId, type);
 		int actionId;
-		Integer resetData;
+		Long resetData;
 
 		if (entry == null) {
 			actionId = -1;

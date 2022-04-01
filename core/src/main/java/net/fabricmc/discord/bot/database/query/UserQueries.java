@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -402,7 +402,27 @@ public final class UserQueries {
 				List<String> ret = new ArrayList<>();
 
 				while (res.next()) {
-					ret.add(res.getString(1));
+					ret.add(res.getString(2));
+				}
+
+				return ret;
+			}
+		}
+	}
+
+	public static Collection<Integer> getDirectGroupUsers(Database db, String group) throws SQLException {
+		if (db == null) throw new NullPointerException("null db");
+		if (group == null) throw new NullPointerException("null group");
+
+		try (Connection conn = db.getConnection();
+				PreparedStatement ps = conn.prepareStatement("SELECT ug.user_id FROM `group` g, `user_group` ug WHERE g.name = ? AND ug.group_id = g.id")) {
+			ps.setString(1, group);
+
+			try (ResultSet res = ps.executeQuery()) {
+				List<Integer> ret = new ArrayList<>();
+
+				while (res.next()) {
+					ret.add(IdArmor.encode(res.getInt(1)));
 				}
 
 				return ret;

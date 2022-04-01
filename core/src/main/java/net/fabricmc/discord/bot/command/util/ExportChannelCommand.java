@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import java.util.concurrent.CompletionException;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import org.javacord.api.entity.channel.ServerTextChannel;
+import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.message.MessageAttachment;
 import org.javacord.api.entity.message.MessageBuilder;
@@ -64,7 +64,7 @@ public final class ExportChannelCommand extends Command {
 
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
-		ServerTextChannel channel = getTextChannel(context, arguments.get("channel"));
+		TextChannel channel = getTextChannel(context, arguments.get("channel"));
 		boolean markBoundaries = Boolean.parseBoolean(arguments.getOrDefault("markBoundaries", "false"));
 
 		MessageSet messages = DiscordUtil.join(channel.getMessages(MSG_COUNT_LIMIT));

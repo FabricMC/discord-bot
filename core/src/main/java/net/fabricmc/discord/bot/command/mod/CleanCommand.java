@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
 
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import org.javacord.api.entity.channel.ServerTextChannel;
+import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.entity.user.User;
@@ -68,7 +68,7 @@ public final class CleanCommand extends Command {
 			checkImmunity(context, targetDiscordUserId, true);
 
 			String targetChannelName = arguments.get("channel");
-			ServerTextChannel targetChannel = targetChannelName != null ? getTextChannel(context, targetChannelName) : null;
+			TextChannel targetChannel = targetChannelName != null ? getTextChannel(context, targetChannelName) : null;
 
 			List<ChannelEntry> actions = new ArrayList<>();
 			int count = gatherActions(LongSet.of(targetDiscordUserId), targetChannel, context.bot(), context.server(), context.user(), actions);
@@ -99,11 +99,11 @@ public final class CleanCommand extends Command {
 		return true;
 	}
 
-	private static int gatherActions(LongSet targetDiscordUserIds, ServerTextChannel targetChannel, DiscordBot bot, Server server, User actor, List<ChannelEntry> actions) {
-		Collection<ServerTextChannel> targetChannels = targetChannel != null ? Collections.singletonList(targetChannel) : server.getTextChannels();
+	private static int gatherActions(LongSet targetDiscordUserIds, TextChannel targetChannel, DiscordBot bot, Server server, User actor, List<ChannelEntry> actions) {
+		Collection<TextChannel> targetChannels = targetChannel != null ? Collections.singletonList(targetChannel) : DiscordUtil.getTextChannels(server);
 		int count = 0;
 
-		for (ServerTextChannel channel : targetChannels) {
+		for (TextChannel channel : targetChannels) {
 			if (!hasMessageDeleteAccess(actor, channel)) continue;
 
 			Collection<CachedMessage> messages = bot.getMessageIndex().getAllByAuthors(targetDiscordUserIds, channel, false);
@@ -152,7 +152,7 @@ public final class CleanCommand extends Command {
 		}
 	}
 
-	static Collection<CachedMessage> clean(int targetUserId, ServerTextChannel targetChannel, String reason, DiscordBot bot, Server server, User actor) throws DiscordException {
+	static Collection<CachedMessage> clean(int targetUserId, TextChannel targetChannel, String reason, DiscordBot bot, Server server, User actor) throws DiscordException {
 		LongSet targetDiscordUserIds = new LongOpenHashSet(bot.getUserHandler().getDiscordUserIds(targetUserId));
 
 		List<ChannelEntry> actions = new ArrayList<>();
@@ -168,5 +168,5 @@ public final class CleanCommand extends Command {
 		return ret;
 	}
 
-	private record ChannelEntry(ServerTextChannel channel, Collection<CachedMessage> messages) { }
+	private record ChannelEntry(TextChannel channel, Collection<CachedMessage> messages) { }
 }

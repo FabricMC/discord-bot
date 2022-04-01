@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,8 +54,8 @@ public final class ActionQueries {
 
 				ActionType type = ActionType.get(res.getString(1), res.getString(2));
 
-				int dataVal = res.getInt(3);
-				ActionData data = res.wasNull() ? null : new ActionData(dataVal, res.getInt(4));
+				long dataVal = res.getLong(3);
+				ActionData data = res.wasNull() ? null : new ActionData(dataVal, res.getLong(4));
 
 				int rawSuspenderUserId = res.getInt(12);
 				if (res.wasNull()) rawSuspenderUserId = -1;
@@ -101,8 +101,8 @@ public final class ActionQueries {
 				while (res.next()) {
 					ActionType type = ActionType.get(res.getString(2), res.getString(3));
 
-					int dataVal = res.getInt(4);
-					ActionData data = res.wasNull() ? null : new ActionData(dataVal, res.getInt(5));
+					long dataVal = res.getLong(4);
+					ActionData data = res.wasNull() ? null : new ActionData(dataVal, res.getLong(5));
 
 					int rawSuspenderUserId = res.getInt(12);
 					if (res.wasNull()) rawSuspenderUserId = -1;
@@ -172,8 +172,8 @@ public final class ActionQueries {
 			if (data != null) {
 				try (PreparedStatement psData = conn.prepareStatement("INSERT INTO `actiondata` (action_id, data, resetdata) VALUES (?, ?, ?)")) {
 					psData.setInt(1, rawActionId);
-					psData.setInt(2, data.data);
-					psData.setInt(3, data.resetData);
+					psData.setLong(2, data.data);
+					psData.setLong(3, data.resetData);
 					psData.executeUpdate();
 				}
 			}
@@ -287,7 +287,7 @@ public final class ActionQueries {
 			String reason, long contextMessageId, int prevId,
 			int suspenderUserId, long suspensionTime, String suspendReason) { }
 
-	public record ActionData(int data, int resetData) { }
+	public record ActionData(long data, long resetData) { }
 
 	public static Collection<ExpiringActionEntry> getExpiringActions(Database db, long maxTime) throws SQLException {
 		if (db == null) throw new NullPointerException("null db");
@@ -307,8 +307,8 @@ public final class ActionQueries {
 				while (res.next()) {
 					ActionType type = ActionType.get(res.getString(2), res.getString(3));
 
-					int dataVal = res.getInt(4);
-					ActionData data = res.wasNull() ? null : new ActionData(dataVal, res.getInt(5));
+					long dataVal = res.getLong(4);
+					ActionData data = res.wasNull() ? null : new ActionData(dataVal, res.getLong(5));
 
 					ret.add(new ExpiringActionEntry(IdArmor.encode(res.getInt(1)), // id
 							type, // type
@@ -413,8 +413,8 @@ public final class ActionQueries {
 			try (ResultSet res = ps.executeQuery()) {
 				if (!res.next()) return null;
 
-				int dataVal = res.getInt(2);
-				ActionData data = res.wasNull() ? null : new ActionData(dataVal, res.getInt(3));
+				long dataVal = res.getLong(2);
+				ActionData data = res.wasNull() ? null : new ActionData(dataVal, res.getLong(3));
 
 				return new ActiveActionEntry(IdArmor.encode(res.getInt(1)), // id
 						type, // type
@@ -446,8 +446,8 @@ public final class ActionQueries {
 				List<ActiveActionEntry> ret = new ArrayList<>();
 
 				do {
-					int dataVal = res.getInt(3);
-					ActionData data = res.wasNull() ? null : new ActionData(dataVal, res.getInt(4));
+					long dataVal = res.getLong(3);
+					ActionData data = res.wasNull() ? null : new ActionData(dataVal, res.getLong(4));
 
 					ret.add(new ActiveActionEntry(IdArmor.encode(res.getInt(1)), // id
 							ActionType.get(kind.id, res.getString(2)), // type
@@ -507,8 +507,8 @@ public final class ActionQueries {
 				while (res.next()) {
 					ActionType type = ActionType.get(res.getString(2), res.getString(3));
 
-					int dataVal = res.getInt(4);
-					ActionData data = res.wasNull() ? null : new ActionData(dataVal, res.getInt(5));
+					long dataVal = res.getLong(4);
+					ActionData data = res.wasNull() ? null : new ActionData(dataVal, res.getLong(5));
 
 					ret.add(new ActiveActionEntry(IdArmor.encode(res.getInt(1)), // id
 							type, // type

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.javacord.api.entity.channel.ServerChannel;
-import org.javacord.api.entity.channel.ServerTextChannel;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.MessageAttachment;
 import org.javacord.api.entity.server.Server;
@@ -120,7 +119,7 @@ public abstract class Command {
 		ServerChannel ret = getChannelUnchecked(context, channel);
 
 		if (!ret.canYouSee()
-				|| ret instanceof ServerTextChannel && !((ServerTextChannel) ret).canYouReadMessageHistory()
+				|| ret instanceof TextChannel && !((TextChannel) ret).canYouReadMessageHistory()
 				|| !ret.canSee(context.user())) {
 			throw new CommandException("Inaccessible channel");
 		}
@@ -163,11 +162,11 @@ public abstract class Command {
 		return matches.get(0);
 	}
 
-	public static ServerTextChannel getTextChannel(CommandContext context, String channel) throws CommandException {
+	public static TextChannel getTextChannel(CommandContext context, String channel) throws CommandException {
 		ServerChannel ret = getChannel(context, channel);
 
-		if (ret instanceof ServerTextChannel) {
-			return (ServerTextChannel) ret;
+		if (ret instanceof TextChannel) {
+			return (TextChannel) ret;
 		} else {
 			throw new CommandException("Not a text channel");
 		}

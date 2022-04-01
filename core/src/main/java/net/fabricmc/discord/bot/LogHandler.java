@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
+import net.fabricmc.discord.bot.util.DiscordUtil;
 
 public final class LogHandler {
 	private static final Logger LOGGER = LogManager.getLogger(LogHandler.class);
@@ -46,7 +47,7 @@ public final class LogHandler {
 		long channelId = bot.getConfigEntry(LOG_CHANNEL);
 
 		if (channelId >= 0) {
-			TextChannel channel = server.getTextChannelById(channelId).orElse(null);
+			TextChannel channel = DiscordUtil.getTextChannel(server, channelId);
 
 			if (channel == null) {
 				LOGGER.warn("invalid log channel: {}", channelId);

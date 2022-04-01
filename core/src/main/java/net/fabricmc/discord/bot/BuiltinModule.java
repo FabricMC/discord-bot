@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021 FabricMC
+ * Copyright (c) 2020, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,6 +77,7 @@ final class BuiltinModule implements Module, MessageCreateListener {
 
 	@Override
 	public void registerConfigEntries(DiscordBot bot) {
+		HelpCommand.registerConfigEntries(bot);
 	}
 
 	@Override

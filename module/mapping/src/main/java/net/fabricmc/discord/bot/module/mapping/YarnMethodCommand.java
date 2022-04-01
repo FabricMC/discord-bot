@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -92,9 +92,9 @@ public final class YarnMethodCommand extends Command {
 				}
 			}
 
-			sb.append(String.format("\n**Yarn Method Descriptor**\n\n```%s```\n"
-					+ "**Yarn Access Widener**\n\n```accessible\tmethod\t%s\t%s\t%s```",
-					result.getDesc("yarn"),
+			sb.append(String.format("\n**Yarn Method Descriptor**\n\n```%3$s```\n"
+					+ "**Yarn Access Widener**\n\n```accessible\tmethod\t%1$s\t%2$s\t%3$s```\n"
+					+ "**Yarn Mixin Target**\n\n```L%1$s;%2$s%3$s```",
 					result.getOwner().getName("yarn"),
 					result.getName("yarn"),
 					result.getDesc("yarn")));

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 
 package net.fabricmc.discord.bot.command.mod;
 
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.sql.SQLException;
 import java.util.List;
 
@@ -229,25 +231,34 @@ public enum UserActionType implements ActionType {
 		this.id = id;
 		this.hasDuration = hasDuration;
 		this.blocksMessages = blocksMessages;
-		this.hasDeactivation = isMethodOverridden(getClass(), "deactivate", Server.class, long.class, String.class, DiscordBot.class);
+		this.hasDeactivation = isMethodOverridden(getClass(), "deactivate");
 		this.notificationBarrier = notificationBarrier;
 		this.hasDedicatedCommand = hasDedicatedCommand;
 	}
 
-	static boolean isMethodOverridden(Class<?> owner, String name, Class<?>... args) {
+	static boolean isMethodOverridden(Class<?> owner, String name) {
 		if (owner == UserActionType.class) return false;
 
-		try {
-			try {
-				owner.getDeclaredMethod(name, args); // throws if missing
-				return true;
-			} catch (NoSuchMethodException e) {
-				owner.getSuperclass().getDeclaredMethod(name, args); // ensures the parent has it
-				return false;
-			}
-		} catch (ReflectiveOperationException e) {
-			throw new RuntimeException(e);
+		if (hasVirtualMethod(owner, name)) return true; // throws if missing
+		if (hasVirtualMethod(owner.getSuperclass(), name)) return false; // ensures the parent has it
+
+		throw new IllegalArgumentException("invalid method: "+name);
+	}
+
+	private static boolean hasVirtualMethod(Class<?> owner, String name) {
+		boolean ret = false;
+
+		for (Method m : owner.getDeclaredMethods()) {
+			if (!m.getName().equals(name)) continue;
+			int mod = m.getModifiers();
+			if (Modifier.isStatic(mod) || Modifier.isFinal(mod) || Modifier.isPrivate(mod)) continue;
+
+			if (ret) throw new IllegalArgumentException("non-unique virtual method "+name+" in "+owner.getName());
+
+			ret = true;
 		}
+
+		return ret;
 	}
 
 	@Override
@@ -281,7 +292,7 @@ public enum UserActionType implements ActionType {
 	}
 
 	@Override
-	public final ActivateResult activate(Server server, long targetId, boolean isDirect, int data, @Nullable String reason, DiscordBot bot) throws DiscordException {
+	public final ActivateResult activate(Server server, long targetId, boolean isDirect, long data, @Nullable String reason, DiscordBot bot) throws DiscordException {
 		int count = 0;
 
 		if (isDirect) {
@@ -310,7 +321,7 @@ public enum UserActionType implements ActionType {
 	protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException { }
 
 	@Override
-	public final void deactivate(Server server, long targetId, Integer resetData, @Nullable String reason, DiscordBot bot) throws DiscordException {
+	public final void deactivate(Server server, long targetId, Long resetData, @Nullable String reason, DiscordBot bot) throws DiscordException {
 		if (!hasDeactivation) return;
 
 		LongList targets = bot.getUserHandler().getDiscordUserIds((int) targetId);
@@ -327,7 +338,7 @@ public enum UserActionType implements ActionType {
 	protected void deactivate(Server server, long targetDiscordUserId, @Nullable String reason, DiscordBot bot) throws DiscordException { }
 
 	@Override
-	public final boolean isActive(Server server, long targetId, int data, DiscordBot bot) {
+	public final boolean isActive(Server server, long targetId, long data, DiscordBot bot) {
 		LongList targets = bot.getUserHandler().getDiscordUserIds((int) targetId);
 		boolean ret = false;
 

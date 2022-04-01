@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 package net.fabricmc.discord.bot.command.mod;
 
+import org.javacord.api.entity.channel.RegularServerChannel;
 import org.javacord.api.entity.channel.ServerChannel;
 import org.javacord.api.entity.channel.ServerTextChannel;
 import org.javacord.api.entity.permission.PermissionType;
@@ -30,93 +31,101 @@ import net.fabricmc.discord.bot.util.DiscordUtil;
 
 public enum ChannelActionType implements ActionType {
 	LOCK("lock", true) {
+		@SuppressWarnings("unchecked")
 		@Override
-		protected Integer activate(Server server, ServerChannel target, int data, @Nullable String reason, DiscordBot bot) throws DiscordException {
-			if (NOP_MODE) return 0;
+		protected Long activate(Server server, ServerChannel target, long data, @Nullable String reason, DiscordBot bot) throws DiscordException {
+			if (!(target instanceof RegularServerChannel)) return null;
+			if (NOP_MODE) return 0L;
 
+			RegularServerChannel channel = (RegularServerChannel) target;
 			Role role = server.getEveryoneRole();
-			Permissions oldPerms = target.getOverwrittenPermissions(role);
-			int extraDenyMask = (restrictedPerms & (int) ~oldPerms.getDeniedBitmask());
-			if (extraDenyMask == 0) return 0;
+			Permissions oldPerms = channel.getOverwrittenPermissions(role);
+			long extraDenyMask = (restrictedPerms & ~oldPerms.getDeniedBitmask());
+			if (extraDenyMask == 0) return 0L;
 
-			DiscordUtil.join(target.createUpdater()
-					.addPermissionOverwrite(role, Permissions.fromBitmask((int) oldPerms.getAllowedBitmask(), (int) oldPerms.getDeniedBitmask() | extraDenyMask))
+			DiscordUtil.join(channel.createUpdater()
+					.addPermissionOverwrite(role, Permissions.fromBitmask(oldPerms.getAllowedBitmask(), oldPerms.getDeniedBitmask() | extraDenyMask))
 					.setAuditLogReason(reason)
 					.update());
 
 			return extraDenyMask;
 		}
 
+		@SuppressWarnings("unchecked")
 		@Override
-		protected void deactivate(Server server, ServerChannel target, Integer resetData, @Nullable String reason, DiscordBot bot) throws DiscordException {
+		protected void deactivate(Server server, ServerChannel target, Long resetData, @Nullable String reason, DiscordBot bot) throws DiscordException {
+			if (!(target instanceof RegularServerChannel)) return;
 			if (NOP_MODE) return;
 			if (resetData == null) resetData = restrictedPerms;
 
 			assert (resetData & ~restrictedPerms) == 0;
 
+			RegularServerChannel channel = (RegularServerChannel) target;
 			Role role = server.getEveryoneRole();
-			Permissions oldPerms = target.getOverwrittenPermissions(role);
+			Permissions oldPerms = channel.getOverwrittenPermissions(role);
 			if ((oldPerms.getDeniedBitmask() & resetData) == 0) return;
 
-			DiscordUtil.join(target.createUpdater()
-					.addPermissionOverwrite(role, Permissions.fromBitmask((int) oldPerms.getAllowedBitmask(), (int) oldPerms.getDeniedBitmask() & ~resetData))
+			DiscordUtil.join(channel.createUpdater()
+					.addPermissionOverwrite(role, Permissions.fromBitmask(oldPerms.getAllowedBitmask(), oldPerms.getDeniedBitmask() & ~resetData))
 					.setAuditLogReason(reason)
 					.update());
 		}
 
 		@Override
-		protected boolean isActive(Server server, ServerChannel target, int data, DiscordBot bot) {
-			return (target.getOverwrittenPermissions(server.getEveryoneRole()).getDeniedBitmask() & restrictedPerms) == restrictedPerms;
+		protected boolean isActive(Server server, ServerChannel target, long data, DiscordBot bot) {
+			return target instanceof RegularServerChannel
+					&& (((RegularServerChannel) target).getOverwrittenPermissions(server.getEveryoneRole()).getDeniedBitmask() & restrictedPerms) == restrictedPerms;
 		}
 
-		private final int restrictedPerms = PermissionType.ADD_REACTIONS.getValue() | PermissionType.SEND_MESSAGES.getValue();
+		private final long restrictedPerms = PermissionType.ADD_REACTIONS.getValue() | PermissionType.SEND_MESSAGES.getValue();
 	},
 	SLOWMODE("slowmode", true) {
 		@Override
-		protected Integer activate(Server server, ServerChannel target, int data, @Nullable String reason, DiscordBot bot) throws DiscordException {
+		protected Long activate(Server server, ServerChannel target, long data, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			assert data > 0;
 
 			if (!(target instanceof ServerTextChannel)) return null;
-			if (NOP_MODE) return 0;
+			if (NOP_MODE) return 0L;
 
 			ServerTextChannel channel = (ServerTextChannel) target;
 			int oldSlowmode = channel.getSlowmodeDelayInSeconds();
 
 			DiscordUtil.join(channel.createUpdater()
-					.setSlowmodeDelayInSeconds(data)
+					.setSlowmodeDelayInSeconds((int) data)
 					.setAuditLogReason(reason)
 					.update());
 
-			return oldSlowmode;
+			return (long) oldSlowmode;
 		}
 
 		@Override
-		protected void deactivate(Server server, ServerChannel target, Integer resetData, @Nullable String reason, DiscordBot bot) throws DiscordException {
-			if (NOP_MODE) return;
+		protected void deactivate(Server server, ServerChannel target, Long resetData, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (!(target instanceof ServerTextChannel)) return;
-			if (resetData == null) resetData = 0;
+			if (NOP_MODE) return;
+			if (resetData == null) resetData = 0L;
 
 			ServerTextChannel channel = (ServerTextChannel) target;
 			if (channel.getSlowmodeDelayInSeconds() <= resetData) return;
 
 			DiscordUtil.join(channel.createUpdater()
-					.setSlowmodeDelayInSeconds(resetData)
+					.setSlowmodeDelayInSeconds(resetData.intValue())
 					.setAuditLogReason(reason)
 					.update());
 		}
 
 		@Override
-		protected boolean isActive(Server server, ServerChannel target, int data, DiscordBot bot) {
-			return target instanceof ServerTextChannel && ((ServerTextChannel) target).getSlowmodeDelayInSeconds() >= data;
+		protected boolean isActive(Server server, ServerChannel target, long data, DiscordBot bot) {
+			return target instanceof ServerTextChannel
+					&& ((ServerTextChannel) target).getSlowmodeDelayInSeconds() >= data;
 		}
 
 		@Override
-		public int compareData(int dataA, int dataB) {
-			return Integer.compare(dataA, dataB);
+		public int compareData(long dataA, long dataB) {
+			return Long.compare(dataA, dataB);
 		}
 
 		@Override
-		public boolean checkData(int data, int prevResetData) {
+		public boolean checkData(long data, long prevResetData) {
 			return data > prevResetData;
 		}
 	};
@@ -130,7 +139,7 @@ public enum ChannelActionType implements ActionType {
 	ChannelActionType(String id, boolean hasDuration) {
 		this.id = id;
 		this.hasDuration = hasDuration;
-		this.hasDeactivation = UserActionType.isMethodOverridden(getClass(), "deactivate", Server.class, ServerChannel.class, Integer.class, String.class, DiscordBot.class);
+		this.hasDeactivation = UserActionType.isMethodOverridden(getClass(), "deactivate");
 	}
 
 	@Override
@@ -169,39 +178,37 @@ public enum ChannelActionType implements ActionType {
 	}
 
 	@Override
-	public final ActivateResult activate(Server server, long targetId, boolean isDirect, int data, @Nullable String reason, DiscordBot bot) throws DiscordException {
+	public final ActivateResult activate(Server server, long targetId, boolean isDirect, long data, @Nullable String reason, DiscordBot bot) throws DiscordException {
 		ServerChannel channel = server.getChannelById(targetId).orElse(null);
-		if (channel == null) return new ActivateResult(true, 0, null);
 
-		Integer resetData = activate(server, channel, data, reason, bot);
+		Long resetData = activate(server, channel, data, reason, bot);
 
 		return new ActivateResult(resetData != null, 1, resetData);
 	}
 
-	protected Integer activate(Server server, ServerChannel target, int data, @Nullable String reason, DiscordBot bot) throws DiscordException {
+	protected Long activate(Server server, ServerChannel target, long data, @Nullable String reason, DiscordBot bot) throws DiscordException {
 		return null;
 	}
 
 	@Override
-	public final void deactivate(Server server, long targetId, Integer resetData, @Nullable String reason, DiscordBot bot) throws DiscordException {
+	public final void deactivate(Server server, long targetId, Long resetData, @Nullable String reason, DiscordBot bot) throws DiscordException {
 		if (!hasDeactivation) return;
 
 		ServerChannel targetChannel = server.getChannelById(targetId).orElse(null);
-		if (targetChannel == null) return;
 
 		deactivate(server, targetChannel, resetData, reason, bot);
 	}
 
-	protected void deactivate(Server server, ServerChannel target, Integer resetData, @Nullable String reason, DiscordBot bot) throws DiscordException { }
+	protected void deactivate(Server server, ServerChannel target, Long resetData, @Nullable String reason, DiscordBot bot) throws DiscordException { }
 
 	@Override
-	public final boolean isActive(Server server, long targetId, int data, DiscordBot bot) {
+	public final boolean isActive(Server server, long targetId, long data, DiscordBot bot) {
 		ServerChannel targetChannel = server.getChannelById(targetId).orElse(null);
 
-		return targetChannel != null && isActive(server, targetChannel, data, bot);
+		return isActive(server, targetChannel, data, bot);
 	}
 
-	protected boolean isActive(Server server, ServerChannel target, int data, DiscordBot bot) {
+	protected boolean isActive(Server server, ServerChannel target, long data, DiscordBot bot) {
 		return false;
 	}
 }

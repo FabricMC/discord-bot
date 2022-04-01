@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,16 +34,22 @@ import it.unimi.dsi.fastutil.longs.Long2IntMap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongIterator;
+import it.unimi.dsi.fastutil.longs.LongList;
 import it.unimi.dsi.fastutil.longs.LongSet;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.javacord.api.entity.channel.Channel;
 import org.javacord.api.entity.channel.ServerChannel;
-import org.javacord.api.entity.channel.ServerTextChannel;
+import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.event.channel.server.ServerChannelChangeOverwrittenPermissionsEvent;
 import org.javacord.api.event.channel.server.ServerChannelCreateEvent;
 import org.javacord.api.event.channel.server.ServerChannelDeleteEvent;
+import org.javacord.api.event.channel.thread.ThreadCreateEvent;
+import org.javacord.api.event.channel.thread.ThreadDeleteEvent;
 import org.javacord.api.event.message.MessageCreateEvent;
 import org.javacord.api.event.message.MessageDeleteEvent;
 import org.javacord.api.event.message.MessageEditEvent;
@@ -53,6 +59,8 @@ import org.javacord.api.listener.ChainableGloballyAttachableListenerManager;
 import org.javacord.api.listener.channel.server.ServerChannelChangeOverwrittenPermissionsListener;
 import org.javacord.api.listener.channel.server.ServerChannelCreateListener;
 import org.javacord.api.listener.channel.server.ServerChannelDeleteListener;
+import org.javacord.api.listener.channel.server.thread.ServerThreadChannelCreateListener;
+import org.javacord.api.listener.channel.server.thread.ServerThreadChannelDeleteListener;
 import org.javacord.api.listener.message.MessageCreateListener;
 import org.javacord.api.listener.message.MessageDeleteListener;
 import org.javacord.api.listener.message.MessageEditListener;
@@ -61,7 +69,9 @@ import org.jetbrains.annotations.Nullable;
 import net.fabricmc.discord.bot.util.DiscordUtil;
 
 public final class MessageIndex implements MessageCreateListener, MessageDeleteListener,
-ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
+ServerChannelCreateListener, ServerChannelDeleteListener,
+ServerThreadChannelCreateListener, ServerThreadChannelDeleteListener,
+ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 	private static final int INIT_LIMIT = 1000;
 	private static final int MESSAGE_LIMIT = 10000;
 
@@ -69,10 +79,12 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 	private static final Pattern MESSAGE_LINK_PATTERN = Pattern.compile(String.format("https://(?:%s)/channels/(@me|\\d+)/(\\d+)/(\\d+)",
 			Arrays.stream(DISCORD_DOMAINS).map(Pattern::quote).collect(Collectors.joining("|"))));
 
+	private static final Logger LOGGER = LogManager.getLogger(MessageIndex.class);
+
 	private final DiscordBot bot;
 	private final List<MessageCreateHandler> createHandlers = new CopyOnWriteArrayList<>();
 	private final List<MessageDeleteHandler> deleteHandlers = new CopyOnWriteArrayList<>();
-	private final Map<ServerTextChannel, ChannelMessageCache> channelCaches = new ConcurrentHashMap<>();
+	private final Map<TextChannel, ChannelMessageCache> channelCaches = new ConcurrentHashMap<>();
 	private final Long2ObjectMap<CachedMessage> globalIndex = new Long2ObjectOpenHashMap<>();
 
 	public MessageIndex(DiscordBot bot) {
@@ -102,7 +114,7 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		return ret != null ? ret : new CachedMessage(message);
 	}
 
-	public @Nullable CachedMessage get(ServerTextChannel channel, long id) {
+	public @Nullable CachedMessage get(TextChannel channel, long id) {
 		ChannelMessageCache cache = channelCaches.get(channel);
 		if (cache == null) return null;
 
@@ -111,7 +123,7 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		}
 	}
 
-	public Collection<CachedMessage> getAll(ServerTextChannel channel, boolean includeDeleted) {
+	public Collection<CachedMessage> getAll(TextChannel channel, boolean includeDeleted) {
 		List<CachedMessage> res = new ArrayList<>();
 
 		accept(channel, msg -> {
@@ -151,7 +163,7 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		return ret;
 	}
 
-	public Collection<CachedMessage> getAllByAuthors(LongSet authorDiscordIds, ServerTextChannel channel, boolean includeDeleted) {
+	public Collection<CachedMessage> getAllByAuthors(LongSet authorDiscordIds, TextChannel channel, boolean includeDeleted) {
 		if (authorDiscordIds.isEmpty()) return Collections.emptyList();
 
 		List<CachedMessage> res = new ArrayList<>();
@@ -174,7 +186,7 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 			String guild = matcher.group(1);
 
 			if (!guild.equals("@me") && server != null && server.getId() == Long.parseUnsignedLong(guild)) {
-				ServerTextChannel channel = server.getTextChannelById(Long.parseUnsignedLong(matcher.group(2))).orElse(null);
+				TextChannel channel = DiscordUtil.getTextChannel(server, Long.parseUnsignedLong(matcher.group(2)));
 				if (channel == null) return null;
 
 				long msgId = Long.parseUnsignedLong(matcher.group(3));
@@ -211,7 +223,7 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		}
 	}
 
-	public void accept(ServerTextChannel channel, Visitor visitor, boolean includeDeleted) {
+	public void accept(TextChannel channel, Visitor visitor, boolean includeDeleted) {
 		Objects.requireNonNull(channel, "null channel");
 
 		ChannelMessageCache cache = channelCaches.get(channel);
@@ -222,11 +234,11 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		}
 	}
 
-	public Collection<ServerTextChannel> getCachedChannels() {
+	public Collection<TextChannel> getCachedChannels() {
 		return channelCaches.keySet();
 	}
 
-	public int getSize(ServerTextChannel channel) {
+	public int getSize(TextChannel channel) {
 		ChannelMessageCache cache = channelCaches.get(channel);
 		if (cache == null) return 0;
 
@@ -238,6 +250,8 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 	void registerEarlyHandlers(ChainableGloballyAttachableListenerManager src) {
 		src.addServerChannelCreateListener(this);
 		src.addServerChannelDeleteListener(this);
+		src.addServerThreadChannelCreateListener(this);
+		src.addServerThreadChannelDeleteListener(this);
 		src.addServerChannelChangeOverwrittenPermissionsListener(this);
 		src.addMessageCreateListener(this);
 		src.addMessageEditListener(this);
@@ -245,11 +259,17 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 	}
 
 	private void init(Server server, long lastActiveTime) {
-		for (ServerTextChannel channel : server.getTextChannels()) {
+		LongList invalidChannels = new LongArrayList();
+
+		for (TextChannel channel : DiscordUtil.getTextChannels(server)) {
 			if (isValidChannel(channel)) {
 				initChannel(channel);
+			} else {
+				invalidChannels.add(channel.getId());
 			}
 		}
+
+		if (!invalidChannels.isEmpty()) LOGGER.info("Skipping inaccessible channels {}", invalidChannels);
 	}
 
 	private void reset(Server server) {
@@ -261,46 +281,62 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 	}
 
 	private boolean isValidChannel(Channel channel) {
-		if (!(channel instanceof ServerTextChannel)) return false;
+		if (!(channel instanceof TextChannel)) return false;
 
-		ServerTextChannel textChannel = (ServerTextChannel) channel;
+		TextChannel textChannel = (TextChannel) channel;
 
 		return textChannel.canYouSee() && textChannel.canYouReadMessageHistory();
 	}
 
-	private void initChannel(ServerTextChannel channel) {
-		ChannelMessageCache cache = new ChannelMessageCache();
+	private void initChannel(TextChannel channel) {
+		ChannelMessageCache cache = channelCaches.computeIfAbsent(channel, ignore -> new ChannelMessageCache());
 
 		synchronized (cache) {
-			if (channelCaches.putIfAbsent(channel, cache) != null) return;
-
 			try {
 				for (Message message : DiscordUtil.join(channel.getMessages(Math.min(INIT_LIMIT, MESSAGE_LIMIT)))) {
 					cache.add(new CachedMessage(message));
 				}
 			} catch (DiscordException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				LOGGER.warn("Error initializing channel {}", channel.getId(), e);
 			}
 		}
 	}
 
 	@Override
 	public void onServerChannelCreate(ServerChannelCreateEvent event) {
-		if (event.getServer().getId() != bot.getServerId()) return;
-
-		ServerChannel channel = event.getChannel();
-
-		if (isValidChannel(channel)) {
-			initChannel((ServerTextChannel) channel);
-		}
+		onChannelCreate(event.getChannel());
 	}
 
 	@Override
 	public void onServerChannelDelete(ServerChannelDeleteEvent event) {
-		if (event.getServer().getId() != bot.getServerId()) return;
+		onChannelDelete(event.getChannel());
+	}
 
-		ChannelMessageCache prev = channelCaches.remove(event.getChannel());
+	@Override
+	public void onThreadCreate(ThreadCreateEvent event) {
+		onChannelCreate(event.getChannel());
+	}
+
+	@Override
+	public void onThreadDelete(ThreadDeleteEvent event) {
+		onChannelDelete(event.getChannel());
+	}
+
+	private void onChannelCreate(ServerChannel channel) {
+		if (channel.getServer().getId() != bot.getServerId()) return;
+
+		if (isValidChannel(channel)) {
+			initChannel((TextChannel) channel);
+		}
+	}
+
+	private void onChannelDelete(ServerChannel channel) {
+		if (channel.getServer().getId() != bot.getServerId()) return;
+		if (!(channel instanceof TextChannel)) return;
+
+		TextChannel textChannel = (TextChannel) channel;
+
+		ChannelMessageCache prev = channelCaches.remove(textChannel);
 
 		if (prev != null) {
 			prev.clear();
@@ -310,11 +346,12 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 	@Override
 	public void onServerChannelChangeOverwrittenPermissions(ServerChannelChangeOverwrittenPermissionsEvent event) {
 		if (event.getServer().getId() != bot.getServerId()) return;
+		if (!(event.getChannel() instanceof TextChannel)) return;
 
-		ServerChannel channel = event.getChannel();
+		TextChannel channel = (TextChannel) event.getChannel();
 
 		if (isValidChannel(channel)) {
-			initChannel((ServerTextChannel) channel);
+			initChannel(channel);
 		} else {
 			ChannelMessageCache prev = channelCaches.remove(channel);
 
@@ -330,7 +367,12 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 		if (server == null) return;
 
 		ChannelMessageCache cache = channelCaches.get(event.getChannel());
-		if (cache == null) return;
+
+		if (cache == null) {
+			LOGGER.warn("Received message {} on unknown channel {}", event.getMessageId(), event.getChannel().getId());
+			cache = new ChannelMessageCache();
+			channelCaches.put(event.getChannel(), cache);
+		}
 
 		CachedMessage msg = new CachedMessage(event.getMessage());
 
@@ -401,21 +443,63 @@ ServerChannelCreateListener, ServerChannelDeleteListener, ServerChannelChangeOve
 
 		boolean add(CachedMessage message) {
 			long key = message.getId();
-			if (index.putIfAbsent(key, writeIdx) >= 0) return false;
+			CachedMessage prev = messages[dec(writeIdx)];
+			CachedMessage replaced;
 
-			CachedMessage prev = messages[writeIdx];
+			if (prev != null && prev.compareCreationTime(message) > 0) { // last message is more recent
+				prev = messages[writeIdx];
+
+				if (prev != null && prev.compareCreationTime(message) >= 0 // first message is more recent or same age
+						|| index.containsKey(key)) {
+					return false;
+				}
+
+				// find insertion index (after most recent msg that isn't newer)
+
+				int start = prev != null ? 0 : messages.length - writeIdx; // prev == null means that the buffer never looped and writeIdx is the message count
+				int end = messages.length;
+
+				while (start < end) {
+					int pos = (start + end) / 2;
+					CachedMessage m = messages[(pos + writeIdx) % messages.length];
+
+					if (m == null || m.compareCreationTime(message) <= 0) {
+						start = pos + 1;
+					} else {
+						end = pos;
+					}
+				}
+
+				int insertIdx = (end + writeIdx) % messages.length;
+				assert insertIdx != writeIdx;
+				replaced = messages[writeIdx];
+
+				if (insertIdx < writeIdx) {
+					System.arraycopy(messages, insertIdx, messages, insertIdx + 1, writeIdx - insertIdx);
+				} else {
+					System.arraycopy(messages, 0, messages, 1, writeIdx);
+					messages[0] = messages[messages.length - 1];
+					System.arraycopy(messages, insertIdx, messages, insertIdx + 1, messages.length - insertIdx - 1);
+				}
+
+				messages[insertIdx] = message;
+				index.put(key, insertIdx);
+			} else {
+				if (index.putIfAbsent(key, writeIdx) >= 0) return false;
+				replaced = messages[writeIdx];
+				messages[writeIdx] = message;
+			}
 
 			synchronized (globalIndex) {
-				if (prev != null) {
-					long prevKey = prev.getId();
-					index.remove(prevKey);
-					globalIndex.remove(prevKey);
+				if (replaced != null) {
+					long replacedKey = replaced.getId();
+					index.remove(replacedKey);
+					globalIndex.remove(replacedKey);
 				}
 
 				globalIndex.put(key, message);
 			}
 
-			messages[writeIdx] = message;
 			writeIdx = inc(writeIdx);
 
 			return true;

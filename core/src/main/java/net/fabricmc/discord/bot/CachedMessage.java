@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.message.MessageAttachment;
 import org.javacord.api.entity.message.MessageAuthor;
+import org.javacord.api.entity.message.MessageType;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.exception.DiscordException;
 import org.javacord.api.exception.NotFoundException;
@@ -34,6 +35,7 @@ import net.fabricmc.discord.bot.util.DiscordUtil;
 public final class CachedMessage {
 	CachedMessage(Message message) {
 		this.id = message.getId();
+		this.type = message.getType();
 		this.channelId = message.getChannel().getId();
 
 		MessageAuthor author = message.getAuthor();
@@ -49,6 +51,7 @@ public final class CachedMessage {
 
 	CachedMessage(CachedMessage prev, String newContent, Instant editTime) {
 		this.id = prev.id;
+		this.type = prev.type;
 		this.channelId = prev.channelId;
 		this.authorId = prev.authorId;
 		this.content = newContent.equals(prev.content) ? prev.content : newContent;
@@ -89,12 +92,20 @@ public final class CachedMessage {
 		return id;
 	}
 
+	public MessageType getType() {
+		return type;
+	}
+
 	public Instant getCreationTime() {
 		return DiscordEntity.getCreationTimestamp(id);
 	}
 
 	public long getChannelId() {
 		return channelId;
+	}
+
+	public @Nullable TextChannel getChannel(Server server) {
+		return DiscordUtil.getTextChannel(server, channelId);
 	}
 
 	public long getAuthorDiscordId() {
@@ -138,7 +149,7 @@ public final class CachedMessage {
 	}
 
 	public @Nullable Message toMessage(Server server) throws DiscordException {
-		TextChannel channel = server.getTextChannelById(channelId).orElse(null);
+		TextChannel channel = getChannel(server);
 		if (channel == null) return null;
 
 		try {
@@ -148,10 +159,18 @@ public final class CachedMessage {
 		}
 	}
 
+	/**
+	 * @return <0 / 0 / >0 for this being older / same / newer
+	 */
+	public int compareCreationTime(CachedMessage o) {
+		return Long.compareUnsigned(id >>> 22, o.id >>> 22);
+	}
+
 	private static final CachedMessageAttachment[] emptyAttachments = new CachedMessageAttachment[0];
 	private static final long[] emptyMentions = new long[0];
 
 	private final long id;
+	private final MessageType type;
 	private final long channelId;
 	private final long authorId;
 	private final String content;

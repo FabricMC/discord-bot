@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,9 +57,9 @@ public interface ActionType {
 		return true;
 	}
 
-	ActivateResult activate(Server server, long targetId, boolean isDirect, int data, @Nullable String reason, DiscordBot bot) throws DiscordException;
-	void deactivate(Server server, long targetId, Integer resetData, String reason, DiscordBot bot) throws DiscordException;
-	boolean isActive(Server server, long targetId, int data, DiscordBot bot);
+	ActivateResult activate(Server server, long targetId, boolean isDirect, long data, @Nullable String reason, DiscordBot bot) throws DiscordException;
+	void deactivate(Server server, long targetId, Long resetData, String reason, DiscordBot bot) throws DiscordException;
+	boolean isActive(Server server, long targetId, long data, DiscordBot bot);
 
 	/**
 	 * Compare two data values to determine precedence.
@@ -68,14 +68,14 @@ public interface ActionType {
 	 * @param dataB
 	 * @return 0 for equal, <0 if b is higher/supersedes a, >0 if a is higher/supersedes b
 	 */
-	default int compareData(int dataA, int dataB) {
+	default int compareData(long dataA, long dataB) {
 		return 0;
 	}
 
 	/**
 	 * Determine whether the data value is applicable considering the previous reset data.
 	 */
-	default boolean checkData(int data, int prevResetData) {
+	default boolean checkData(long data, long prevResetData) {
 		return true;
 	}
 
@@ -110,5 +110,5 @@ public interface ActionType {
 		}
 	}
 
-	public record ActivateResult(boolean applicable, int targets, Integer resetData) { }
+	public record ActivateResult(boolean applicable, int targets, Long resetData) { }
 }

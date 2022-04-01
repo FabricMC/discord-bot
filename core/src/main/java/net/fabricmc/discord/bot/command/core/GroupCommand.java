@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,16 @@
 
 package net.fabricmc.discord.bot.command.core;
 
+import java.util.Collection;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.database.query.UserQueries;
+import net.fabricmc.discord.bot.util.DiscordUtil;
 
 public final class GroupCommand extends Command {
 	@Override
@@ -32,7 +35,7 @@ public final class GroupCommand extends Command {
 
 	@Override
 	public String usage() {
-		return "list [<user>] | (add|remove) [<user>] <group> | listsub <group> | (addsub|removesub) <parent> <child>";
+		return "list [<user>] | listusers <group> | (add|remove) [<user>] <group> | listsub <group> | (addsub|removesub) <parent> <child>";
 	}
 
 	@Override
@@ -47,7 +50,7 @@ public final class GroupCommand extends Command {
 
 			switch (arguments.get("unnamed_0")) {
 			case "list":
-				context.channel().sendMessage(String.format("Groups for %s: %s",
+				DiscordUtil.sendMentionlessMessage(context.channel(), String.format("Groups for %s: %s",
 						context.bot().getUserHandler().formatUser(userId, context.server()),
 						String.join(", ", UserQueries.getDirectGroups(context.bot().getDatabase(), userId))));
 				return true;
@@ -65,6 +68,24 @@ public final class GroupCommand extends Command {
 
 				context.channel().sendMessage("User %s removed from group".formatted(context.bot().getUserHandler().formatUser(userId, context.server())));
 				return true;
+			}
+		} else if (arguments.containsKey("group")) {
+			String group = arguments.get("group");
+
+			switch (arguments.get("unnamed_0")) {
+			case "listusers": {
+				Collection<Integer> userIds = UserQueries.getDirectGroupUsers(context.bot().getDatabase(), group);
+
+				if (userIds.isEmpty()) {
+					context.channel().sendMessage(String.format("The group %s doesn't have any users", group));
+				} else {
+					DiscordUtil.sendMentionlessMessage(context.channel(), String.format("Users directly in group %s: %s",
+							group,
+							userIds.stream().map(userId -> context.bot().getUserHandler().formatUser(userId, context.server())).collect(Collectors.joining(", "))));
+				}
+
+				return true;
+			}
 			}
 		} else { // group handling itself
 			switch (arguments.get("unnamed_0")) {

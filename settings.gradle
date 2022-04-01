@@ -3,7 +3,7 @@ rootProject.name = "thimble"
 include("core")
 include("tag-parser")
 
-["fabricversion", "mapping", "mcversion", "tag", "test"].each {
+["automod", "fabricversion", "mapping", "mcversion", "tag", "test"].each {
     include(it)
 
     def module = project(":$it")

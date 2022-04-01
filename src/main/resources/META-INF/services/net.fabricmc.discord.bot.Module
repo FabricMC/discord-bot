@@ -2,6 +2,7 @@
 # To load a new module, simply add a new entry below.
 #
 # Do not add the builtin module to this service file!
+net.fabricmc.discord.bot.module.automod.AutoModModule
 net.fabricmc.discord.bot.module.fabricversion.FabricVersionModule
 net.fabricmc.discord.bot.module.mapping.MappingModule
 net.fabricmc.discord.bot.module.mcversion.McVersionModule

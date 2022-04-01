@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,18 +20,30 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import com.google.gson.stream.JsonReader;
 
+import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
+import net.fabricmc.discord.bot.config.ConfigKey;
+import net.fabricmc.discord.bot.config.ValueSerializers;
 import net.fabricmc.discord.bot.message.Paginator;
 
 public final class HelpCommand extends Command {
+	private static final ConfigKey<List<Long>> HELP_CHANNEL_RESTRICTION = new ConfigKey<>("helpChannelRestriction", ValueSerializers.LONG_LIST);
+	private static final ConfigKey<String> HELP_CHANNEL_RESTRICTION_MESSAGE = new ConfigKey<>("helpChannelRestrictionMessage", ValueSerializers.STRING);
+
+	public static void registerConfigEntries(DiscordBot bot) {
+		bot.registerConfigEntry(HELP_CHANNEL_RESTRICTION, () -> Collections.emptyList());
+		bot.registerConfigEntry(HELP_CHANNEL_RESTRICTION_MESSAGE, () -> "The help command can only be used in <#%d> or DMs");
+	}
+
 	private static final Map<String, String> shortHelpTexts = new HashMap<>();
 	private static final Map<String, String> longHelpTexts = new HashMap<>();
 
@@ -47,6 +59,15 @@ public final class HelpCommand extends Command {
 
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
+		if (!context.isPrivateMessage()) {
+			List<Long> reqChannels = context.bot().getConfigEntry(HELP_CHANNEL_RESTRICTION);
+
+			if (!reqChannels.isEmpty() && !reqChannels.contains(context.channel().getId())) {
+				context.channel().sendMessage(context.bot().getConfigEntry(HELP_CHANNEL_RESTRICTION_MESSAGE).formatted(reqChannels.get(0)));
+				return true;
+			}
+		}
+
 		if (!arguments.containsKey("command")) {
 			Paginator.Builder builder = new Paginator.Builder(context.user()).title("Bot Usage Help");
 			StringBuilder currentPage = new StringBuilder();
