@@ -211,6 +211,7 @@ public final class FormatUtil {
 	}
 
 	private static final String TO_ESCAPE = "*_~|<>`:@[]\\";
+	private static final String TO_ESCAPE_ON_LINE_BEGINNING = "#-";
 	private static final char ZERO_WIDTH_SPACE = '\u200b';
 
 	public static String escapePlain(String s) {
@@ -224,16 +225,19 @@ public final class FormatUtil {
 		case PLAIN -> {
 			StringBuilder ret = null;
 			int startPos = 0;
+			boolean lineBeginning = true;
 
 			for (int i = 0; i < len; i++) {
 				char c = s.charAt(i);
 
-				if (TO_ESCAPE.indexOf(c) >= 0) {
+				if (TO_ESCAPE.indexOf(c) >= 0 || lineBeginning && TO_ESCAPE_ON_LINE_BEGINNING.indexOf(c) >= 0) {
 					if (ret == null) ret = new StringBuilder();
 					ret.append(s, startPos, i);
 					ret.append('\\');
 					startPos = i;
 				}
+
+				lineBeginning = c == '\n' || lineBeginning && Character.isWhitespace(c);
 			}
 
 			if (ret != null) {
