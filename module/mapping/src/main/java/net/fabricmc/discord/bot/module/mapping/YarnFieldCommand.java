@@ -46,7 +46,7 @@ public final class YarnFieldCommand extends Command {
 
 	@Override
 	public String usage() {
-		return "<fieldName> [latest | latestStable | <mcVersion>] [--ns=<nsList>] [--queryNs=<nsList>] [--displayNs=<nsList>]";
+		return "<fieldName> [latest | latestStable | <mcVersion>] [--ns=<nsList>] [--queryNs=<nsList>] [--displayNs=<nsList>] [--brief]";
 	}
 
 	@Override
@@ -54,6 +54,8 @@ public final class YarnFieldCommand extends Command {
 		String mcVersion = MappingCommandUtil.getMcVersion(context, arguments);
 		MappingData data = MappingCommandUtil.getMappingData(repo, mcVersion);
 		String name = arguments.get("fieldName");
+
+		boolean brief = arguments.containsKey("brief");
 
 		List<String> queryNamespaces = MappingCommandUtil.getNamespaces(context, arguments, true);
 		Collection<FieldMapping> results = data.findFields(name, data.resolveNamespaces(queryNamespaces, false));
@@ -72,37 +74,48 @@ public final class YarnFieldCommand extends Command {
 		StringBuilder sb = new StringBuilder(400);
 
 		for (FieldMapping result : results) {
-			sb.append("**Class Names**\n\n");
+			if (brief) {
+				for (String ns : namespaces) {
+					String owner = result.getOwner().getName(ns);
+					String member = result.getName(ns);
 
-			for (String ns : namespaces) {
-				String res = result.getOwner().getName(ns);
-
-				if (res != null) {
-					sb.append(String.format("**%s:** `%s`\n", FormatUtil.capitalize(ns), res));
+					if (owner != null && member != null) {
+						sb.append(String.format("**%s:** `%s.%s`\n", FormatUtil.capitalize(ns), owner, member));
+					}
 				}
-			}
+			} else {
+				sb.append("**Class Names**\n\n");
 
-			sb.append("\n**Field Names**\n\n");
+				for (String ns : namespaces) {
+					String res = result.getOwner().getName(ns);
 
-			for (String ns : namespaces) {
-				String res = result.getName(ns);
-
-				if (res != null) {
-					sb.append(String.format("**%s:** `%s`\n", FormatUtil.capitalize(ns), res));
+					if (res != null) {
+						sb.append(String.format("**%s:** `%s`\n", FormatUtil.capitalize(ns), res));
+					}
 				}
-			}
 
-			sb.append(String.format("\n**Yarn Field Descriptor**\n\n```%3$s```\n"
-					+ "**Yarn Access Widener**\n\n```accessible\tfield\t%1$s\t%2$s\t%3$s```\n"
-					+ "**Yarn Mixin Target**\n\n```L%1$s;%2$s:%3$s```",
-					result.getOwner().getName("yarn"),
-					result.getName("yarn"),
-					result.getDesc("yarn")));
+				sb.append("\n**Field Names**\n\n");
 
-			URI javadocUrl = data.getJavadocUrl(result);
+				for (String ns : namespaces) {
+					String res = result.getName(ns);
 
-			if (javadocUrl != null) {
-				sb.append(String.format("\n**[Javadoc](%s)**", javadocUrl));
+					if (res != null) {
+						sb.append(String.format("**%s:** `%s`\n", FormatUtil.capitalize(ns), res));
+					}
+				}
+
+				sb.append(String.format("\n**Yarn Field Descriptor**\n\n```%3$s```\n"
+								+ "**Yarn Access Widener**\n\n```accessible\tfield\t%1$s\t%2$s\t%3$s```\n"
+								+ "**Yarn Mixin Target**\n\n```L%1$s;%2$s:%3$s```",
+						result.getOwner().getName("yarn"),
+						result.getName("yarn"),
+						result.getDesc("yarn")));
+
+				URI javadocUrl = data.getJavadocUrl(result);
+
+				if (javadocUrl != null) {
+					sb.append(String.format("\n**[Javadoc](%s)**", javadocUrl));
+				}
 			}
 
 			builder.page(sb);

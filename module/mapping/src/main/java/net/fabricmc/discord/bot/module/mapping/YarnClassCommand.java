@@ -46,7 +46,7 @@ public final class YarnClassCommand extends Command {
 
 	@Override
 	public String usage() {
-		return "<className> [latest | latestStable | <mcVersion>] [--ns=<nsList>] [--queryNs=<nsList>] [--displayNs=<nsList>]";
+		return "<className> [latest | latestStable | <mcVersion>] [--ns=<nsList>] [--queryNs=<nsList>] [--displayNs=<nsList>] [--brief]";
 	}
 
 	@Override
@@ -54,6 +54,8 @@ public final class YarnClassCommand extends Command {
 		String mcVersion = MappingCommandUtil.getMcVersion(context, arguments);
 		MappingData data = MappingCommandUtil.getMappingData(repo, mcVersion);
 		String name = arguments.get("className");
+
+		boolean brief = arguments.containsKey("brief");
 
 		List<String> queryNamespaces = MappingCommandUtil.getNamespaces(context, arguments, true);
 		Collection<ClassMapping> results = data.findClasses(name, data.resolveNamespaces(queryNamespaces, false));
@@ -72,7 +74,8 @@ public final class YarnClassCommand extends Command {
 		StringBuilder sb = new StringBuilder(400);
 
 		for (ClassMapping result : results) {
-			sb.append("**Names**\n\n");
+			if (!brief)
+				sb.append("**Names**\n\n");
 
 			for (String ns : namespaces) {
 				String res = result.getName(ns);
@@ -82,13 +85,15 @@ public final class YarnClassCommand extends Command {
 				}
 			}
 
-			sb.append(String.format("\n**Yarn Access Widener**\n\n```accessible\tclass\t%s```",
-					result.getName("yarn")));
+			if (!brief) {
+				sb.append(String.format("\n**Yarn Access Widener**\n\n```accessible\tclass\t%s```",
+						result.getName("yarn")));
 
-			URI javadocUrl = data.getJavadocUrl(result);
+				URI javadocUrl = data.getJavadocUrl(result);
 
-			if (javadocUrl != null) {
-				sb.append(String.format("\n**[Javadoc](%s)**", javadocUrl));
+				if (javadocUrl != null) {
+					sb.append(String.format("\n**[Javadoc](%s)**", javadocUrl));
+				}
 			}
 
 			builder.page(sb);
