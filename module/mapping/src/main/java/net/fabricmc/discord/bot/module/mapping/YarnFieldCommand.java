@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2022 FabricMC
+ * Copyright (c) 2021, 2022, 2023 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,13 +74,23 @@ public final class YarnFieldCommand extends Command {
 		StringBuilder sb = new StringBuilder(400);
 
 		for (FieldMapping result : results) {
+			URI javadocUrl = data.getJavadocUrl(result);
+
 			if (brief) {
 				for (String ns : namespaces) {
 					String owner = result.getOwner().getName(ns);
 					String member = result.getName(ns);
 
+					boolean linkJavadoc = ns.equals("yarn") && javadocUrl != null;
+
 					if (owner != null && member != null) {
+						if (linkJavadoc)
+							sb.append('[');
+
 						sb.append(String.format("**%s:** `%s.%s`\n", FormatUtil.capitalize(ns), owner, member));
+
+						if (linkJavadoc)
+							sb.append(String.format("](%s)", javadocUrl));
 					}
 				}
 			} else {
@@ -110,8 +120,6 @@ public final class YarnFieldCommand extends Command {
 						result.getOwner().getName("yarn"),
 						result.getName("yarn"),
 						result.getDesc("yarn")));
-
-				URI javadocUrl = data.getJavadocUrl(result);
 
 				if (javadocUrl != null) {
 					sb.append(String.format("\n**[Javadoc](%s)**", javadocUrl));

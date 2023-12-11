@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2023 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,19 +77,26 @@ public final class YarnClassCommand extends Command {
 			if (!brief)
 				sb.append("**Names**\n\n");
 
+			URI javadocUrl = data.getJavadocUrl(result);
+
 			for (String ns : namespaces) {
 				String res = result.getName(ns);
 
+				boolean linkJavadoc = brief && ns.equals("yarn") && javadocUrl != null;
+
 				if (res != null) {
+					if (linkJavadoc)
+						sb.append('[');
 					sb.append(String.format("**%s:** `%s`\n", FormatUtil.capitalize(ns), res));
+
+					if (linkJavadoc)
+						sb.append(String.format("](%s)", javadocUrl));
 				}
 			}
 
 			if (!brief) {
 				sb.append(String.format("\n**Yarn Access Widener**\n\n```accessible\tclass\t%s```",
 						result.getName("yarn")));
-
-				URI javadocUrl = data.getJavadocUrl(result);
 
 				if (javadocUrl != null) {
 					sb.append(String.format("\n**[Javadoc](%s)**", javadocUrl));
