@@ -55,7 +55,7 @@ public final class YarnFieldCommand extends Command {
 		MappingData data = MappingCommandUtil.getMappingData(repo, mcVersion);
 		String name = arguments.get("fieldName");
 
-		boolean brief = arguments.containsKey("brief");
+		boolean briefMappings = MappingCommandUtil.shouldShowBriefMappings(context, arguments);
 
 		List<String> queryNamespaces = MappingCommandUtil.getNamespaces(context, arguments, true);
 		Collection<FieldMapping> results = data.findFields(name, data.resolveNamespaces(queryNamespaces, false));
@@ -76,7 +76,7 @@ public final class YarnFieldCommand extends Command {
 		for (FieldMapping result : results) {
 			URI javadocUrl = data.getJavadocUrl(result);
 
-			if (brief) {
+			if (briefMappings) {
 				for (String ns : namespaces) {
 					String owner = result.getOwner().getName(ns);
 					String member = result.getName(ns);

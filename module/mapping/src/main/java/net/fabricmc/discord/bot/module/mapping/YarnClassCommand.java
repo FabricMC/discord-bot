@@ -55,7 +55,7 @@ public final class YarnClassCommand extends Command {
 		MappingData data = MappingCommandUtil.getMappingData(repo, mcVersion);
 		String name = arguments.get("className");
 
-		boolean brief = arguments.containsKey("brief");
+		boolean briefMappings = MappingCommandUtil.shouldShowBriefMappings(context, arguments);
 
 		List<String> queryNamespaces = MappingCommandUtil.getNamespaces(context, arguments, true);
 		Collection<ClassMapping> results = data.findClasses(name, data.resolveNamespaces(queryNamespaces, false));
@@ -74,7 +74,7 @@ public final class YarnClassCommand extends Command {
 		StringBuilder sb = new StringBuilder(400);
 
 		for (ClassMapping result : results) {
-			if (!brief)
+			if (!briefMappings)
 				sb.append("**Names**\n\n");
 
 			URI javadocUrl = data.getJavadocUrl(result);
@@ -82,7 +82,7 @@ public final class YarnClassCommand extends Command {
 			for (String ns : namespaces) {
 				String res = result.getName(ns);
 
-				boolean linkJavadoc = brief && ns.equals("yarn") && javadocUrl != null;
+				boolean linkJavadoc = briefMappings && ns.equals("yarn") && javadocUrl != null;
 
 				if (res != null) {
 					if (linkJavadoc)
@@ -94,7 +94,7 @@ public final class YarnClassCommand extends Command {
 				}
 			}
 
-			if (!brief) {
+			if (!briefMappings) {
 				sb.append(String.format("\n**Yarn Access Widener**\n\n```accessible\tclass\t%s```",
 						result.getName("yarn")));
 

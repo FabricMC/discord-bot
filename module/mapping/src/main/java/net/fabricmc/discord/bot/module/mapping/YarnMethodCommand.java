@@ -55,7 +55,7 @@ public final class YarnMethodCommand extends Command {
 		MappingData data = MappingCommandUtil.getMappingData(repo, mcVersion);
 		String name = arguments.get("methodName");
 
-		boolean brief = arguments.containsKey("brief");
+		boolean briefMappings = MappingCommandUtil.shouldShowBriefMappings(context, arguments);
 
 		List<String> queryNamespaces = MappingCommandUtil.getNamespaces(context, arguments, true);
 		Collection<MethodMapping> results = data.findMethods(name, data.resolveNamespaces(queryNamespaces, false));
@@ -76,7 +76,7 @@ public final class YarnMethodCommand extends Command {
 		for (MethodMapping result : results) {
 			URI javadocUrl = data.getJavadocUrl(result);
 
-			if (brief) {
+			if (briefMappings) {
 				for (String ns : namespaces) {
 					String owner = result.getOwner().getName(ns);
 					String member = result.getName(ns);

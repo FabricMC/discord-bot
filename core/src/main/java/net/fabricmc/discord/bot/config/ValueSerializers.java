@@ -56,6 +56,14 @@ public final class ValueSerializers {
 	public static final ValueSerializer<Long> LONG = new LongSerializer();
 	public static final ValueSerializer<List<Long>> LONG_LIST = new ListSerializer<>(LONG);
 
+	/**
+	 * A value serializer which parses booleans, while treating invalid values as false.
+	 *
+	 * @see Boolean#parseBoolean(String)
+	 */
+	public static final ValueSerializer<Boolean> BOOLEAN = new BooleanSerializer();
+
+
 	private ValueSerializers() {
 	}
 
@@ -189,5 +197,17 @@ public final class ValueSerializers {
 		}
 
 		private final ValueSerializer<V> elementSerializer;
+	}
+
+	private static final class BooleanSerializer implements ValueSerializer<Boolean> {
+		@Override
+		public Boolean deserialize(String serialized) throws IllegalArgumentException {
+			return Boolean.parseBoolean(serialized);
+		}
+
+		@Override
+		public String serialize(Boolean value) {
+			return Boolean.toString(value);
+		}
 	}
 }
