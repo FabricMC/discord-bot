@@ -40,6 +40,7 @@ public final class MappingModule implements Module {
 	// user properties
 	static final ConfigKey<List<String>> QUERY_NAMESPACES = new ConfigKey<>("mapping.queryNamespaces", ValueSerializers.STRING_LIST);
 	static final ConfigKey<List<String>> DISPLAY_NAMESPACES = new ConfigKey<>("mapping.displayNamespaces", ValueSerializers.STRING_LIST);
+	static final ConfigKey<Boolean> BRIEF_MAPPINGS = new ConfigKey<>("mapping.briefMappings", ValueSerializers.BOOLEAN);
 
 	private MappingRepository repo;
 
@@ -67,6 +68,7 @@ public final class MappingModule implements Module {
 		bot.registerCommand(new YarnClassCommand(repo));
 		bot.registerCommand(new YarnFieldCommand(repo));
 		bot.registerCommand(new YarnMethodCommand(repo));
+		bot.registerCommand(new BriefMappingsCommand());
 
 		for (NamespaceApplication application : NamespaceApplication.values()) {
 			bot.registerCommand(new SetNamespaceCommand(application));

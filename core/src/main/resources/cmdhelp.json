@@ -159,6 +159,9 @@ Examples:
 		"setQueryNamespace": {
 			"short": "Configure default namespace for mapping queries"
 		},
+		"briefMappings": {
+			"short": "Configure default for brief responses in mapping queries"
+		},
 		"fabricVersion": {
 			"short": "Show the latest Fabric versions for a mod build script"
 		},
@@ -176,6 +179,8 @@ Anything can additionally
 - contain * wildcards or ? for single-character wildcards (`the/p*/MyClass`)
 - be in any supported namespace (official, named/yarn and intermediary)
 
-The Minecraft version can be given as any supported MC release such as `1.15.2` or `21w14a`, `latestStable` for the last supported stable release or `latest` for the latest supported release including snapshots etc. The selection defaults to `latestStable` if the argument is missing."
+The Minecraft version can be given as any supported MC release such as `1.15.2` or `21w14a`, `latestStable` for the last supported stable release or `latest` for the latest supported release including snapshots etc. The selection defaults to `latestStable` if the argument is missing.
+
+A brief response can be sent instead using the `--brief` argument or if configured using the user-specific `!!briefMappings` command."
 	}
 }

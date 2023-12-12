@@ -147,4 +147,8 @@ final class MappingCommandUtil {
 
 		return ret != null ? ret : Collections.emptyList();
 	}
+
+	public static boolean shouldShowBriefMappings(CommandContext context, Map<String, String> arguments) {
+		return arguments.containsKey("brief") || Command.getUserConfig(context, MappingModule.BRIEF_MAPPINGS, false);
+	}
 }

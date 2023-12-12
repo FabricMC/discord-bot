@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2022 FabricMC
+ * Copyright (c) 2021, 2022, 2023 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ public final class YarnFieldCommand extends Command {
 
 	@Override
 	public String usage() {
-		return "<fieldName> [latest | latestStable | <mcVersion>] [--ns=<nsList>] [--queryNs=<nsList>] [--displayNs=<nsList>]";
+		return "<fieldName> [latest | latestStable | <mcVersion>] [--ns=<nsList>] [--queryNs=<nsList>] [--displayNs=<nsList>] [--brief]";
 	}
 
 	@Override
@@ -54,6 +54,8 @@ public final class YarnFieldCommand extends Command {
 		String mcVersion = MappingCommandUtil.getMcVersion(context, arguments);
 		MappingData data = MappingCommandUtil.getMappingData(repo, mcVersion);
 		String name = arguments.get("fieldName");
+
+		boolean briefMappings = MappingCommandUtil.shouldShowBriefMappings(context, arguments);
 
 		List<String> queryNamespaces = MappingCommandUtil.getNamespaces(context, arguments, true);
 		Collection<FieldMapping> results = data.findFields(name, data.resolveNamespaces(queryNamespaces, false));
@@ -72,37 +74,56 @@ public final class YarnFieldCommand extends Command {
 		StringBuilder sb = new StringBuilder(400);
 
 		for (FieldMapping result : results) {
-			sb.append("**Class Names**\n\n");
-
-			for (String ns : namespaces) {
-				String res = result.getOwner().getName(ns);
-
-				if (res != null) {
-					sb.append(String.format("**%s:** `%s`\n", FormatUtil.capitalize(ns), res));
-				}
-			}
-
-			sb.append("\n**Field Names**\n\n");
-
-			for (String ns : namespaces) {
-				String res = result.getName(ns);
-
-				if (res != null) {
-					sb.append(String.format("**%s:** `%s`\n", FormatUtil.capitalize(ns), res));
-				}
-			}
-
-			sb.append(String.format("\n**Yarn Field Descriptor**\n\n```%3$s```\n"
-					+ "**Yarn Access Widener**\n\n```accessible\tfield\t%1$s\t%2$s\t%3$s```\n"
-					+ "**Yarn Mixin Target**\n\n```L%1$s;%2$s:%3$s```",
-					result.getOwner().getName("yarn"),
-					result.getName("yarn"),
-					result.getDesc("yarn")));
-
 			URI javadocUrl = data.getJavadocUrl(result);
 
-			if (javadocUrl != null) {
-				sb.append(String.format("\n**[Javadoc](%s)**", javadocUrl));
+			if (briefMappings) {
+				for (String ns : namespaces) {
+					String owner = result.getOwner().getName(ns);
+					String member = result.getName(ns);
+
+					boolean linkJavadoc = ns.equals("yarn") && javadocUrl != null;
+
+					if (owner != null && member != null) {
+						if (linkJavadoc)
+							sb.append('[');
+
+						sb.append(String.format("**%s:** `%s.%s`\n", FormatUtil.capitalize(ns), owner, member));
+
+						if (linkJavadoc)
+							sb.append(String.format("](%s)", javadocUrl));
+					}
+				}
+			} else {
+				sb.append("**Class Names**\n\n");
+
+				for (String ns : namespaces) {
+					String res = result.getOwner().getName(ns);
+
+					if (res != null) {
+						sb.append(String.format("**%s:** `%s`\n", FormatUtil.capitalize(ns), res));
+					}
+				}
+
+				sb.append("\n**Field Names**\n\n");
+
+				for (String ns : namespaces) {
+					String res = result.getName(ns);
+
+					if (res != null) {
+						sb.append(String.format("**%s:** `%s`\n", FormatUtil.capitalize(ns), res));
+					}
+				}
+
+				sb.append(String.format("\n**Yarn Field Descriptor**\n\n```%3$s```\n"
+								+ "**Yarn Access Widener**\n\n```accessible\tfield\t%1$s\t%2$s\t%3$s```\n"
+								+ "**Yarn Mixin Target**\n\n```L%1$s;%2$s:%3$s```",
+						result.getOwner().getName("yarn"),
+						result.getName("yarn"),
+						result.getDesc("yarn")));
+
+				if (javadocUrl != null) {
+					sb.append(String.format("\n**[Javadoc](%s)**", javadocUrl));
+				}
 			}
 
 			builder.page(sb);

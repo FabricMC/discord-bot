@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2023 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ public final class YarnClassCommand extends Command {
 
 	@Override
 	public String usage() {
-		return "<className> [latest | latestStable | <mcVersion>] [--ns=<nsList>] [--queryNs=<nsList>] [--displayNs=<nsList>]";
+		return "<className> [latest | latestStable | <mcVersion>] [--ns=<nsList>] [--queryNs=<nsList>] [--displayNs=<nsList>] [--brief]";
 	}
 
 	@Override
@@ -54,6 +54,8 @@ public final class YarnClassCommand extends Command {
 		String mcVersion = MappingCommandUtil.getMcVersion(context, arguments);
 		MappingData data = MappingCommandUtil.getMappingData(repo, mcVersion);
 		String name = arguments.get("className");
+
+		boolean briefMappings = MappingCommandUtil.shouldShowBriefMappings(context, arguments);
 
 		List<String> queryNamespaces = MappingCommandUtil.getNamespaces(context, arguments, true);
 		Collection<ClassMapping> results = data.findClasses(name, data.resolveNamespaces(queryNamespaces, false));
@@ -72,23 +74,33 @@ public final class YarnClassCommand extends Command {
 		StringBuilder sb = new StringBuilder(400);
 
 		for (ClassMapping result : results) {
-			sb.append("**Names**\n\n");
+			if (!briefMappings)
+				sb.append("**Names**\n\n");
+
+			URI javadocUrl = data.getJavadocUrl(result);
 
 			for (String ns : namespaces) {
 				String res = result.getName(ns);
 
+				boolean linkJavadoc = briefMappings && ns.equals("yarn") && javadocUrl != null;
+
 				if (res != null) {
+					if (linkJavadoc)
+						sb.append('[');
 					sb.append(String.format("**%s:** `%s`\n", FormatUtil.capitalize(ns), res));
+
+					if (linkJavadoc)
+						sb.append(String.format("](%s)", javadocUrl));
 				}
 			}
 
-			sb.append(String.format("\n**Yarn Access Widener**\n\n```accessible\tclass\t%s```",
-					result.getName("yarn")));
+			if (!briefMappings) {
+				sb.append(String.format("\n**Yarn Access Widener**\n\n```accessible\tclass\t%s```",
+						result.getName("yarn")));
 
-			URI javadocUrl = data.getJavadocUrl(result);
-
-			if (javadocUrl != null) {
-				sb.append(String.format("\n**[Javadoc](%s)**", javadocUrl));
+				if (javadocUrl != null) {
+					sb.append(String.format("\n**[Javadoc](%s)**", javadocUrl));
+				}
 			}
 
 			builder.page(sb);
