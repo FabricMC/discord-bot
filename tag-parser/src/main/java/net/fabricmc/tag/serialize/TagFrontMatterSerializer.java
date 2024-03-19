@@ -18,6 +18,11 @@ package net.fabricmc.tag.serialize;
 
 import java.awt.Color;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.jetbrains.annotations.Nullable;
@@ -44,10 +49,37 @@ public final class TagFrontMatterSerializer implements TypeSerializer<TagFrontMa
 
 		return switch (tagType) {
 		case "text" -> TagFrontMatter.TEXT;
+		case "parameterized" -> deserializeParameterized(node);
 		case "embed" -> deserializeEmbedTag(node);
 		case "alias" -> deserializeAlias(node);
 		default -> throw new SerializationException("Unsupported tag type \"%s\"!".formatted(tagType));
 		};
+	}
+
+	private TagFrontMatter deserializeParameterized(ConfigurationNode node) throws SerializationException {
+		final ConfigurationNode validatorsNode = node.node("validators");
+
+		if (validatorsNode.virtual()) {
+			throw new SerializationException("Parameterized tag requires a validator!");
+		}
+
+		final List<String> patterns = validatorsNode.getList(String.class);
+
+		if (patterns == null || patterns.isEmpty()) {
+			throw new SerializationException("Parameterized tag requires a validator!");
+		}
+
+		final List<Predicate<String>> validators = new ArrayList<>();
+
+		for (String pattern : patterns) {
+			try {
+				validators.add(Pattern.compile(pattern).asMatchPredicate());
+			} catch (PatternSyntaxException e) {
+				throw new SerializationException(e);
+			}
+		}
+
+		return new TagFrontMatter.ParameterizedText(validators);
 	}
 
 	private TagFrontMatter deserializeAlias(ConfigurationNode node) throws SerializationException {
