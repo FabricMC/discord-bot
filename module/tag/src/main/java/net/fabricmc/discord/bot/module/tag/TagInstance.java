@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
 
 import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
@@ -70,10 +71,16 @@ public abstract class TagInstance {
 
 	public static final class ParameterizedText extends TagInstance {
 		private final int[] parts; // 0..n for literalParts references, -1,..-m for arg# -(part+1)
+		@Nullable
+		private final List<Predicate<String>> validators;
 		private final String[] literalParts;
 		private final int argCount;
 
 		public ParameterizedText(String name, String text) {
+			this(name, null, text);
+		}
+
+		public ParameterizedText(String name, @Nullable List<Predicate<String>> validators, String text) {
 			super(name);
 
 			// parse text into segments of literal texts and tokens
@@ -128,8 +135,13 @@ public abstract class TagInstance {
 				this.parts[i] = parts.get(i);
 			}
 
+			this.validators = validators;
 			this.literalParts = literalParts.toArray(new String[0]);
 			this.argCount = argCount;
+
+			if (validators != null && validators.size() != argCount) {
+				throw new IllegalStateException("Missing validator for tag %s; required %d, found %d".formatted(name, argCount, validators.size()));
+			}
 		}
 
 		@Override
@@ -185,7 +197,24 @@ public abstract class TagInstance {
 			return DiscordUtil.sendMentionlessMessage(context.channel(), sb);
 		}
 
-		private void format(List<String> args, StringBuilder out) {
+		private void format(List<String> args, StringBuilder out) throws CommandException {
+			for (int part : parts) {
+				if (part >= 0) {
+					out.append(literalParts[part]);
+				} else {
+					int index = -(part+1);
+					String arg = args.get(index);
+
+					if (this.validators != null && !this.validators.get(index).test(arg)) {
+						throw new CommandException("Received malformed argument");
+					}
+
+					out.append(arg);
+				}
+			}
+		}
+
+		private void formatUnvalidated(List<String> args, StringBuilder out) {
 			for (int part : parts) {
 				if (part >= 0) {
 					out.append(literalParts[part]);
@@ -204,7 +233,7 @@ public abstract class TagInstance {
 			}
 
 			StringBuilder sb = new StringBuilder();
-			format(args, sb);
+			formatUnvalidated(args, sb);
 
 			return "ParameterizedText{name=\"%s\", text=\"%s\"}".formatted(this.getName(), sb);
 		}

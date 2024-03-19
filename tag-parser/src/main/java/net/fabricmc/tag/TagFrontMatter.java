@@ -16,11 +16,17 @@
 
 package net.fabricmc.tag;
 
+import java.util.List;
+import java.util.function.Predicate;
+
 import org.javacord.api.entity.message.embed.EmbedBuilder;
 
 public interface TagFrontMatter {
 	TagFrontMatter TEXT = new TagFrontMatter() {
 	};
+
+	record ParameterizedText(List<Predicate<String>> validators) implements TagFrontMatter {
+	}
 
 	record Alias(String target) implements TagFrontMatter {
 	}

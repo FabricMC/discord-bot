@@ -163,10 +163,14 @@ public final class TagModule implements Module, CommandStringHandler {
 						logger.warn("Text tag {} doesn't have any content, skipping", entry.name());
 						continue;
 					} else if (entry.messageContent().contains("{{")) {
+						logger.warn("Text tag {} has a parameter, set type to \"parameterized\" instead", entry.name());
 						tag = new TagInstance.ParameterizedText(entry.name(), entry.messageContent());
 					} else {
 						tag = new TagInstance.PlainText(entry.name(), entry.messageContent());
 					}
+				} else if (entry.frontMatter() instanceof TagFrontMatter.ParameterizedText) {
+					TagFrontMatter.ParameterizedText parameterized = (TagFrontMatter.ParameterizedText)entry.frontMatter();
+					tag = new TagInstance.ParameterizedText(entry.name(), parameterized.validators(), entry.messageContent());
 				} else if (entry.frontMatter() instanceof TagFrontMatter.Alias) {
 					postponedEntries.add(entry);
 					continue; // handle later since the referenced tag may not be loaded yet
