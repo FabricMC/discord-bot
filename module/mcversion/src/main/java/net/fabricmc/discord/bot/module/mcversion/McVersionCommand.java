@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,10 +23,10 @@ import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 
 public final class McVersionCommand extends Command {
-	private final McVersionRepo repo;
+	private final McVersionModule module;
 
-	McVersionCommand(McVersionRepo repo) {
-		this.repo = repo;
+	McVersionCommand(McVersionModule module) {
+		this.module = module;
 	}
 
 	@Override
@@ -46,7 +46,10 @@ public final class McVersionCommand extends Command {
 
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
-		context.channel().sendMessage(String.format("Latest: %s\nLatest Stable: %s", repo.getLatest(), repo.getLatestStable()));
+		context.channel().sendMessage(String.format("**Fabric**\nLatest: %s\nLatest Stable: %s\n\n"
+				+ "**McMeta**\nRelease: %s\nSnapshot: %s\nLast Update: <t:%d>",
+				module.getRepo().getLatest(), module.getRepo().getLatestStable(),
+				module.metaFetcher.getLatestRelease(), module.metaFetcher.getLatestSnapshot(), module.metaFetcher.getLastUpdateTimeMs() / 1000));
 
 		return true;
 	}

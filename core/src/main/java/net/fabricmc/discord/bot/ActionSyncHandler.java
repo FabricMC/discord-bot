@@ -277,7 +277,7 @@ public final class ActionSyncHandler implements ServerMemberJoinListener, Server
 					return;
 				}
 
-				Ban ban = event.requestBan().join().orElse(null);
+				Ban ban = event.requestBan().join();
 				if (ban == null) return; // not banned
 
 				String reason = ban.getReason().orElse(null);

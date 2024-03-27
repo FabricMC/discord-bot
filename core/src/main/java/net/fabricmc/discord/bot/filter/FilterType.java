@@ -17,9 +17,12 @@
 package net.fabricmc.discord.bot.filter;
 
 import java.util.Locale;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.javacord.api.entity.message.Message;
+
+import net.fabricmc.discord.bot.util.DiscordUtil;
 
 public enum FilterType {
 	CONTENT("content") {
@@ -95,6 +98,16 @@ public enum FilterType {
 				}
 
 				return false;
+			};
+		}
+	},
+	DISCORD("discord") {
+		@Override
+		public MessageMatcher compile(String pattern) {
+			return (msg, lcContent) -> {
+				Matcher matcher = DiscordUtil.INVITE_PATTERN.matcher(msg.getContent());
+
+				return matcher.matches() && matcher.group(1).equals(pattern);
 			};
 		}
 	};

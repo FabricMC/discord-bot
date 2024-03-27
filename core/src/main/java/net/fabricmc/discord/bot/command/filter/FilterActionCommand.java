@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.database.query.FilterQueries;
 import net.fabricmc.discord.bot.database.query.FilterQueries.FilterActionEntry;
 import net.fabricmc.discord.bot.filter.FilterAction;
+import net.fabricmc.discord.bot.util.FormatUtil;
+import net.fabricmc.discord.bot.util.FormatUtil.OutputType;
 
 public final class FilterActionCommand extends Command {
 	@Override
@@ -55,7 +57,9 @@ public final class FilterActionCommand extends Command {
 
 				for (FilterActionEntry action : actions) {
 					sb.append(String.format("\n%d %s: %s -> %s %s",
-							action.id(), action.name(), action.description(), action.action(), action.actionData()));
+							action.id(), action.name(), action.description(),
+							action.action().id,
+							(action.actionData() != null ? FormatUtil.escape(action.actionData(), OutputType.INLINE_CODE, true) : "")));
 				}
 
 				context.channel().sendMessage(sb.toString());

@@ -22,6 +22,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.javacord.api.entity.server.Server;
 import org.javacord.api.listener.ChainableGloballyAttachableListenerManager;
 
@@ -34,6 +36,8 @@ import net.fabricmc.discord.bot.config.ValueSerializers;
 public final class ActiveHandler {
 	private static final int activeRefreshDelay = 10; // in s
 	private static final ConfigKey<Long> LAST_ACTIVE = new ConfigKey<>("lastActive", ValueSerializers.LONG);
+
+	private static final Logger LOGGER = LogManager.getLogger("ActiveHandler");
 
 	private final DiscordBot bot;
 	private final List<ReadyHandler> readyHandlers = new CopyOnWriteArrayList<>();
@@ -64,6 +68,8 @@ public final class ActiveHandler {
 
 		if (!activeRef.compareAndSet(false, true)) return;
 
+		LOGGER.info("Server ready");
+
 		long lastActive = lastActiveTime;
 		readyHandlers.forEach(h -> h.onReady(server, lastActive));
 
@@ -75,6 +81,8 @@ public final class ActiveHandler {
 		assert server.getId() == bot.getServerId();
 
 		if (!activeRef.compareAndSet(true, false)) return;
+
+		LOGGER.info("Server gone");
 
 		scheduledTask.cancel(false);
 		scheduledTask = null;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package net.fabricmc.discord.bot.module.mapping;
+package net.fabricmc.discord.bot.module.mapping.repo;
 
-import static net.fabricmc.mappingio.tree.MappingTree.MIN_NAMESPACE_ID;
-import static net.fabricmc.mappingio.tree.MappingTree.NULL_NAMESPACE_ID;
+import static net.fabricmc.mappingio.tree.MappingTreeView.MIN_NAMESPACE_ID;
+import static net.fabricmc.mappingio.tree.MappingTreeView.NULL_NAMESPACE_ID;
 
 import java.lang.reflect.Array;
 import java.net.URI;
@@ -46,8 +46,9 @@ import net.fabricmc.mappingio.tree.MappingTree.MemberMapping;
 import net.fabricmc.mappingio.tree.MappingTree.MethodArgMapping;
 import net.fabricmc.mappingio.tree.MappingTree.MethodMapping;
 import net.fabricmc.mappingio.tree.MappingTree.MethodVarMapping;
+import net.fabricmc.mappingio.tree.MappingTreeView;
 
-final class MappingData {
+public final class MappingData {
 	private static final String intermediaryClassPrefix = "class_";
 	private static final String intermediaryFullClassPrefix = "net/minecraft/"+intermediaryClassPrefix;
 	private static final String intermediaryFieldPrefix = "field_";
@@ -59,7 +60,7 @@ final class MappingData {
 	public final String intermediaryMavenId;
 	public final String yarnMavenId;
 	public final String mcpVersion;
-	final MappingTree mappingTree;
+	public final MappingTree mappingTree;
 	public final boolean hasYarnJavadoc;
 
 	private final int maxNsId;
@@ -202,7 +203,7 @@ final class MappingData {
 		for (String name : namespaces) {
 			int id = mappingTree.getNamespaceId(name);
 
-			if (id == MappingTree.NULL_NAMESPACE_ID) {
+			if (id == MappingTreeView.NULL_NAMESPACE_ID) {
 				if (require) {
 					throw new IllegalArgumentException("unknown namespace: "+name);
 				} else {
@@ -218,10 +219,10 @@ final class MappingData {
 
 	public int[] getAllNamespaces() {
 		int maxId = mappingTree.getMaxNamespaceId();
-		int[] ret = new int[maxId - MappingTree.MIN_NAMESPACE_ID];
+		int[] ret = new int[maxId - MappingTreeView.MIN_NAMESPACE_ID];
 
 		for (int i = 0; i < ret.length; i++) {
-			ret[i] = i + MappingTree.MIN_NAMESPACE_ID;
+			ret[i] = i + MappingTreeView.MIN_NAMESPACE_ID;
 		}
 
 		return ret;
@@ -653,13 +654,11 @@ final class MappingData {
 			fragment = sb.toString();
 		}
 
-		URI ret = null;
-
 		try {
 			return new URI("https", null,
 					"maven.fabricmc.net", -1,
 					String.format("/docs/%s/%s.html",
-							MappingRepository.getYarnJavadocDir(yarnMavenId), // net.fabricmc:yarn:1.16.5+build.9 -> yarn-1.16.5+build.9
+							FabricHandler.getYarnJavadocDir(yarnMavenId), // net.fabricmc:yarn:1.16.5+build.9 -> yarn-1.16.5+build.9
 							clsName.replace('$', '.')),
 					null, fragment);
 		} catch (URISyntaxException e) {

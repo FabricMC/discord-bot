@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,8 @@ import java.util.Map;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
+import net.fabricmc.discord.bot.module.mapping.repo.MappingData;
+import net.fabricmc.discord.bot.module.mapping.repo.MappingRepository;
 import net.fabricmc.discord.bot.module.mcversion.McVersionRepo;
 
 final class MappingCommandUtil {

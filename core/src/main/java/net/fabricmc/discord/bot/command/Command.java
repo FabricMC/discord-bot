@@ -281,7 +281,7 @@ public abstract class Command {
 			MessageAttachment attachment = attachments.get(0);
 			if (attachment.getSize() > 20_000_000) throw new CommandException("Oversized content attachment");
 
-			return new String(attachment.downloadAsByteArray().join(), StandardCharsets.UTF_8).replace("\r\n", "\n");
+			return new String(attachment.asByteArray().join(), StandardCharsets.UTF_8).replace("\r\n", "\n");
 		}
 	}
 }

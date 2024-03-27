@@ -102,7 +102,7 @@ public final class ExportChannelCommand extends Command {
 
 			if (embedData) {
 				try {
-					obj.addProperty("data", Base64.getEncoder().encodeToString(attachment.downloadAsByteArray().join()));
+					obj.addProperty("data", Base64.getEncoder().encodeToString(attachment.asByteArray().join()));
 				} catch (CompletionException e) {
 					Throwable cause = e.getCause();
 

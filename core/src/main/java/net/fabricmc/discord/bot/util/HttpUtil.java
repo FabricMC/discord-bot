@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 FabricMC
+ * Copyright (c) 2021, 2022 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -70,16 +70,32 @@ public final class HttpUtil {
 				return client.send(request, BodyHandlers.ofInputStream());
 			} catch (IOException f) { }
 
-			throw e;
+			throw new HttpException(uri, e);
 		}
 	}
 
 	public static void logError(String desc, Throwable exc, Logger logger) {
+		if (exc instanceof HttpException) {
+			desc = String.format("%s: Error requesting %s", desc, ((HttpException) exc).uri);
+			exc = exc.getCause();
+		}
+
 		if (exc instanceof HttpTimeoutException
 				|| exc instanceof ConnectException) {
 			logger.warn("{}: {}", desc, exc.toString());
 		} else {
 			logger.warn("{}", desc, exc);
 		}
+	}
+
+	@SuppressWarnings("serial")
+	private static final class HttpException extends IOException {
+		HttpException(URI uri, Throwable exc) {
+			super("Error requesting "+uri, exc);
+
+			this.uri = uri;
+		}
+
+		final URI uri;
 	}
 }

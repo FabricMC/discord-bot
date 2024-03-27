@@ -30,13 +30,14 @@ import org.apache.logging.log4j.Logger;
 import net.fabricmc.discord.bot.util.HttpUtil;
 
 final class MetaFetcher {
-	private static final String HOST = "launchermeta.mojang.com";
+	private static final String HOST = "piston-meta.mojang.com";
 	private static final String PATH = "/mc/game/version_manifest_v2.json";
 
 	private static final Logger LOGGER = LogManager.getLogger("mcversion/meta");
 
 	private String latestRelease;
 	private String latestSnapshot;
+	private long lastUpdateTimeMs;
 
 	MetaFetcher(McVersionModule mcVersionModule) { }
 
@@ -46,6 +47,10 @@ final class MetaFetcher {
 
 	String getLatestSnapshot() {
 		return latestSnapshot;
+	}
+
+	long getLastUpdateTimeMs() {
+		return lastUpdateTimeMs;
 	}
 
 	void update() throws IOException, URISyntaxException, InterruptedException {
@@ -59,6 +64,8 @@ final class MetaFetcher {
 
 		try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
 			reader.beginObject();
+			boolean readRelease = false;
+			boolean readSnapshot = false;
 
 			while (reader.hasNext()) {
 				if (!reader.nextName().equals("latest")) {
@@ -70,14 +77,26 @@ final class MetaFetcher {
 
 				while (reader.hasNext()) {
 					switch (reader.nextName()) {
-					case "release" -> latestRelease = reader.nextString();
-					case "snapshot" -> latestSnapshot = reader.nextString();
+					case "release" -> {
+						latestRelease = reader.nextString();
+						readRelease = true;
+					}
+					case "snapshot" -> {
+						latestSnapshot = reader.nextString();
+						readSnapshot = true;
+					}
 					default -> reader.skipValue();
 					}
 				}
 
 				break;
 			}
+
+			if (!readRelease || !readSnapshot) {
+				LOGGER.warn("Missing data: release={} snapshot={}", readRelease ? latestRelease : "(missing)", readSnapshot ? latestSnapshot : "(missing)");
+			}
 		}
+
+		lastUpdateTimeMs = System.currentTimeMillis();
 	}
 }

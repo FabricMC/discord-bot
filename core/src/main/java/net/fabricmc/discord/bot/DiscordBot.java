@@ -132,7 +132,7 @@ public final class DiscordBot {
 		builder
 		.setWaitForUsersOnStartup(true)
 		.setIntents(Intent.GUILDS, Intent.GUILD_MEMBERS, Intent.GUILD_PRESENCES,
-				Intent.GUILD_MESSAGES, Intent.GUILD_MESSAGE_REACTIONS, Intent.DIRECT_MESSAGES, Intent.DIRECT_MESSAGE_REACTIONS,
+				Intent.GUILD_MESSAGES, Intent.GUILD_MESSAGE_REACTIONS, Intent.DIRECT_MESSAGES, Intent.DIRECT_MESSAGE_REACTIONS, Intent.MESSAGE_CONTENT,
 				Intent.GUILD_BANS)
 		.setToken(this.config.getToken())
 		.login()

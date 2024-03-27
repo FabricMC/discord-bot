@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.regex.Pattern;
 
 import org.javacord.api.entity.Nameable;
 import org.javacord.api.entity.channel.ChannelType;
@@ -108,4 +109,6 @@ public final class DiscordUtil {
 				channelId,
 				messageId);
 	}
+
+	public static final Pattern INVITE_PATTERN = Pattern.compile("(?:https://)?(?:www\\.)?discord(?:\\.gg|(?:\\.com|app\\.com)/invite)/([A-Za-z0-9]){2,10}");
 }

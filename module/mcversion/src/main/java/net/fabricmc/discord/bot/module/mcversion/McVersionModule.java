@@ -37,6 +37,7 @@ import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
 import org.javacord.api.entity.server.Server;
 
+import net.fabricmc.discord.bot.CachedMessage;
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.Module;
 import net.fabricmc.discord.bot.config.ConfigKey;
@@ -92,7 +93,7 @@ public final class McVersionModule implements Module {
 
 	private final Set<String> announcedVersions = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-	private final MetaFetcher metaFetcher = new MetaFetcher(this);
+	final MetaFetcher metaFetcher = new MetaFetcher(this);
 	final NewsFetcher newsFetcher = new NewsFetcher(this);
 	private final RedditFetcher redditFetcher = new RedditFetcher(this);
 
@@ -142,7 +143,7 @@ public final class McVersionModule implements Module {
 		bot.getActiveHandler().registerReadyHandler(this::onReady);
 		bot.getActiveHandler().registerGoneHandler(this::onGone);
 
-		bot.registerCommand(new McVersionCommand(repo));
+		bot.registerCommand(new McVersionCommand(this));
 		bot.registerCommand(new SetMcVersionCommand(repo));
 	}
 
@@ -227,15 +228,17 @@ public final class McVersionModule implements Module {
 			return;
 		}
 
-		LOGGER.info("Announcing MC {} {} -> {}", kind, oldVersion, latestVersion);
+		LOGGER.info("Announcing MC-Meta {} {} -> {}", kind, oldVersion, latestVersion);
 
 		String msgText = MESSAGE.formatted(kind, latestVersion);
 
-		if (sendAnnouncement(announceChannel, msgText)
-				| sendAnnouncement(updateChannel, msgText)) { // deliberate | to force eval both
-			announcedVersions.add(latestVersion);
-			bot.setConfigEntry(announcedVersionKey, latestVersion);
+		if (!sendAnnouncement(announceChannel, msgText)
+				& !sendAnnouncement(updateChannel, msgText)) { // deliberate & to force evaluating both
+			return; // skip announced version record update
 		}
+
+		announcedVersions.add(latestVersion);
+		bot.setConfigEntry(announcedVersionKey, latestVersion);
 	}
 
 	static boolean isOldVersion(String version) throws IOException, URISyntaxException, InterruptedException {
@@ -255,8 +258,15 @@ public final class McVersionModule implements Module {
 		}
 	}
 
-	static boolean sendAnnouncement(TextChannel channel, String msg) {
+	boolean sendAnnouncement(TextChannel channel, String msg) {
 		if (channel == null) return false;
+
+		for (CachedMessage m : bot.getMessageIndex().getAllByAuthor(bot.getUserHandler().getBotDiscordUserId(), channel, false)) {
+			if (m.getContent().equals(msg)) {
+				LOGGER.warn("Duplicate announcement to {}: {}", channel.getId(), msg);
+				return true; // pretend it succeeded, avoids retries and it was already announced in the past anyway
+			}
+		}
 
 		Message message;
 

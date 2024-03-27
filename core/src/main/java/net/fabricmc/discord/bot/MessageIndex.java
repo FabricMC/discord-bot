@@ -124,15 +124,15 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 	}
 
 	public Collection<CachedMessage> getAll(TextChannel channel, boolean includeDeleted) {
-		List<CachedMessage> res = new ArrayList<>();
+		List<CachedMessage> ret = new ArrayList<>();
 
 		accept(channel, msg -> {
-			res.add(msg);
+			ret.add(msg);
 
 			return true;
 		}, includeDeleted);
 
-		return res;
+		return ret;
 	}
 
 	public Collection<CachedMessage> getAllByAuthor(long authorId, boolean includeDeleted) {
@@ -145,6 +145,20 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 				}
 			}
 		}
+
+		return ret;
+	}
+
+	public Collection<CachedMessage> getAllByAuthor(long authorId, TextChannel channel, boolean includeDeleted) {
+		List<CachedMessage> ret = new ArrayList<>();
+
+		accept(channel, msg -> {
+			if (msg.getAuthorDiscordId() == authorId) {
+				ret.add(msg);
+			}
+
+			return true;
+		}, includeDeleted);
 
 		return ret;
 	}
@@ -166,17 +180,17 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 	public Collection<CachedMessage> getAllByAuthors(LongSet authorDiscordIds, TextChannel channel, boolean includeDeleted) {
 		if (authorDiscordIds.isEmpty()) return Collections.emptyList();
 
-		List<CachedMessage> res = new ArrayList<>();
+		List<CachedMessage> ret = new ArrayList<>();
 
 		accept(channel, msg -> {
 			if (authorDiscordIds.contains(msg.getAuthorDiscordId())) {
-				res.add(msg);
+				ret.add(msg);
 			}
 
 			return true;
 		}, includeDeleted);
 
-		return res;
+		return ret;
 	}
 
 	public @Nullable CachedMessage get(String desc, @Nullable Server server) throws DiscordException {
@@ -217,7 +231,7 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 		synchronized (globalIndex) {
 			for (CachedMessage message : globalIndex.values()) {
 				if (includeDeleted || !message.isDeleted()) {
-					visitor.visit(message);
+					if (!visitor.visit(message)) break;
 				}
 			}
 		}
@@ -259,17 +273,23 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 	}
 
 	private void init(Server server, long lastActiveTime) {
-		LongList invalidChannels = new LongArrayList();
+		bot.getExecutor().execute(() -> {
+			try {
+				LongList invalidChannels = new LongArrayList();
 
-		for (TextChannel channel : DiscordUtil.getTextChannels(server)) {
-			if (isValidChannel(channel)) {
-				initChannel(channel);
-			} else {
-				invalidChannels.add(channel.getId());
+				for (TextChannel channel : DiscordUtil.getTextChannels(server)) {
+					if (isValidChannel(channel)) {
+						initChannel(channel);
+					} else {
+						invalidChannels.add(channel.getId());
+					}
+				}
+
+				if (!invalidChannels.isEmpty()) LOGGER.info("Skipping inaccessible channels {}", invalidChannels);
+			} catch (Throwable t) {
+				LOGGER.warn("Error initializing message index", t);
 			}
-		}
-
-		if (!invalidChannels.isEmpty()) LOGGER.info("Skipping inaccessible channels {}", invalidChannels);
+		});
 	}
 
 	private void reset(Server server) {
@@ -363,6 +383,8 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 
 	@Override
 	public void onMessageCreate(MessageCreateEvent event) {
+		if (event.getMessageAuthor().isWebhook()) return;
+
 		Server server = event.getServer().orElse(null);
 		if (server == null) return;
 
@@ -393,7 +415,7 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 		Instant time = Instant.now();
 
 		synchronized (cache) {
-			cache.update(event.getMessageId(), event.getNewContent(), time);
+			cache.update(event.getMessageId(), event.getMessageContent(), time);
 		}
 	}
 

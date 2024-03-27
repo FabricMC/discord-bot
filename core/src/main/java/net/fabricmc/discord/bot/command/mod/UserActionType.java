@@ -19,6 +19,7 @@ package net.fabricmc.discord.bot.command.mod;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.sql.SQLException;
+import java.time.Duration;
 import java.util.List;
 
 import it.unimi.dsi.fastutil.longs.LongList;
@@ -36,7 +37,7 @@ public enum UserActionType implements ActionType {
 	BAN("ban", true, true, true, false) {
 		@Override
 		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException {
-			if (!NOP_MODE) DiscordUtil.join(server.banUser(target, 0, reason));
+			if (!NOP_MODE) DiscordUtil.join(server.banUser(target, Duration.ZERO, reason));
 		}
 
 		@Override

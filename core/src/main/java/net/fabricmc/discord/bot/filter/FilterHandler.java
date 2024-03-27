@@ -291,7 +291,7 @@ public final class FilterHandler implements MessageCreateListener, MessageEditLi
 		Server server = event.getServer().orElse(null);
 		if (server == null || server.getId() != bot.getServerId()) return;
 
-		handleMessage(event.requestMessage().join(), true);
+		handleMessage(event.getMessage(), true);
 	}
 
 	private void handleMessage(Message message, boolean isEdit) {

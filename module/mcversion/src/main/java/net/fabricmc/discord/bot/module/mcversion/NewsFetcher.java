@@ -181,11 +181,11 @@ final class NewsFetcher {
 			SnapshotVersion version = snapshotMatcher != null ? SnapshotVersion.get(snapshotMatcher) : null;
 
 			if (version == null
-					|| !hasAnnouncedSnapshot(version) /*&& !McVersionModule.isOldVersion(version.toString())*/) {
-				LOGGER.info("Announcing {} (regular, version {})", path, version != null ? version.toString() : "(unknown)");
+					|| !hasAnnouncedSnapshot(version) && !McVersionModule.isOldVersion(version.toString())) {
+				LOGGER.info("Announcing MC-News {} (regular, version {})", path, version != null ? version.toString() : "(unknown)");
 
-				if (!McVersionModule.sendAnnouncement(mcVersionModule.getUpdateChannel(), "https://"+HOST+path)) {
-					return; // avoid updating ANNOUNCED_NEWS_DATE
+				if (!mcVersionModule.sendAnnouncement(mcVersionModule.getUpdateChannel(), "https://"+HOST+path)) {
+					return; // skip ANNOUNCED_NEWS_DATE record update
 				}
 			}
 
@@ -210,10 +210,10 @@ final class NewsFetcher {
 		if (dateMs > announcedNewsDate
 				&& !announcedNews.contains(path)
 				&& !McVersionModule.isOldVersion(version.toString())) {
-			LOGGER.info("Announcing {} (url poll, version {})", path, version);
+			LOGGER.info("Announcing MC-News {} (url poll, version {})", path, version);
 
-			if (!McVersionModule.sendAnnouncement(mcVersionModule.getUpdateChannel(), "https://"+HOST+path)) {
-				return;
+			if (!mcVersionModule.sendAnnouncement(mcVersionModule.getUpdateChannel(), "https://"+HOST+path)) {
+				return; // skip ANNOUNCED_NEWS_DATE record update
 			}
 		}
 
