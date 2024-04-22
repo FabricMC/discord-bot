@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, 2022 FabricMC
+ * Copyright (c) 2021, 2024 FabricMC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ import net.fabricmc.mappingio.MappingUtil;
 import net.fabricmc.mappingio.MappingVisitor;
 import net.fabricmc.mappingio.adapter.ForwardingMappingVisitor;
 import net.fabricmc.mappingio.adapter.MappingNsRenamer;
-import net.fabricmc.mappingio.format.tsrg.TsrgFileReader;
+import net.fabricmc.mappingio.format.srg.TsrgFileReader;
 import net.fabricmc.mappingio.tree.MappingTree;
 import net.fabricmc.mappingio.tree.MappingTree.ClassMapping;
 import net.fabricmc.mappingio.tree.MappingTree.FieldMapping;
