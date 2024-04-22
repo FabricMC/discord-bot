@@ -59,7 +59,6 @@ allprojects {
 
 	spotless {
 		java {
-			ratchetFrom "origin/master"
 			licenseHeaderFile(rootProject.file("HEADER")).yearSeparator(", ")
 		}
 
