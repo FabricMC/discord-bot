@@ -2,9 +2,8 @@ plugins {
 	id("java")
 	id("java-library")
 	id("application")
-	id("com.github.johnrengelman.shadow") version "6.1.0"
-	// TODO: Wait for shadow to support JDK 15 so we can minimize the built jar
-	id("com.diffplug.spotless") version "5.8.2"
+	id("com.github.johnrengelman.shadow") version "8.1.1"
+	id("com.diffplug.spotless") version "6.25.0"
 }
 
 group "net.fabricmc"
@@ -79,26 +78,16 @@ allprojects {
 
 	java {
 		modularity.inferModulePath = true
-
-		toolchain {
-			languageVersion = JavaLanguageVersion.of(16)
-		}
 	}
 
 	tasks.withType(JavaCompile).configureEach {
-//		options.compilerArgs += ["--enable-preview"]
 		options.release = 16
 	}
-
-//	tasks.withType(Test).configureEach {
-//		jvmArgs += "--enable-preview"
-//	}
 }
 
 // Main bot module
 application {
 	mainClass = "net.fabricmc.discord.bot.Main"
-//	applicationDefaultJvmArgs = ["--enable-preview"]
 	executableDir = "run"
 }
 
@@ -120,14 +109,6 @@ subprojects {
 	}
 }
 
-shadowJar {
-	mainClassName = "net.fabricmc.discord.bot.Main"
-}
-
 java {
 	modularity.inferModulePath = true
-
-	toolchain {
-		languageVersion = JavaLanguageVersion.of(16)
-	}
 }

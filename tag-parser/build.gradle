@@ -12,9 +12,5 @@ dependencies {
 }
 
 application {
-	mainClassName = "net.fabricmc.tag.TagParser"
-}
-
-shadowJar {
-	mainClassName = "net.fabricmc.tag.TagParser"
+	mainClass = "net.fabricmc.tag.TagParser"
 }
