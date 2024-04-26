@@ -205,14 +205,14 @@ final class LauncherNewsFetcher {
 		// Note: at this point URL is not available (yet).
 		// However, this is *very* quick from my observation.
 		LOGGER.info("Announcing MCLauncher-News {} version: {}", version.type, version.name);
-		return this.mcVersionModule.sendAnnouncement(mcVersionModule.getAnnounceChannel(), version.toEmbed());
+		return this.mcVersionModule.sendAnnouncement(mcVersionModule.getUpdateChannel(), version.toEmbed());
 	}
 
 	record Version(String type, String name, String title, @Nullable URI image, String shortText, ZonedDateTime date) {
 		EmbedBuilder toEmbed() {
 			EmbedBuilder builder = new EmbedBuilder();
 			builder.setTitle(title);
-			builder.setDescription(shortText);
+			builder.setDescription(shortText + "...");
 			if (image != null) builder.setThumbnail(image.toString());
 			builder.setTimestamp(date.toInstant());
 			return builder;
