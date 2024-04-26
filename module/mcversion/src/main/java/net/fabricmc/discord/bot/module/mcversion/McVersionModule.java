@@ -35,6 +35,7 @@ import org.apache.logging.log4j.Logger;
 import org.javacord.api.DiscordApi;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.Message;
+import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.javacord.api.entity.server.Server;
 
 import net.fabricmc.discord.bot.CachedMessage;
@@ -62,6 +63,7 @@ import net.fabricmc.discord.bot.util.HttpUtil;
 public final class McVersionModule implements Module {
 	private static final int UPDATE_DELAY = 30; // in s
 	private static final int NEWS_UPDATE_CYCLES = 4; // check news every n updates
+	private static final int LAUNCHER_NEWS_UPDATE_CYCLES = 2; // check launcher news every n updates
 
 	private static final String MESSAGE = "A new Minecraft %s is out: %s"; // args: kind, version
 	static final String KIND_RELEASE = "release";
@@ -95,6 +97,7 @@ public final class McVersionModule implements Module {
 
 	final MetaFetcher metaFetcher = new MetaFetcher(this);
 	final NewsFetcher newsFetcher = new NewsFetcher(this);
+	final LauncherNewsFetcher launcherNewsFetcher = new LauncherNewsFetcher(this);
 
 	@Override
 	public String getName() {
@@ -196,6 +199,11 @@ public final class McVersionModule implements Module {
 					&& newsCycleCouter++ % NEWS_UPDATE_CYCLES == 0) {
 				newsFetcher.update();
 			}
+
+			if (updateChannel != null
+					&& newsCycleCouter % LAUNCHER_NEWS_UPDATE_CYCLES == 0) {
+				launcherNewsFetcher.update();
+			}
 		} catch (Throwable t) {
 			HttpUtil.logError("mc version check failed", t, LOGGER);
 		}
@@ -277,6 +285,27 @@ public final class McVersionModule implements Module {
 			return null;
 		});
 		//}
+
+		return true;
+	}
+
+	boolean sendAnnouncement(TextChannel channel, EmbedBuilder embed) {
+		if (channel == null) return false;
+
+		Message message;
+
+		try {
+			message = channel.sendMessage(embed).join();
+		} catch (Throwable t) {
+			LOGGER.warn("Announcement failed", t);
+			return false;
+		}
+
+		message.crossPost()
+				.exceptionally(exc -> {
+					LOGGER.warn("Message crossposting failed: "+exc); // fails with MissingPermissionsException for non-news channel
+					return null;
+				});
 
 		return true;
 	}
