@@ -95,7 +95,6 @@ public final class McVersionModule implements Module {
 
 	final MetaFetcher metaFetcher = new MetaFetcher(this);
 	final NewsFetcher newsFetcher = new NewsFetcher(this);
-	private final RedditFetcher redditFetcher = new RedditFetcher(this);
 
 	@Override
 	public String getName() {
@@ -111,7 +110,6 @@ public final class McVersionModule implements Module {
 		bot.registerConfigEntry(ANNOUNCED_PENDING_VERSION, () -> "0");
 
 		newsFetcher.register(bot);
-		redditFetcher.register(bot);
 	}
 
 	@Override
@@ -193,11 +191,6 @@ public final class McVersionModule implements Module {
 			metaFetcher.update();
 			updateSpecific(KIND_RELEASE, metaFetcher.getLatestRelease(), ANNOUNCED_RELEASE_VERSION);
 			updateSpecific(KIND_SNAPSHOT, metaFetcher.getLatestSnapshot(), ANNOUNCED_SNAPSHOT_VERSION, ANNOUNCED_RELEASE_VERSION);
-
-			redditFetcher.update();
-			updateSpecific(KIND_RELEASE, redditFetcher.getLatestRelease(), ANNOUNCED_RELEASE_VERSION);
-			updateSpecific(KIND_SNAPSHOT, redditFetcher.getLatestSnapshot(), ANNOUNCED_SNAPSHOT_VERSION);
-			updateSpecific(KIND_PENDING, redditFetcher.getLatestPending(), ANNOUNCED_PENDING_VERSION);
 
 			if (updateChannel != null
 					&& newsCycleCouter++ % NEWS_UPDATE_CYCLES == 0) {
