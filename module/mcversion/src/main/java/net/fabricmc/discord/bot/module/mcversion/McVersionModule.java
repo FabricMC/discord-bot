@@ -146,6 +146,7 @@ public final class McVersionModule implements Module {
 
 		bot.registerCommand(new McVersionCommand(this));
 		bot.registerCommand(new SetMcVersionCommand(repo));
+		bot.registerCommand(new LauncherNewsCommand(this));
 	}
 
 	DiscordBot getBot() {
