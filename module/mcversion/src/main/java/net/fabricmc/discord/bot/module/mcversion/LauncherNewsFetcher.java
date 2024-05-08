@@ -26,7 +26,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
@@ -209,13 +212,29 @@ final class LauncherNewsFetcher {
 	}
 
 	record Version(String type, String name, String title, @Nullable URI image, String shortText, ZonedDateTime date) {
-		EmbedBuilder toEmbed() {
+		private static final String URL_PREFIX = "https://www.minecraft.net/en-us/article/minecraft";
+		private static final Predicate<String> SNAPSHOT_PREDICATE = Pattern.compile("^\\d+w\\d+[a-z]+$").asMatchPredicate();
+		private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^a-z0-9]");
+
+        EmbedBuilder toEmbed() {
 			EmbedBuilder builder = new EmbedBuilder();
 			builder.setTitle(title);
 			builder.setDescription(shortText + "...");
 			if (image != null) builder.setThumbnail(image.toString());
 			builder.setTimestamp(date.toInstant());
+			builder.setUrl(getUrl());
+			builder.setFooter("URL is automatically generated and might not be valid.");
 			return builder;
+		}
+
+		String getUrl() {
+			if ("release".equals(type)) {
+				return "%s-java-edition-%s".formatted(URL_PREFIX, name.replace('.', '-'));
+			} else if (SNAPSHOT_PREDICATE.test(name)) {
+				return "%s-snapshot-%s".formatted(URL_PREFIX, name);
+			} else {
+				return "%s-%s".formatted(URL_PREFIX, NON_ALPHANUMERIC.matcher(name.toLowerCase(Locale.ROOT)).replaceAll("-"));
+			}
 		}
 	}
 }
