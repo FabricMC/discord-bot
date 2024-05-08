@@ -36,6 +36,7 @@ import com.google.gson.stream.JsonToken;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.javacord.api.entity.message.embed.EmbedBuilder;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.util.HttpUtil;
@@ -211,7 +212,7 @@ final class LauncherNewsFetcher {
 		return this.mcVersionModule.sendAnnouncement(mcVersionModule.getUpdateChannel(), version.toEmbed());
 	}
 
-	record Version(String type, String name, String title, @Nullable URI image, String shortText, ZonedDateTime date) {
+	record Version(String type, String name, String title, @Nullable URI image, String shortText, ZonedDateTime date) implements Comparable<Version> {
 		private static final String URL_PREFIX = "https://www.minecraft.net/en-us/article/minecraft";
 		private static final Predicate<String> SNAPSHOT_PREDICATE = Pattern.compile("^\\d+w\\d+[a-z]+$").asMatchPredicate();
 		private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^a-z0-9]");
@@ -235,6 +236,11 @@ final class LauncherNewsFetcher {
 			} else {
 				return "%s-%s".formatted(URL_PREFIX, NON_ALPHANUMERIC.matcher(name.toLowerCase(Locale.ROOT)).replaceAll("-"));
 			}
+		}
+
+		@Override
+		public int compareTo(@NotNull LauncherNewsFetcher.Version o) {
+			return date.compareTo(o.date);
 		}
 	}
 }
