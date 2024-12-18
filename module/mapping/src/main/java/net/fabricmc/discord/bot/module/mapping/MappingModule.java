@@ -33,10 +33,12 @@ public final class MappingModule implements Module {
 	static final List<String> supportedNamespaces = List.of("official", "intermediary", "yarn", "mojmap", "srg", "mcp");
 	private static final List<String> defaultNamespaces = List.of("official", "intermediary", "yarn");
 	private static final List<String> publicNamespaces = defaultNamespaces;
+	private static final List<Long> privateChannels = List.of(521545796882006027L); // #yarn on fabricord
 
 	// global properties
 	static final ConfigKey<List<String>> DEFAULT_NAMESPACES = new ConfigKey<>("mapping.defaultNamespaces", ValueSerializers.STRING_LIST);
 	static final ConfigKey<List<String>> PUBLIC_NAMESPACES = new ConfigKey<>("mapping.publicNamespaces", ValueSerializers.STRING_LIST);
+	static final ConfigKey<List<Long>> PRIVATE_CHANNELS = new ConfigKey<>("mapping.privateChannels", ValueSerializers.LONG_LIST);
 
 	// user properties
 	static final ConfigKey<List<String>> QUERY_NAMESPACES = new ConfigKey<>("mapping.queryNamespaces", ValueSerializers.STRING_LIST);
@@ -58,6 +60,7 @@ public final class MappingModule implements Module {
 	public void registerConfigEntries(DiscordBot bot) {
 		bot.registerConfigEntry(DEFAULT_NAMESPACES, () -> defaultNamespaces);
 		bot.registerConfigEntry(PUBLIC_NAMESPACES, () -> publicNamespaces);
+		bot.registerConfigEntry(PRIVATE_CHANNELS, () -> privateChannels);
 	}
 
 	@Override

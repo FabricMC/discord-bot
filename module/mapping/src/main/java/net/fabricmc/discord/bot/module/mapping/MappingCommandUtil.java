@@ -108,7 +108,7 @@ final class MappingCommandUtil {
 		// trim to allowed only
 		boolean removedPrivateNs = false;
 
-		if (checkPublic && !context.isPrivateMessage()) {
+		if (checkPublic && Command.getConfig(context, MappingModule.PRIVATE_CHANNELS).contains(context.channel().getId())) {
 			List<String> privateNs = getPrivateNamespaces(context, ret);
 
 			if (!privateNs.isEmpty()) {
@@ -125,7 +125,7 @@ final class MappingCommandUtil {
 			ret.retainAll(MappingModule.supportedNamespaces);
 		}
 
-		if (ret.isEmpty()) throw new CommandException(removedPrivateNs ? "all selected namespaces are DM only" : "no valid namespaces");
+		if (ret.isEmpty()) throw new CommandException(removedPrivateNs ? "all selected namespaces are not available in the current channel" : "no valid namespaces");
 
 		return ret;
 	}
