@@ -61,7 +61,7 @@ final class McHandler {
 	}
 
 	private static boolean downloadMcMappings(String mcVersion, Path out) throws URISyntaxException, IOException, InterruptedException {
-		URI jsonUrl = queryVersionJsonUrl(mcVersion, "launchermeta.mojang.com", "/mc/game/version_manifest_v2.json");
+		URI jsonUrl = queryVersionJsonUrl(mcVersion, "piston-meta.mojang.com", "/mc/game/version_manifest_v2.json");
 		if (jsonUrl == null) jsonUrl = queryVersionJsonUrl(mcVersion, "maven.fabricmc.net", "/net/minecraft/experimental_versions.json");
 		if (jsonUrl == null) return false;
 

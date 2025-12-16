@@ -87,7 +87,7 @@ public final class SetNamespaceCommand extends Command {
 
 			if (!privateNs.isEmpty()) {
 				privateNs = new LinkedHashSet<>(privateNs);
-				context.channel().sendMessage("Settings updated, bot DM only: "+String.join(", ", privateNs));
+				context.channel().sendMessage("Settings updated, restricted: "+String.join(", ", privateNs));
 			} else {
 				context.channel().sendMessage("Settings updated");
 			}
@@ -195,7 +195,7 @@ public final class SetNamespaceCommand extends Command {
 			}
 
 			List<String> privateNs = MappingCommandUtil.getPrivateNamespaces(context, selectedNs);
-			String privateSuffix = privateNs.isEmpty() ? "" : "\nBot DM only: "+String.join(", ", privateNs);
+			String privateSuffix = privateNs.isEmpty() ? "" : "\nRestricted: "+String.join(", ", privateNs);
 
 			String errorSuffix = error ? "\n\n**Error: Can't remove all namespaces!**" : "";
 

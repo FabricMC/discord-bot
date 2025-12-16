@@ -108,7 +108,7 @@ final class MappingCommandUtil {
 		// trim to allowed only
 		boolean removedPrivateNs = false;
 
-		if (checkPublic && !context.isPrivateMessage()) {
+		if (checkPublic && isPrivateNsCensored(context)) {
 			List<String> privateNs = getPrivateNamespaces(context, ret);
 
 			if (!privateNs.isEmpty()) {
@@ -125,7 +125,7 @@ final class MappingCommandUtil {
 			ret.retainAll(MappingModule.supportedNamespaces);
 		}
 
-		if (ret.isEmpty()) throw new CommandException(removedPrivateNs ? "all selected namespaces are DM only" : "no valid namespaces");
+		if (ret.isEmpty()) throw new CommandException(removedPrivateNs ? "all selected namespaces are prohibited in this channel" : "no valid namespaces");
 
 		return ret;
 	}
@@ -148,5 +148,9 @@ final class MappingCommandUtil {
 		}
 
 		return ret != null ? ret : Collections.emptyList();
+	}
+
+	public static boolean isPrivateNsCensored(CommandContext context) {
+		return !context.isPrivateMessage() && Command.getConfig(context, MappingModule.PRIVATE_NAMESPACE_BLOCKLIST).contains(context.channel().getId());
 	}
 }
