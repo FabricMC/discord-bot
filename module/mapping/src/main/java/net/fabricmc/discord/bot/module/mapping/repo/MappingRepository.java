@@ -36,6 +36,7 @@ import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.DiscordBot;
+import net.fabricmc.discord.bot.module.mapping.MappingCommandUtil;
 import net.fabricmc.discord.bot.util.HttpUtil;
 import net.fabricmc.mappingio.tree.MemoryMappingTree;
 
@@ -77,6 +78,7 @@ public final class MappingRepository {
 
 	private static @Nullable String getMavenId(String mcVersion, String kind) throws IOException, InterruptedException, URISyntaxException {
 		if (mcVersion.indexOf('/') >= 0) throw new IllegalArgumentException("invalid mc version: "+mcVersion);
+		if (MappingCommandUtil.isRipYarn(mcVersion)) return null; // RIP yarn
 
 		HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(metaHost, "/v2/versions/%s/%s".formatted(kind, mcVersion), "limit=1"));
 

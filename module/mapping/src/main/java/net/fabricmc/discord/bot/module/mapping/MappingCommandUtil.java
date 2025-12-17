@@ -22,6 +22,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
@@ -30,13 +31,37 @@ import net.fabricmc.discord.bot.module.mapping.repo.MappingData;
 import net.fabricmc.discord.bot.module.mapping.repo.MappingRepository;
 import net.fabricmc.discord.bot.module.mcversion.McVersionRepo;
 
-final class MappingCommandUtil {
-	public static String getMcVersion(CommandContext context, Map<String, String> arguments) throws CommandException {
+public final class MappingCommandUtil {
+	public static final String LAST_YARN_VERSION = "1.21.11";
+	public static final Pattern NEW_VERSION_PATTERN = Pattern.compile("^\\d{2}\\.");
+
+	public static class RipYarnException extends Exception {
+		public static final RipYarnException INSTANCE = new RipYarnException();
+
+		RipYarnException() {
+			super("", null, false, false);
+		}
+
+		public String lastYarnVersion() {
+			return LAST_YARN_VERSION;
+		}
+	}
+
+	public static boolean isRipYarn(String mcVersion) {
+		return NEW_VERSION_PATTERN.matcher(mcVersion).matches();
+	}
+
+	public static String getMcVersion(CommandContext context, Map<String, String> arguments) throws CommandException, RipYarnException {
 		String ret = arguments.get("mcVersion");
 		if (ret == null) ret = arguments.get("unnamed_1");
 
+		boolean isLatest = ret.startsWith("latest");
+
 		ret = McVersionRepo.get(context.bot()).resolve(context, ret);
 		if (ret == null) throw new CommandException("invalid version or latest version data is unavailable");
+		if (isLatest && isRipYarn(ret)) {
+			throw RipYarnException.INSTANCE;
+		}
 
 		return ret;
 	}
