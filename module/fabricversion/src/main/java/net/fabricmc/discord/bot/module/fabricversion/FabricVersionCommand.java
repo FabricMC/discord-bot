@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
@@ -49,8 +48,9 @@ public final class FabricVersionCommand extends Command {
 	private static final String metaHost = "meta.fabricmc.net";
 	private static final String mavenHost = "maven.fabricmc.net";
 
-	private static final Pattern RELEASE_PATTERN = Pattern.compile("^(\\d+)\\.(\\d+)(?:\\.(\\d+))?");
-	private static final Pattern SNAPSHOT_PATTERN = Pattern.compile("(\\d+)w0?(0|[1-9]\\d*)([a-z])");
+	private static final Pattern NEW_VERSION_PATTERN = Pattern.compile("^\\d{2}\\.");
+	private static final Pattern NEW_VERSION_AND_RELEASE_PATTERN = Pattern.compile("^(\\d+)\\.(\\d+)(?:\\.(\\d+))?");
+	private static final Pattern OLD_SNAPSHOT_PATTERN = Pattern.compile("(\\d+)w0?(0|[1-9]\\d*)([a-z])");
 
 	FabricVersionCommand() { }
 
@@ -81,13 +81,15 @@ public final class FabricVersionCommand extends Command {
 
 		StringBuilder sb = new StringBuilder(1000);
 
+		String yarnLine = data.yarnVersion == null ? "" : "    mappings \"net.fabricmc:yarn:%s:v2\"\n".formatted(data.yarnVersion);
+
 		sb.append(String.format("**build.gradle** (constants inside the build script)\n"
 				+ "```"
 				+ "dependencies {\n"
 				+ "    minecraft \"com.mojang:minecraft:%s\"\n"
-				+ "    mappings \"net.fabricmc:yarn:%s:v2\"\n"
+				+ "%s"
 				+ "    modImplementation \"net.fabricmc:fabric-loader:%s\"\n",
-				data.mcVersion, data.yarnVersion, data.loaderVersion));
+				data.mcVersion, yarnLine, data.loaderVersion));
 
 		if (data.apiVersion != null) {
 			sb.append(String.format("\n"
@@ -98,12 +100,14 @@ public final class FabricVersionCommand extends Command {
 
 		sb.append("}```\n");
 
+		String yarnMappingsLine = data.yarnVersion == null ? "" : "yarn_mappings=%s\n".formatted(data.yarnVersion);
+
 		sb.append(String.format("**gradle.properties** (constants in a separate file, as with Example Mod)\n"
 				+ "```"
 				+ "minecraft_version=%s\n"
-				+ "yarn_mappings=%s\n"
+				+ "%s"
 				+ "loader_version=%s\n",
-				data.mcVersion, data.yarnVersion, data.loaderVersion));
+				data.mcVersion, yarnMappingsLine, data.loaderVersion));
 
 		if (data.apiVersion != null) {
 			sb.append(String.format("\n"
@@ -114,15 +118,17 @@ public final class FabricVersionCommand extends Command {
 
 		sb.append("```\n");
 
-		sb.append(String.format("**Mappings Migration** ([more info](https://fabricmc.net/wiki/tutorial:migratemappings))\n"
-				+ "```"
-				+ "gradlew migrateMappings --mappings \"%s\""
-				+ "```",
+		if (data.yarnVersion != null) {
+			sb.append(String.format("**Mappings Migration** ([more info](https://fabricmc.net/wiki/tutorial:migratemappings))\n"
+					+ "```"
+					+ "gradlew migrateMappings --mappings \"%s\""
+					+ "```\n",
 				data.yarnVersion));
+		}
 
-		sb.append("\nNote that the Fabric API version is usually only correct for the latest minor MC release "
+		sb.append("Note that the Fabric API version is usually only correct for the latest minor MC release "
 				+ "(e.g. 1.16.5 or 1.15.2) due to implementation limitations. "
-				+ "Check [CurseForge](https://minecraft.curseforge.com/projects/fabric/files) for a more precise listing.");
+				+ "Check [Modrinth](https://modrinth.com/mod/fabric-api/versions) for a more precise listing.");
 
 		context.channel().sendMessage(new EmbedBuilder()
 				.setTitle("%s Fabric versions".formatted(data.mcVersion))
@@ -138,7 +144,7 @@ public final class FabricVersionCommand extends Command {
 		String yarnVersion = null;
 		String loaderVersion = null;
 
-		HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(metaHost, "/v1/versions/loader/%s".formatted(mcVersion), "limit=1"));
+		HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(metaHost, "/v2/versions/loader/%s".formatted(mcVersion), "limit=1"));
 
 		if (response.statusCode() != 200) {
 			response.body().close();
@@ -155,16 +161,12 @@ public final class FabricVersionCommand extends Command {
 				String key = reader.nextName();
 
 				switch (key) {
-				case "loader", "mappings" -> {
+				case "loader" -> {
 					reader.beginObject();
 
 					while (reader.hasNext()) {
 						if (reader.nextName().equals("version")) {
-							if (key.equals("loader")) {
-								loaderVersion = reader.nextString();
-							} else { // mappings
-								yarnVersion = reader.nextString();
-							}
+							loaderVersion = reader.nextString();
 						} else {
 							reader.skipValue();
 						}
@@ -177,6 +179,36 @@ public final class FabricVersionCommand extends Command {
 			}
 
 			reader.endObject();
+		}
+
+		// Don't bother with checking yarn if the version is non-obf
+		if (!NEW_VERSION_PATTERN.matcher(mcVersion).matches()) {
+			response = HttpUtil.makeRequest(HttpUtil.toUri(metaHost, "/v2/versions/yarn/%s".formatted(mcVersion), "limit=1"));
+
+			if (response.statusCode() != 200) {
+				response.body().close();
+				throw new IOException("meta request failed with code " + response.statusCode());
+			}
+
+			try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+				reader.beginArray();
+				if (reader.hasNext()) {
+					reader.beginObject();
+
+					while (reader.hasNext()) {
+						String key = reader.nextName();
+
+						switch (key) {
+							case "version" -> {
+								yarnVersion = reader.nextString();
+							}
+							default -> reader.skipValue();
+						}
+					}
+
+					reader.endObject();
+				}
+			}
 		}
 
 		List<String> apiBranches = getApiBranch(mcVersion);
@@ -239,7 +271,7 @@ public final class FabricVersionCommand extends Command {
 	}
 
 	private static List<String> getApiBranch(String mcVersion) {
-		Matcher matcher = RELEASE_PATTERN.matcher(mcVersion);
+		Matcher matcher = NEW_VERSION_AND_RELEASE_PATTERN.matcher(mcVersion);
 
 		if (matcher.find()) {
 			int major = Integer.parseInt(matcher.group(1));
@@ -249,7 +281,7 @@ public final class FabricVersionCommand extends Command {
 			return Arrays.asList(String.format("%d.%d.%s", major, minor, patch), String.format("%d.%d", major, minor));
 		}
 
-		matcher = SNAPSHOT_PATTERN.matcher(mcVersion);
+		matcher = OLD_SNAPSHOT_PATTERN.matcher(mcVersion);
 		String version;
 
 		if (matcher.find()) {
@@ -276,5 +308,5 @@ public final class FabricVersionCommand extends Command {
 		return Collections.singletonList(version);
 	}
 
-	private record VersionData(String mcVersion, String yarnVersion, String loaderVersion, String apiVersion, String apiMavenName) { }
+	private record VersionData(String mcVersion, @Nullable String yarnVersion, String loaderVersion, @Nullable String apiVersion, String apiMavenName) { }
 }
