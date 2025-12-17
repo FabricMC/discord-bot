@@ -231,10 +231,8 @@ final class LauncherNewsFetcher {
 		String getUrl() {
 			if ("release".equals(type)) {
 				return "%s/minecraft-java-edition-%s".formatted(URL_PREFIX, name.replace('.', '-'));
-			} else if (SNAPSHOT_PREDICATE.test(name)) {
-				return "%s/minecraft-snapshot-%s".formatted(URL_PREFIX, name);
 			} else {
-				return "%s/%s".formatted(URL_PREFIX, NON_ALPHANUMERIC.matcher(title.toLowerCase(Locale.ROOT)).replaceAll("-"));
+				return "%s/minecraft-%s".formatted(URL_PREFIX, NON_ALPHANUMERIC.matcher(title.toLowerCase(Locale.ROOT)).replaceAll("-"));
 			}
 		}
 
