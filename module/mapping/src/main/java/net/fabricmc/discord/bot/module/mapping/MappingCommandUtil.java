@@ -54,12 +54,11 @@ public final class MappingCommandUtil {
 	public static String getMcVersion(CommandContext context, Map<String, String> arguments) throws CommandException, RipYarnException {
 		String ret = arguments.get("mcVersion");
 		if (ret == null) ret = arguments.get("unnamed_1");
+		boolean[] isLatest = {false};
 
-		boolean isLatest = ret.startsWith("latest");
-
-		ret = McVersionRepo.get(context.bot()).resolve(context, ret);
+		ret = McVersionRepo.get(context.bot()).resolve(context, ret, isLatest);
 		if (ret == null) throw new CommandException("invalid version or latest version data is unavailable");
-		if (isLatest && isRipYarn(ret)) {
+		if (isLatest[0] && isRipYarn(ret)) {
 			throw RipYarnException.INSTANCE;
 		}
 

@@ -40,8 +40,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import net.fabricmc.discord.bot.DiscordBot;
-import net.fabricmc.discord.bot.config.ConfigKey;
-import net.fabricmc.discord.bot.config.ValueSerializers;
 import net.fabricmc.discord.bot.util.HttpUtil;
 
 final class NewsFetcher {
@@ -49,10 +47,8 @@ final class NewsFetcher {
 	private static final String PATH = "/content/minecraftnet/language-masters/en-us/jcr:content/root/container/image_grid_a_copy_64.articles.page-1.json";
 	private static final String QUERY = "cache=%d";
 	private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd MMMM y HH:mm:ss zzz", Locale.ENGLISH);
-	private static final Pattern TEXT_SNAPSHOT_PATTERN = Pattern.compile(" (\\d{2}).(\\d+)(?:.(\\d+))?(?: (snapshot|pre-?release|release candidate) (\\d+))? ");
-	private static final Pattern SNAPSHOT_PATTERN = Pattern.compile("(\\d{2}).(\\d+)(?:.(\\d+))?(?:-(snapshot|pre|rc).(\\d+))?");
-
-	private static final ConfigKey<Long> ANNOUNCED_NEWS_DATE = new ConfigKey<>("mcversion.announcedNewsDate", ValueSerializers.LONG);
+	private static final Pattern TEXT_SNAPSHOT_PATTERN = Pattern.compile(" (\\d{2})\\.(\\d+)(?:\\.(\\d+))?(?: (snapshot|pre[- ]?release|release candidate) (\\d+))? ");
+	private static final Pattern SNAPSHOT_PATTERN = Pattern.compile("(\\d{2})\\.(\\d+)(?:\\.(\\d+))?(?:-(snapshot|pre|rc).(\\d+))?");
 
 	private static final Logger LOGGER = LogManager.getLogger("mcversion/news");
 
@@ -65,7 +61,6 @@ final class NewsFetcher {
 	}
 
 	void register(DiscordBot bot) {
-		bot.registerConfigEntry(ANNOUNCED_NEWS_DATE, () -> System.currentTimeMillis());
 	}
 
 	void init(String announcedSnapshotVersion) {
@@ -154,10 +149,6 @@ final class NewsFetcher {
 	}
 
 	private void checkArticle(String title, String subTitle, String path) throws IOException, URISyntaxException, InterruptedException {
-		long dateMs = Instant.now().toEpochMilli();
-		long announcedNewsDate = mcVersionModule.getBot().getConfigEntry(ANNOUNCED_NEWS_DATE);
-		if (dateMs <= announcedNewsDate) return;
-
 		String content = String.format(" %s %s %s ", title, subTitle, path).toLowerCase(Locale.ENGLISH);
 		Matcher matcher = null;
 
@@ -175,7 +166,6 @@ final class NewsFetcher {
 
 			announcedNews.add(path);
 			setAnnouncedSnapshot(version);
-			mcVersionModule.getBot().setConfigEntry(ANNOUNCED_NEWS_DATE, dateMs);
 		}
 	}
 	private static HttpResponse<InputStream> requestNews(URI uri, boolean json) throws IOException, InterruptedException {

@@ -50,7 +50,7 @@ public class NewVersionUtil {
 	}
 
 	public record Version(int year, int drop, int hotfix, VersionType type, int build) implements Comparable<Version> {
-		public static final Version DEFAULT = new Version(26, 1, 0, VersionType.SNAPSHOT, 1);
+		public static final Version DEFAULT = new Version(26, 1, 0, VersionType.SNAPSHOT, 0);
 
 		public static Version get(Matcher matcher) {
 			int yearN = Integer.parseUnsignedInt(matcher.group(1));
