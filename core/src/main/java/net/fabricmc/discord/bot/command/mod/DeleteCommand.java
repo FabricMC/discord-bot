@@ -18,15 +18,13 @@ package net.fabricmc.discord.bot.command.mod;
 
 import java.util.Map;
 
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.Message;
-
 import net.fabricmc.discord.bot.CachedMessage;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.command.mod.ActionUtil.UserMessageAction;
-import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.Message;
 
 public final class DeleteCommand extends Command {
 	@Override
@@ -54,19 +52,19 @@ public final class DeleteCommand extends Command {
 		Message message = cachedMessage.toMessage(context.server());
 		if (message == null) throw new CommandException("Can't resolve message");
 
-		TextChannel channel = message.getChannel();
+		Channel channel = message.getChannel();
 		checkMessageDeleteAccess(context, channel);
 
 		String reason = arguments.get("reason");
 
-		DiscordUtil.join(message.delete(reason));
+		message.delete(reason);
 
 		if (userId != context.bot().getUserHandler().getBotUserId()) {
 			ActionUtil.applyUserAction(UserActionType.DELETE_MESSAGE, 0, userId, null, reason, cachedMessage, UserMessageAction.NONE,
 					!arguments.containsKey("silent"), null,
 					context.bot(), context.server(), context.channel(), context.user(), context.userId());
 		} else {
-			context.channel().sendMessage("Message deleted");
+			context.channel().send("Message deleted");
 		}
 
 		return true;

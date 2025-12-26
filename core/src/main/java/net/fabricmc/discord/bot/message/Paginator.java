@@ -16,28 +16,26 @@
 
 package net.fabricmc.discord.bot.message;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.emoji.Emoji;
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.MessageAuthor;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
-import org.javacord.api.entity.user.User;
-import org.javacord.api.event.message.reaction.ReactionAddEvent;
-import org.javacord.api.exception.DiscordException;
-import org.javacord.api.listener.message.reaction.ReactionAddListener;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.util.CommonEmotes;
 import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.DiscordException;
+import net.fabricmc.discord.io.Emoji;
+import net.fabricmc.discord.io.GlobalEventHolder.MessageReactionAddHandler;
+import net.fabricmc.discord.io.GlobalEventHolder.TemporaryRegistration;
+import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.MessageEmbed;
+import net.fabricmc.discord.io.User;
 
 /**
  * A utility to create paginated messages.
@@ -45,7 +43,7 @@ import net.fabricmc.discord.bot.util.DiscordUtil;
  * <p>These messages contain emotes for controlling the paginator to allow switching pages and destroying the paginated message.
  * Paginated messages will expire after a certain amount of time and will destroy all page controls.
  */
-public final class Paginator implements ReactionAddListener {
+public final class Paginator implements MessageReactionAddHandler {
 	private static final Logger LOGGER = LogManager.getLogger(Paginator.class);
 
 	private final Logger logger;
@@ -65,6 +63,7 @@ public final class Paginator implements ReactionAddListener {
 	 */
 	@Nullable
 	private volatile Message message;
+	private volatile TemporaryRegistration tempEventReg;
 
 	/**
 	 * Creates a new paginator.
@@ -120,8 +119,9 @@ public final class Paginator implements ReactionAddListener {
 	 * @param channel the text channel to display the paginator in
 	 * @return a future letting us know when the message is displayed
 	 */
-	public CompletableFuture<Message> send(TextChannel channel) {
+	public Message send(Channel channel) {
 		Objects.requireNonNull(channel, "Channel cannot be null");
+		if (!channel.getType().text) throw new IllegalArgumentException("channel is not a text channel");
 
 		return send0(channel);
 	}
@@ -131,7 +131,7 @@ public final class Paginator implements ReactionAddListener {
 	 *
 	 * @return a future letting us know whether the page was successfully changed. If false the page was not changed.
 	 */
-	public CompletableFuture<Boolean> nextPage(boolean repost) {
+	public boolean nextPage(boolean repost) {
 		Message message = this.message;
 
 		if (message != null && pages.size() > 1) {
@@ -140,7 +140,7 @@ public final class Paginator implements ReactionAddListener {
 			return update(repost);
 		}
 
-		return CompletableFuture.completedFuture(false);
+		return false;
 	}
 
 	/**
@@ -148,7 +148,7 @@ public final class Paginator implements ReactionAddListener {
 	 *
 	 * @return a future letting us know whether the page was successfully changed. If false the page was not changed.
 	 */
-	public CompletableFuture<Boolean> previousPage(boolean repost) {
+	public boolean previousPage(boolean repost) {
 		Message message = this.message;
 
 		if (message != null && pages.size() > 1) {
@@ -157,23 +157,21 @@ public final class Paginator implements ReactionAddListener {
 			return update(repost);
 		}
 
-		return CompletableFuture.completedFuture(false);
+		return false;
 	}
 
-	private CompletableFuture<Boolean> update(boolean repost) {
+	private boolean update(boolean repost) {
 		Message message = this.message;
-		if (message == null) return CompletableFuture.completedFuture(false);
-
-		CompletableFuture<?> future;
+		if (message == null) return false;
 
 		if (repost) {
-			future = message.delete()
-					.thenRun(() -> send0(message.getChannel()));
+			message.delete("page update");
+			send0(message.getChannel());
 		} else {
-			future = message.edit(getEmbed());
+			message.edit(getEmbed());
 		}
 
-		return future.thenApply(ignored -> true);
+		return true;
 	}
 
 	/**
@@ -183,115 +181,88 @@ public final class Paginator implements ReactionAddListener {
 	 *
 	 * @return a future letting us know when the paginator has been destroyed
 	 */
-	public CompletableFuture<Void> destroy() {
+	public void destroy() {
 		Message message = this.message;
 
 		if (message != null) {
-			message.removeListener(ReactionAddListener.class, this);
-
-			CompletableFuture<Void> ret;
+			TemporaryRegistration tempEventReg = this.tempEventReg;
+			if (tempEventReg != null) tempEventReg.cancel();
 
 			if (deleteOnFinish) {
-				ret = message.delete("paginator destroyed");
+				message.delete("paginator destroyed");
 			} else if (DiscordUtil.canRemoveReactions(message.getChannel())) {
-				ret = message.removeAllReactions();
-			} else {
-				ret = CompletableFuture.completedFuture(null);
+				message.removeAllReactions();
 			}
 
-			return ret.thenApply(_v -> {
-				this.message = null;
-
-				return null;
-			});
+			this.message = null;
 		}
-
-		return CompletableFuture.completedFuture(null);
 	}
 
-	private CompletableFuture<Message> send0(TextChannel channel) {
+	private Message send0(Channel channel) {
 		// Send the message to create the paginator on first page
-		CompletableFuture<Message> ret = channel.sendMessage(this.getEmbed());
+		Message ret = channel.send(this.getEmbed());
 
 		if (pages.size() > 1) {
-			ret = ret.thenCompose(message -> {
-				this.message = message;
+			this.message = message;
 
-				List<CompletableFuture<Void>> futures = new ArrayList<>(3);
+			List<Emoji> emotes = new ArrayList<>(3);
 
-				// add control emotes
-				futures.add(message.addReaction(CommonEmotes.ARROW_BACKWARDS));
+			// add control emotes
+			emotes.add(Emoji.fromUnicode(CommonEmotes.ARROW_BACKWARDS));
 
-				if (deleteOnFinish || DiscordUtil.canRemoveReactions(message.getChannel())) {
-					futures.add(message.addReaction(CommonEmotes.X));
-				}
+			if (deleteOnFinish || DiscordUtil.canRemoveReactions(message.getChannel())) {
+				emotes.add(Emoji.fromUnicode(CommonEmotes.X));
+			}
 
-				futures.add(message.addReaction(CommonEmotes.ARROW_FORWARDS));
+			emotes.add(Emoji.fromUnicode(CommonEmotes.ARROW_FORWARDS));
 
-				// setup the listeners for said emotes
-				return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
-						.thenApply(_v -> {
-							message.addReactionAddListener(this).removeAfter(this.timeout, TimeUnit.SECONDS).addRemoveHandler(this::destroy);
-							return message;
-						});
-			});
+			tempEventReg = channel.getDiscord().getGlobalEvents().registerTemporary(MessageReactionAddHandler.class,
+					this,
+					this::destroy,
+					Duration.ofSeconds(timeout));
+
+			message.addReactions(emotes);
 		}
 
-		return ret.exceptionally(e -> {
-			this.logger.error("Failed to setup paginator", e);
-			return null;
-		});
+		return ret;
 	}
 
 	@Override
-	public void onReactionAdd(ReactionAddEvent event) {
+	public void onMessageReactionAdd(long messageId, Emoji emoji, long userId, Channel channel) {
+		Message message = this.message;
+		if (message == null || messageId != message.getId()) return;
+
 		// Let ourselves add the emojis for controls without removal
-		if (event.getApi().getYourself().getId() == event.getUserId()) {
+		if (emoji.getDiscord().getYourself().getId() == userId) {
 			return;
 		}
 
-		boolean canRemoveReactions = DiscordUtil.canRemoveReactions(event.getChannel());
+		boolean canRemoveReactions = DiscordUtil.canRemoveReactions(channel);
 
-		if (event.getUserId() == this.getOwnerSnowflake()) {
-			final Emoji emoji = event.getEmoji();
-
-			if (emoji.equalsEmoji(CommonEmotes.ARROW_BACKWARDS)) {
-				this.previousPage(!canRemoveReactions).exceptionally(e -> {
-					this.logger.error("Failed to move paginator to previous page", e);
-					return null;
-				});
-			} else if (emoji.equalsEmoji(CommonEmotes.ARROW_FORWARDS)) {
-				this.nextPage(!canRemoveReactions).exceptionally(e -> {
-					this.logger.error("Failed to move paginator to next page", e);
-					return null;
-				});
-			} else if (emoji.equalsEmoji(CommonEmotes.X)) {
-				this.destroy().exceptionally(e -> {
-					this.logger.error("Failed to destroy paginator", e);
-					return null;
-				});
+		if (userId == this.getOwnerSnowflake()) {
+			switch (emoji.getName()) {
+			case CommonEmotes.ARROW_BACKWARDS -> previousPage(!canRemoveReactions);
+			case CommonEmotes.ARROW_FORWARDS -> nextPage(!canRemoveReactions);
+			case CommonEmotes.X -> destroy();
 			}
 		}
 
 		if (canRemoveReactions) { // requires the user to remove reactions manually (double click to advance)
-			event.removeReaction().exceptionally(e -> {
-				this.logger.error("Failed to remove reaction from paginator event", e);
-				return null;
-			});
+			message.removeReaction(emoji, userId);
 		}
 	}
 
-	private EmbedBuilder getEmbed() {
+	private MessageEmbed getEmbed() {
 		final Page page = this.pages.get(this.getCurrentPage());
 
-		EmbedBuilder ret = new EmbedBuilder()
-				.setDescription(page.content)
-				.setFooter("Page %s/%s%s%s".formatted(this.getCurrentPage() + 1, this.getPageCount(), footer != null ? " - " : "", footer != null ? footer : ""));
+		MessageEmbed.Builder ret = new MessageEmbed.Builder()
+				.description(page.content)
+				.footer("Page %s/%s%s%s".formatted(this.getCurrentPage() + 1, this.getPageCount(), footer != null ? " - " : "", footer != null ? footer : ""));
 
-		if (title != null) ret.setTitle(title);
-		if (page.thumbnailUrl != null) ret.setThumbnail(page.thumbnailUrl);
+		if (title != null) ret.title(title);
+		if (page.thumbnailUrl != null) ret.thumbnail(page.thumbnailUrl);
 
-		return ret;
+		return ret.build();
 	}
 
 	public static final class Builder {
@@ -304,10 +275,6 @@ public final class Paginator implements ReactionAddListener {
 		private boolean deleteOnFinish;
 
 		public Builder(User owner) {
-			this.ownerId = owner.getId();
-		}
-
-		public Builder(MessageAuthor owner) {
 			this.ownerId = owner.getId();
 		}
 
@@ -395,8 +362,8 @@ public final class Paginator implements ReactionAddListener {
 			return new Paginator(logger, title, footer, pages, timeout, ownerId, deleteOnFinish);
 		}
 
-		public void buildAndSend(TextChannel channel) throws DiscordException {
-			DiscordUtil.join(build().send(channel));
+		public void buildAndSend(Channel channel) throws DiscordException {
+			build().send(channel);
 		}
 	}
 

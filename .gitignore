@@ -23,6 +23,7 @@
 # Source code
 !/src
 !/core
+!/ioimpl
 !/module
 !/tag-parser
 

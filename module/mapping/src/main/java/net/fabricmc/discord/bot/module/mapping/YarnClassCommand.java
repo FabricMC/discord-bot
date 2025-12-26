@@ -68,7 +68,7 @@ public final class YarnClassCommand extends Command {
 		Collection<ClassMapping> results = data.findClasses(name, data.resolveNamespaces(queryNamespaces, false));
 
 		if (results.isEmpty()) {
-			context.channel().sendMessage("no matches for the given class name, MC version and query namespace");
+			context.channel().send("no matches for the given class name, MC version and query namespace");
 			return true;
 		}
 

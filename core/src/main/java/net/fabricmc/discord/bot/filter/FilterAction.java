@@ -21,11 +21,6 @@ import java.io.StringReader;
 import java.util.Locale;
 
 import com.google.gson.stream.JsonReader;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.MessageBuilder;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
-import org.javacord.api.entity.server.Server;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.UserHandler;
@@ -35,31 +30,34 @@ import net.fabricmc.discord.bot.command.mod.UserActionType;
 import net.fabricmc.discord.bot.database.query.FilterQueries.FilterData;
 import net.fabricmc.discord.bot.database.query.FilterQueries.FilterEntry;
 import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.bot.util.FormatUtil;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.Message.AllowedMentions;
+import net.fabricmc.discord.io.MessageEmbed;
+import net.fabricmc.discord.io.Server;
 
 public enum FilterAction {
 	ALERT("alert") {
 		@Override
 		public void apply(Message message, FilterEntry filter, FilterData filterData, FilterHandler filterHandler) {
-			TextChannel alertChannel = filterHandler.getAlertChannel();
+			Channel alertChannel = filterHandler.getAlertChannel();
 			if (alertChannel == null) return;
 
-			new MessageBuilder()
-			.setContent("@here")
-			.setEmbed(new EmbedBuilder()
-					.setTitle("%s filter triggered: %s".formatted(filter.type().id, filterData.groupName()))
-					.setDescription(String.format("**User:** %s\n**Channel:** <#%d>\n**[Message](%s):**\n\n%s\n\n**Filter pattern:** `%s`",
-							UserHandler.formatDiscordUser(message.getAuthor()),
-							message.getChannel().getId(),
-							message.getLink(), message.getContent(),
-							filter.pattern()))
-					.setFooter("Filter ID: %d".formatted(filter.id()))
-					.setTimestamp(message.getLastEditTimestamp().orElse(message.getCreationTimestamp())))
-			.setAllowedMentions(DiscordUtil.NO_MENTIONS)
-			.send(alertChannel)
-			.exceptionally(exc -> {
-				exc.printStackTrace();
-				return null;
-			});
+			alertChannel.send(new Message.Builder()
+					.content("@here")
+					.embed(new MessageEmbed.Builder()
+							.title("%s filter triggered: %s".formatted(filter.type().id, filterData.groupName()))
+							.description(String.format("**User:** %s\n**Channel:** <#%d>\n**[Message](%s):**\n\n%s\n\n**Filter pattern:** `%s`",
+									UserHandler.formatDiscordUser(message.getAuthor()),
+									message.getChannel().getId(),
+									FormatUtil.createMessageLink(message), message.getContent(),
+									filter.pattern()))
+							.footer("Filter ID: %d".formatted(filter.id()))
+							.time(message.getLastEditTime() != null ? message.getLastEditTime() : DiscordUtil.getCreationTime(message.getId()))
+							.build())
+					.allowedMentions(AllowedMentions.ofEveryoneAndHere())
+					.build());
 		}
 	},
 
@@ -74,8 +72,9 @@ public enum FilterAction {
 		@Override
 		public void apply(Message message, FilterEntry filter, FilterData filterData, FilterHandler filterHandler) throws Exception {
 			DiscordBot bot = filterHandler.getBot();
-			Server server = message.getServer().orElseThrow();
-			int userId = bot.getUserHandler().getUserId(message.getAuthor().asUser().orElseThrow());
+			Server server = message.getChannel().getServer();
+			if (server == null) throw new RuntimeException("not a server channel");
+			int userId = bot.getUserHandler().getUserId(message.getAuthor());
 
 			String data = filterData.actionData();
 			UserActionType actionType = UserActionType.BAN;
@@ -143,19 +142,20 @@ public enum FilterAction {
 	}
 
 	private static void deleteAndLog(Message message, FilterEntry filter, FilterData filterData, DiscordBot bot) {
-		TextChannel logChannel = bot.getLogHandler().getLogChannel();
+		Channel logChannel = bot.getLogHandler().getLogChannel();
 
 		if (logChannel != null) {
-			logChannel.sendMessage(new EmbedBuilder()
-					.setTitle("Message deleted: %s (%s filter)".formatted(filterData.groupName(), filter.type().id))
-					.setDescription(String.format("**User:** %s\n**Channel:** <#%d>\n**Message ID:** `%d`\n**Message:**\n\n%s\n\n**Filter pattern:** `%s`",
+			logChannel.send(new MessageEmbed.Builder()
+					.title("Message deleted: %s (%s filter)".formatted(filterData.groupName(), filter.type().id))
+					.description(String.format("**User:** %s\n**Channel:** <#%d>\n**Message ID:** `%d`\n**Message:**\n\n%s\n\n**Filter pattern:** `%s`",
 							UserHandler.formatDiscordUser(message.getAuthor()),
 							message.getChannel().getId(),
 							message.getId(),
 							message.getContent(),
 							filter.pattern()))
-					.setFooter("Filter ID: %d".formatted(filter.id()))
-					.setTimestampToNow());
+					.footer("Filter ID: %d".formatted(filter.id()))
+					.timeNow()
+					.build());
 		}
 
 		message.delete("filter action (filter %d, group %s)".formatted(filter.id(), filterData.groupName()));

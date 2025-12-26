@@ -20,15 +20,15 @@ import java.nio.file.Path;
 import java.util.List;
 
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.DiscordApi;
-import org.javacord.api.event.message.MessageCreateEvent;
-import org.javacord.api.listener.message.MessageCreateListener;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.Module;
 import net.fabricmc.discord.bot.message.Paginator;
+import net.fabricmc.discord.io.Discord;
+import net.fabricmc.discord.io.GlobalEventHolder.MessageCreateHandler;
+import net.fabricmc.discord.io.Message;
 
-public final class TestModule implements Module, MessageCreateListener {
+public final class TestModule implements Module, MessageCreateHandler {
 	public static final List<String> PAGINATOR_TEXT = List.of(
 			"**The first page of the paginator**",
 			"*The second page of the paginator*",
@@ -53,23 +53,23 @@ public final class TestModule implements Module, MessageCreateListener {
 	}
 
 	@Override
-	public void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
+	public void setup(DiscordBot bot, Discord discord, Logger logger, Path dataDir) {
 		this.bot = bot;
 		this.logger = logger;
-		api.addMessageCreateListener(this);
+		discord.getGlobalEvents().registerMessageCreate(this);;
 	}
 
 	@Override
-	public void onMessageCreate(MessageCreateEvent event) {
-		if (event.getMessageContent().equals(this.bot.getCommandPrefix() + "paginatorTest")) {
-			Paginator paginator = new Paginator.Builder(event.getMessageAuthor())
+	public void onMessageCreate(Message message) {
+		if (message.getContent().equals(this.bot.getCommandPrefix() + "paginatorTest")) {
+			Paginator paginator = new Paginator.Builder(message.getAuthor())
 					.logger(logger)
 					.title("some Title")
 					.plainPages(PAGINATOR_TEXT)
 					.timeoutSec(30)
 					.build();
 
-			paginator.send(event.getChannel());
+			paginator.send(message.getChannel());
 		}
 	}
 }

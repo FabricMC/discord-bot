@@ -21,8 +21,6 @@ import java.util.Collection;
 import java.util.Map;
 
 import it.unimi.dsi.fastutil.longs.LongList;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
 
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
@@ -31,6 +29,8 @@ import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.database.query.NoteQueries;
 import net.fabricmc.discord.bot.database.query.NoteQueries.NoteEntry;
 import net.fabricmc.discord.bot.util.FormatUtil;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.MessageEmbed;
 
 public final class NoteCommand extends Command {
 	@Override
@@ -58,23 +58,23 @@ public final class NoteCommand extends Command {
 			LongList targets = context.bot().getUserHandler().getDiscordUserIds(targetUserId);
 			Instant creationTime = Instant.ofEpochMilli(entry.creationTime());
 			String description = "User %d has been noted:%s\n\n**Note:** %s".formatted(targetUserId, FormatUtil.formatUserList(targets, context), entry.content());
-			TextChannel logChannel = context.bot().getLogHandler().getLogChannel();
+			Channel logChannel = context.bot().getLogHandler().getLogChannel();
 
-			EmbedBuilder msg = new EmbedBuilder()
-					.setTitle("User noted")
-					.setDescription(description)
-					.setFooter("Note ID: %d".formatted(entry.id()))
-					.setTimestamp(creationTime);
+			MessageEmbed.Builder msgBuilder = new MessageEmbed.Builder()
+					.title("User noted")
+					.description(description)
+					.footer("Note ID: %d".formatted(entry.id()))
+					.time(creationTime);
 
 			if (context.channel() != logChannel) {
-				context.channel().sendMessage(msg).get();
+				context.channel().send(msgBuilder.build());
 			}
 
 			if (logChannel != null) {
 				// include executing moderator info
-				msg.setDescription("%s\n**Moderator:** %s".formatted(description, UserHandler.formatDiscordUser(context.user())));
+				msgBuilder.description("%s\n**Moderator:** %s".formatted(description, UserHandler.formatDiscordUser(context.user())));
 
-				logChannel.sendMessage(msg).get();
+				logChannel.send(msgBuilder.build());
 			}
 
 			return true;
@@ -84,7 +84,7 @@ public final class NoteCommand extends Command {
 			Collection<NoteEntry> notes = NoteQueries.getAll(context.bot().getDatabase(), targetUserId);
 
 			if (notes.isEmpty()) {
-				context.channel().sendMessage(String.format("No notes for user %d", targetUserId));
+				context.channel().send(String.format("No notes for user %d", targetUserId));
 			} else {
 				StringBuilder sb = new StringBuilder(String.format("Notes for user %d:", targetUserId));
 
@@ -103,7 +103,7 @@ public final class NoteCommand extends Command {
 							content));
 				}
 
-				context.channel().sendMessage(sb.toString());
+				context.channel().send(sb.toString());
 			}
 
 			return true;
@@ -114,14 +114,15 @@ public final class NoteCommand extends Command {
 
 			LongList targets = context.bot().getUserHandler().getDiscordUserIds(note.targetUserId());
 
-			context.channel().sendMessage(new EmbedBuilder()
-					.setTitle("Note %d details".formatted(note.id()))
-					.setDescription(String.format("**User %d:**%s\n**Moderator:** %s\n**Creation:** %s\n**Note:** %s",
+			context.channel().send(new MessageEmbed.Builder()
+					.title("Note %d details".formatted(note.id()))
+					.description(String.format("**User %d:**%s\n**Moderator:** %s\n**Creation:** %s\n**Note:** %s",
 							note.targetUserId(),
 							FormatUtil.formatUserList(targets, context),
 							context.bot().getUserHandler().formatUser(note.actorUserId(), context.server()),
 							FormatUtil.dateTimeFormatter.format(Instant.ofEpochMilli(note.creationTime())),
-							note.content())));
+							note.content()))
+					.build());
 
 			return true;
 		}
@@ -130,14 +131,14 @@ public final class NoteCommand extends Command {
 				throw new CommandException("Unknown note");
 			}
 
-			context.channel().sendMessage("Note updated");
+			context.channel().send("Note updated");
 			return true;
 		case "remove":
 			if (!NoteQueries.remove(context.bot().getDatabase(), Integer.parseInt(arguments.get("id")))) {
 				throw new CommandException("Unknown note");
 			}
 
-			context.channel().sendMessage("Note removed");
+			context.channel().send("Note removed");
 			return true;
 		}
 

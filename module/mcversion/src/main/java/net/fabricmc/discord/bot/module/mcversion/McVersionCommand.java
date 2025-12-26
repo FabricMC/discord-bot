@@ -46,7 +46,7 @@ public final class McVersionCommand extends Command {
 
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
-		context.channel().sendMessage(String.format("**Fabric**\nLatest: %s\nLatest Stable: %s\n\n"
+		context.channel().send(String.format("**Fabric**\nLatest: %s\nLatest Stable: %s\n\n"
 				+ "**McMeta**\nRelease: %s\nSnapshot: %s\nLast Update: <t:%d>",
 				module.getRepo().getLatest(), module.getRepo().getLatestStable(),
 				module.metaFetcher.getLatestRelease(), module.metaFetcher.getLatestSnapshot(), module.metaFetcher.getLastUpdateTimeMs() / 1000));

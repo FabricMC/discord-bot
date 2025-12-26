@@ -16,18 +16,16 @@
 
 package net.fabricmc.discord.bot;
 
-import org.javacord.api.DiscordApi;
-import org.javacord.api.entity.activity.ActivityType;
-import org.javacord.api.entity.server.Server;
-
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
+import net.fabricmc.discord.io.Discord;
+import net.fabricmc.discord.io.Server;
 
 public final class ActivityHandler {
 	private static final ConfigKey<String> ACTIVITY = new ConfigKey<>("activity", ValueSerializers.STRING);
 
 	private final DiscordBot bot;
-	private volatile DiscordApi api;
+	private volatile Discord discord;
 
 	ActivityHandler(DiscordBot bot) {
 		this.bot = bot;
@@ -40,26 +38,26 @@ public final class ActivityHandler {
 
 	private void onReady(Server server, long prevActive) {
 		String activity = bot.getConfigEntry(ACTIVITY);
-		DiscordApi api = server.getApi();
+		Discord discord = server.getDiscord();
 
-		updateActivity(api, activity);
+		updateActivity(discord, activity);
 
-		this.api = api;
+		this.discord = discord;
 	}
 
 	private void onGone(Server server) {
-		api = null;
+		discord = null;
 	}
 
 	void onConfigValueChanged(ConfigKey<?> key, Object value) {
 		if (key != ACTIVITY) return;
 
-		DiscordApi api = this.api;
-		if (api != null) updateActivity(api, (String) value);
+		Discord discord = this.discord;
+		if (discord != null) updateActivity(discord, (String) value);
 	}
 
-	private static void updateActivity(DiscordApi api, String activity) {
+	private static void updateActivity(Discord discord, String activity) {
 		String value = activity.isEmpty() ? null : activity;
-		api.updateActivity(ActivityType.PLAYING, value); // CUSTOM isn't available to bots yet
+		discord.setActivity(value);
 	}
 }

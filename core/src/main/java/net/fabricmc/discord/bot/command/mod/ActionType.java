@@ -16,12 +16,12 @@
 
 package net.fabricmc.discord.bot.command.mod;
 
-import org.javacord.api.entity.server.Server;
-import org.javacord.api.exception.DiscordException;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.util.FormatUtil;
+import net.fabricmc.discord.io.DiscordException;
+import net.fabricmc.discord.io.Server;
 
 public interface ActionType {
 	Kind getKind();

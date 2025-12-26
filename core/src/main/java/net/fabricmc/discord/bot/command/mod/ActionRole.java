@@ -16,12 +16,11 @@
 
 package net.fabricmc.discord.bot.command.mod;
 
-import org.javacord.api.entity.permission.Role;
-import org.javacord.api.entity.server.Server;
-
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
+import net.fabricmc.discord.io.Role;
+import net.fabricmc.discord.io.Server;
 
 enum ActionRole {
 	META_MUTE, MUTE, REACTION_MUTE, REQUESTS_MUTE, SUPPORT_MUTE;
@@ -34,7 +33,7 @@ enum ActionRole {
 		long roleId = bot.getConfigEntry(configKey);
 		if (roleId < 0) return null;
 
-		return server.getRoleById(roleId).orElse(null);
+		return server.getRole(roleId);
 	}
 
 	static void registerConfig(DiscordBot bot) {

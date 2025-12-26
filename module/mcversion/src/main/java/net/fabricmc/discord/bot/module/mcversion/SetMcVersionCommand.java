@@ -51,7 +51,7 @@ public final class SetMcVersionCommand extends Command {
 
 		if ("reset".equals(arg)) {
 			removeUserConfig(context, McVersionModule.DEFAULT_VERSION);
-			context.channel().sendMessage("Default MC version reset");
+			context.channel().send("Default MC version reset");
 		} else {
 			if (arg == null) {
 				arg = arguments.get("mcVersion");
@@ -62,7 +62,7 @@ public final class SetMcVersionCommand extends Command {
 			}
 
 			setUserConfig(context, McVersionModule.DEFAULT_VERSION, arg);
-			context.channel().sendMessage("Default MC version updated");
+			context.channel().send("Default MC version updated");
 		}
 
 		return true;

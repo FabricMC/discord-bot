@@ -24,11 +24,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.entity.server.Server;
-import org.javacord.api.listener.ChainableGloballyAttachableListenerManager;
 
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
+import net.fabricmc.discord.io.GlobalEventHolder;
+import net.fabricmc.discord.io.Server;
 
 /**
  * Bot presence state handling
@@ -92,13 +92,11 @@ public final class ActiveHandler {
 		goneHandlers.forEach(h -> h.onGone(server));
 	}
 
-	void registerEarlyHandlers(ChainableGloballyAttachableListenerManager src) {
-		src.addServerBecomesAvailableListener(api -> {
-			Server server = api.getServer();
+	void registerEarlyHandlers(GlobalEventHolder holder) {
+		holder.registerServerReady(server -> {
 			if (server.getId() == bot.getServerId()) onServerReady(server);
 		});
-		src.addServerBecomesUnavailableListener(api -> {
-			Server server = api.getServer();
+		holder.registerServerGone(server -> {
 			if (server.getId() == bot.getServerId()) onServerGone(server);
 		});
 	}

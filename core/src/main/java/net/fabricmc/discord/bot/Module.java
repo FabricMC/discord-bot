@@ -19,9 +19,9 @@ package net.fabricmc.discord.bot;
 import java.nio.file.Path;
 
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.DiscordApi;
 
 import net.fabricmc.discord.bot.config.ConfigKey;
+import net.fabricmc.discord.io.Discord;
 
 public interface Module {
 	String getName();
@@ -40,9 +40,9 @@ public interface Module {
 	 * @param logger the logger for this module
 	 * @param dataDir the data directory the bot is using
 	 */
-	void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir);
+	void setup(DiscordBot bot, Discord discord, Logger logger, Path dataDir);
 
-	default void onAllSetup(DiscordBot bot, DiscordApi api) { }
+	default void onAllSetup(DiscordBot bot, Discord discord) { }
 
 	/**
 	 * Called when a config entry has changed.

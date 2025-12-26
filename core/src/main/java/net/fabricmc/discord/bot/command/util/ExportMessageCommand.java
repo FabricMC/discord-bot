@@ -18,14 +18,13 @@ package net.fabricmc.discord.bot.command.util;
 
 import java.util.Map;
 
-import org.javacord.api.entity.message.Message;
-
 import net.fabricmc.discord.bot.CachedMessage;
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.util.FormatUtil;
+import net.fabricmc.discord.io.Message;
 
 public final class ExportMessageCommand extends Command {
 	@Override

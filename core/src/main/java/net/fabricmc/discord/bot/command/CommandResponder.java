@@ -16,22 +16,18 @@
 
 package net.fabricmc.discord.bot.command;
 
-import java.util.concurrent.CompletableFuture;
-
-import org.javacord.api.entity.emoji.Emoji;
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.event.message.MessageEvent;
-
 import net.fabricmc.discord.bot.message.Paginator;
+import net.fabricmc.discord.io.Emoji;
+import net.fabricmc.discord.io.Message;
 
 /**
  * An object which provides methods to respond to a command that was sent to the bot.
  */
 public final class CommandResponder {
-	private final MessageEvent event;
+	private final Message message;
 
-	public CommandResponder(MessageEvent event) {
-		this.event = event;
+	public CommandResponder(Message message) {
+		this.message = message;
 	}
 
 	/**
@@ -39,26 +35,21 @@ public final class CommandResponder {
 	 *
 	 * @return a future which will be completed when the message is deleted
 	 */
-	public CompletableFuture<Void> deleteMessage() {
-		return this.event.deleteMessage();
+	public void deleteMessage() {
+		message.delete(null);
 	}
 
 	/**
 	 * Deletes a message.
 	 *
 	 * @param reason the audit log reason for deleting the message
-	 * @return a future which will be completed when the message is deleted
 	 */
-	public CompletableFuture<Void> deleteMessage(String reason) {
-		return this.event.deleteMessage(reason);
+	public void deleteMessage(String reason) {
+		message.delete(reason);
 	}
 
-	public CompletableFuture<Void> addEmote(String unicodeEmoji) {
-		return this.event.addReactionToMessage(unicodeEmoji);
-	}
-
-	public CompletableFuture<Void> addEmote(Emoji emoji) {
-		return this.event.addReactionToMessage(emoji);
+	public void addEmote(Emoji emoji) {
+		message.addReaction(emoji);
 	}
 
 	/**
@@ -67,7 +58,7 @@ public final class CommandResponder {
 	 * @param paginator the paginator
 	 * @return a future which will be completed when the paginator is displayed
 	 */
-	public CompletableFuture<Message> paginate(Paginator paginator) {
-		return paginator.send(this.event.getChannel());
+	public Message paginate(Paginator paginator) {
+		return paginator.send(message.getChannel());
 	}
 }

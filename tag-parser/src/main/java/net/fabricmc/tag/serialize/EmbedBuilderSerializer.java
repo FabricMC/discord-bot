@@ -19,16 +19,17 @@ package net.fabricmc.tag.serialize;
 import java.lang.reflect.Type;
 import java.util.Map;
 
-import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.configurate.ConfigurationNode;
 import org.spongepowered.configurate.serialize.SerializationException;
 import org.spongepowered.configurate.serialize.TypeSerializer;
 
-public final class EmbedBuilderSerializer implements TypeSerializer<EmbedBuilder> {
+import net.fabricmc.discord.io.MessageEmbed;
+
+public final class EmbedBuilderSerializer implements TypeSerializer<MessageEmbed.Builder> {
 	@Override
-	public EmbedBuilder deserialize(Type type, ConfigurationNode node) throws SerializationException {
-		final EmbedBuilder builder = new EmbedBuilder();
+	public MessageEmbed.Builder deserialize(Type type, ConfigurationNode node) throws SerializationException {
+		final MessageEmbed.Builder builder = new MessageEmbed.Builder();
 
 		if (!node.isMap()) {
 			throw new SerializationException("Embed must be an object!");
@@ -39,20 +40,20 @@ public final class EmbedBuilderSerializer implements TypeSerializer<EmbedBuilder
 			final ConfigurationNode value = childEntry.getValue();
 
 			switch (key) {
-			case "title" -> builder.setTitle(value.getString());
+			case "title" -> builder.title(value.getString());
 			case "footer" -> this.readFooter(builder, value);
 			case "image" -> this.readImage(builder, value);
 			case "author" -> this.readAuthor(builder, value);
 			case "thumbnail" -> this.readThumbnail(builder, value);
 			case "fields" -> this.readFields(builder, value);
-			default -> throw new SerializationException(node.path(), EmbedBuilder.class, "Invalid field %s in embed".formatted(key));
+			default -> throw new SerializationException(node.path(), MessageEmbed.Builder.class, "Invalid field %s in embed".formatted(key));
 			}
 		}
 
 		return builder;
 	}
 
-	private void readFooter(EmbedBuilder builder, ConfigurationNode node) throws SerializationException {
+	private void readFooter(MessageEmbed.Builder builder, ConfigurationNode node) throws SerializationException {
 		@Nullable String text = null;
 		@Nullable String iconUrl = null;
 
@@ -63,30 +64,26 @@ public final class EmbedBuilderSerializer implements TypeSerializer<EmbedBuilder
 			switch (key) {
 			case "text" -> text = valueNode.getString();
 			case "iconUrl", "icon-url" -> iconUrl = valueNode.getString();
-			default -> throw new SerializationException(valueNode.path(), EmbedBuilder.class, "Invalid field %s in embed footer".formatted(key));
+			default -> throw new SerializationException(valueNode.path(), MessageEmbed.Builder.class, "Invalid field %s in embed footer".formatted(key));
 			}
 		}
 
-		if (iconUrl != null) {
-			builder.setFooter(text, iconUrl);
-		} else {
-			builder.setFooter(text);
-		}
+		builder.footer(text, iconUrl);
 	}
 
-	private void readImage(EmbedBuilder builder, ConfigurationNode node) throws SerializationException {
+	private void readImage(MessageEmbed.Builder builder, ConfigurationNode node) throws SerializationException {
 		for (Map.Entry<Object, ? extends ConfigurationNode> propertyEntry : node.childrenMap().entrySet()) {
 			final String key = propertyEntry.getKey().toString();
 			final ConfigurationNode valueNode = propertyEntry.getValue();
 
 			switch (key) {
-			case "url" -> builder.setImage(valueNode.getString());
-			default -> throw new SerializationException(node.path(), EmbedBuilder.class, "Invalid image key %s in embed".formatted(key));
+			case "url" -> builder.image(valueNode.getString());
+			default -> throw new SerializationException(node.path(), MessageEmbed.Builder.class, "Invalid image key %s in embed".formatted(key));
 			}
 		}
 	}
 
-	private void readAuthor(EmbedBuilder builder, ConfigurationNode node) throws SerializationException {
+	private void readAuthor(MessageEmbed.Builder builder, ConfigurationNode node) throws SerializationException {
 		String name = null;
 		String url = null;
 		String iconUrl = null;
@@ -99,7 +96,7 @@ public final class EmbedBuilderSerializer implements TypeSerializer<EmbedBuilder
 			case "name" -> name = valueNode.getString();
 			case "url" -> url = valueNode.getString();
 			case "iconUrl" -> iconUrl = valueNode.getString();
-			default -> throw new SerializationException(valueNode.path(), EmbedBuilder.class, "Invalid author key %s in embed".formatted(key));
+			default -> throw new SerializationException(valueNode.path(), MessageEmbed.Builder.class, "Invalid author key %s in embed".formatted(key));
 			}
 		}
 
@@ -107,22 +104,22 @@ public final class EmbedBuilderSerializer implements TypeSerializer<EmbedBuilder
 			throw new SerializationException(node.path(), String.class, "Embed author must have a name!");
 		}
 
-		builder.setAuthor(name, url, iconUrl);
+		builder.author(name, url, iconUrl);
 	}
 
-	private void readThumbnail(EmbedBuilder builder, ConfigurationNode node) throws SerializationException {
+	private void readThumbnail(MessageEmbed.Builder builder, ConfigurationNode node) throws SerializationException {
 		for (Map.Entry<Object, ? extends ConfigurationNode> propertyEntry : node.childrenMap().entrySet()) {
 			final String key = propertyEntry.getKey().toString();
 			final ConfigurationNode valueNode = propertyEntry.getValue();
 
 			switch (key) {
-			case "url" -> builder.setThumbnail(valueNode.getString());
-			default -> throw new SerializationException(node.path(), EmbedBuilder.class, "Invalid thumbnail key %s in embed".formatted(key));
+			case "url" -> builder.thumbnail(valueNode.getString());
+			default -> throw new SerializationException(node.path(), MessageEmbed.Builder.class, "Invalid thumbnail key %s in embed".formatted(key));
 			}
 		}
 	}
 
-	private void readFields(EmbedBuilder builder, ConfigurationNode node) throws SerializationException {
+	private void readFields(MessageEmbed.Builder builder, ConfigurationNode node) throws SerializationException {
 		for (ConfigurationNode itemEntry : node.childrenList()) {
 			String name = null;
 			String value = null;
@@ -136,7 +133,7 @@ public final class EmbedBuilderSerializer implements TypeSerializer<EmbedBuilder
 				case "name" -> name = valueNode.getString();
 				case "value" -> value = valueNode.getString();
 				case "inline" -> inline = valueNode.getBoolean();
-				default -> throw new SerializationException(valueNode.path(), EmbedBuilder.class, "Invalid field key %s in embed".formatted(key));
+				default -> throw new SerializationException(valueNode.path(), MessageEmbed.Builder.class, "Invalid field key %s in embed".formatted(key));
 				}
 			}
 
@@ -148,12 +145,12 @@ public final class EmbedBuilderSerializer implements TypeSerializer<EmbedBuilder
 				throw new SerializationException(itemEntry.path(), String.class, "Embed field must have a value!");
 			}
 
-			builder.addField(name, value, inline);
+			builder.field(name, value, inline);
 		}
 	}
 
 	@Override
-	public void serialize(Type type, @Nullable EmbedBuilder obj, ConfigurationNode node) throws SerializationException {
+	public void serialize(Type type, @Nullable MessageEmbed.Builder obj, ConfigurationNode node) throws SerializationException {
 		throw new SerializationException("Serialization not supported!");
 	}
 }

@@ -22,13 +22,14 @@ import java.util.List;
 import java.util.Locale;
 
 import it.unimi.dsi.fastutil.longs.LongList;
-import org.javacord.api.entity.server.Server;
-import org.javacord.api.entity.user.User;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
+import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.Server;
+import net.fabricmc.discord.io.User;
 
 public final class FormatUtil {
 	public static final int MAX_MESSAGE_LENGTH = 2000;
@@ -326,5 +327,14 @@ public final class FormatUtil {
 
 	public static String truncateMessage(String s, int extraLen) {
 		return truncate(s, MAX_MESSAGE_LENGTH - extraLen);
+	}
+
+	public static String createMessageLink(Message message) {
+		Server server = message.getChannel().getServer();
+
+		return String.format("https://discord.com/channels/%s/%d/%d",
+				(server != null ? Long.toUnsignedString(server.getId()) : "@me"),
+				message.getChannel().getId(),
+				message.getId());
 	}
 }

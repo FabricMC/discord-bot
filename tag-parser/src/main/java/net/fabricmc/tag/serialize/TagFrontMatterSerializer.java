@@ -24,12 +24,12 @@ import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
-import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.configurate.ConfigurationNode;
 import org.spongepowered.configurate.serialize.SerializationException;
 import org.spongepowered.configurate.serialize.TypeSerializer;
 
+import net.fabricmc.discord.io.MessageEmbed;
 import net.fabricmc.tag.TagFrontMatter;
 
 public final class TagFrontMatterSerializer implements TypeSerializer<TagFrontMatter> {
@@ -102,14 +102,14 @@ public final class TagFrontMatterSerializer implements TypeSerializer<TagFrontMa
 		final ConfigurationNode embedNode = node.node("embed");
 
 		if (embedNode.virtual()) {
-			throw new SerializationException(embedNode.path(), EmbedBuilder.class, "Embed tag requires an embed!");
+			throw new SerializationException(embedNode.path(), MessageEmbed.Builder.class, "Embed tag requires an embed!");
 		}
 
 		@Nullable
-		final EmbedBuilder embed = embedNode.get(EmbedBuilder.class);
+		final MessageEmbed.Builder embed = embedNode.get(MessageEmbed.Builder.class);
 
 		if (embed == null) {
-			throw new SerializationException(embedNode.path(), EmbedBuilder.class, "Failed to parse embed!");
+			throw new SerializationException(embedNode.path(), MessageEmbed.Builder.class, "Failed to parse embed!");
 		}
 
 		final ConfigurationNode colorNode = node.node("color");
@@ -123,15 +123,15 @@ public final class TagFrontMatterSerializer implements TypeSerializer<TagFrontMa
 				final Color colour = colourNode.get(Color.class);
 
 				if (colour != null) {
-					embed.setColor(colour);
+					embed.color(colour);
 				}
-			// American spelling
+				// American spelling
 			} else if (!colorNode.virtual()) {
 				@Nullable
 				final Color color = colorNode.get(Color.class);
 
 				if (color != null) {
-					embed.setColor(color);
+					embed.color(color);
 				}
 			}
 		}

@@ -18,26 +18,25 @@ package net.fabricmc.discord.bot.command.util;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletionException;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.MessageAttachment;
-import org.javacord.api.entity.message.MessageBuilder;
-import org.javacord.api.entity.message.MessageSet;
-import org.javacord.api.entity.message.embed.Embed;
-import org.javacord.api.exception.DiscordException;
 
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
-import net.fabricmc.discord.bot.util.DiscordUtil;
 import net.fabricmc.discord.bot.util.FormatUtil;
 import net.fabricmc.discord.bot.util.FormatUtil.OutputType;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.DiscordException;
+import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.MessageAttachment;
+import net.fabricmc.discord.io.MessageEmbed;
+import net.fabricmc.discord.io.MessageEmbed.Type;
 
 public final class ExportChannelCommand extends Command {
 	static final int MSG_COUNT_LIMIT = 100;
@@ -64,10 +63,10 @@ public final class ExportChannelCommand extends Command {
 
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
-		TextChannel channel = getTextChannel(context, arguments.get("channel"));
+		Channel channel = getTextChannel(context, arguments.get("channel"));
 		boolean markBoundaries = Boolean.parseBoolean(arguments.getOrDefault("markBoundaries", "false"));
 
-		MessageSet messages = DiscordUtil.join(channel.getMessages(MSG_COUNT_LIMIT));
+		List<? extends Message> messages = channel.getMessages(MSG_COUNT_LIMIT);
 		if (messages.isEmpty()) throw new CommandException("empty channel");
 
 		boolean embedData = arguments.containsKey("embedData");
@@ -98,17 +97,18 @@ public final class ExportChannelCommand extends Command {
 			JsonObject obj = new JsonObject();
 			obj.addProperty("type", "attachment");
 			obj.addProperty("fileName", attachment.getFileName());
+			if (attachment.getDescription() != null) obj.addProperty("description", attachment.getDescription());
 			obj.addProperty("url", attachment.getUrl().toString());
 
 			if (embedData) {
 				try {
-					obj.addProperty("data", Base64.getEncoder().encodeToString(attachment.asByteArray().join()));
+					obj.addProperty("data", Base64.getEncoder().encodeToString(attachment.getBytes()));
 				} catch (CompletionException e) {
 					Throwable cause = e.getCause();
 
 					if (cause != null) {
 						cause.printStackTrace();
-						context.channel().sendMessage(String.format("Error fetching data from %s: %s",
+						context.channel().send(String.format("Error fetching data from %s: %s",
 								FormatUtil.escape(attachment.getUrl().toString(), OutputType.INLINE_CODE, true),
 								FormatUtil.escapePlain(attachment.getUrl().toString())));
 					} else {
@@ -122,15 +122,17 @@ public final class ExportChannelCommand extends Command {
 			out.append(TAG_END);
 		}
 
-		for (Embed embed : message.getEmbeds()) {
+		for (MessageEmbed embed : message.getEmbeds()) {
+			if (embed.getType() == Type.OTHER) continue; // unsupported
+
 			JsonObject obj = new JsonObject();
 			obj.addProperty("type", "embed");
-			obj.addProperty("embedType", embed.getType());
-			if (embed.getTitle().isPresent()) obj.addProperty("title", embed.getTitle().orElseThrow());
-			if (embed.getDescription().isPresent()) obj.addProperty("description", embed.getDescription().orElseThrow());
-			if (embed.getUrl().isPresent()) obj.addProperty("url", embed.getUrl().orElseThrow().toString());
-			if (embed.getTimestamp().isPresent()) obj.addProperty("timestamp", embed.getTimestamp().orElseThrow().toEpochMilli());
-			if (embed.getColor().isPresent()) obj.addProperty("color", embed.getColor().orElseThrow().getRGB());
+			obj.addProperty("embedType", embed.getType().name);
+			if (embed.getTitle() != null) obj.addProperty("title", embed.getTitle());
+			if (embed.getTitleUrl() != null) obj.addProperty("url", embed.getTitleUrl().toString());
+			if (embed.getDescription() != null) obj.addProperty("description", embed.getDescription());
+			if (embed.getTime() != null) obj.addProperty("timestamp", embed.getTime().toEpochMilli());
+			if (embed.getColor() != null) obj.addProperty("color", embed.getColor().getRGB());
 			// TODO: remaining properties
 
 			out.append(TAG_START);
@@ -140,9 +142,9 @@ public final class ExportChannelCommand extends Command {
 	}
 
 	static void uploadExport(CommandContext context, CharSequence data) throws DiscordException {
-		Message msg = DiscordUtil.join(new MessageBuilder()
-				.addAttachment(data.toString().getBytes(StandardCharsets.UTF_8), "contents.txt")
-				.send(context.channel()));
+		Message msg = context.channel().send(new Message.Builder()
+				.attachment(new MessageAttachment.Builder().data(data.toString().getBytes(StandardCharsets.UTF_8)).name("contents.txt").build())
+				.build());
 
 		msg.edit(msg.getAttachments().get(0).getUrl().toString());
 	}

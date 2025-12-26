@@ -18,7 +18,6 @@ package net.fabricmc.discord.bot.command.core;
 
 import java.util.Map;
 
-import org.javacord.api.exception.DiscordException;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.UserHandler;
@@ -26,6 +25,7 @@ import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.message.Paginator;
+import net.fabricmc.discord.io.DiscordException;
 
 public final class ConfigCommand extends Command {
 	@Override
@@ -83,7 +83,7 @@ public final class ConfigCommand extends Command {
 		@Nullable final ConfigKey<Object> configKey = (ConfigKey<Object>) context.bot().getConfigKey(key);
 
 		if (configKey == null) {
-			context.channel().sendMessage("%s\nInvalid config entry key `%s`".formatted(context.user().getNicknameMentionTag(), key));
+			context.channel().send("%s\nInvalid config entry key `%s`".formatted(context.user().getNickMentionTag(), key));
 			return false;
 		}
 
@@ -94,16 +94,16 @@ public final class ConfigCommand extends Command {
 			deserializedValue = configKey.valueSerializer().deserialize(value);
 		} catch (IllegalArgumentException e) {
 			// FIXME: Big-ass exceptions could exceed message limit?
-			context.channel().sendMessage("Failed to set `%s` to `%s`:\n`%s`".formatted(key, value, e));
+			context.channel().send("Failed to set `%s` to `%s`:\n`%s`".formatted(key, value, e));
 			return false;
 		}
 
 		if (!context.bot().setConfigEntry(configKey, deserializedValue)) {
-			context.channel().sendMessage("%s\nInvalid value: cannot set config entry %s to %s".formatted(context.user().getNicknameMentionTag(), key, value));
+			context.channel().send("%s\nInvalid value: cannot set config entry %s to %s".formatted(context.user().getNickMentionTag(), key, value));
 			return false;
 		}
 
-		context.channel().sendMessage("Set config entry `%s` to `%s`".formatted(key, value));
+		context.channel().send("Set config entry `%s` to `%s`".formatted(key, value));
 
 		return true;
 	}
@@ -114,13 +114,13 @@ public final class ConfigCommand extends Command {
 		@Nullable final ConfigKey<Object> configKey = (ConfigKey<Object>) context.bot().getConfigKey(key);
 
 		if (configKey == null) {
-			context.channel().sendMessage("%s: Invalid config entry key %s".formatted(context.user().getNicknameMentionTag(), key));
+			context.channel().send("%s: Invalid config entry key %s".formatted(context.user().getNickMentionTag(), key));
 			return false;
 		}
 
 		final Object configEntry = context.bot().getConfigEntry(configKey);
 		final String value = configKey.valueSerializer().serialize(configEntry);
-		context.channel().sendMessage("Config entry `%s` is `%s`".formatted(key, value));
+		context.channel().send("Config entry `%s` is `%s`".formatted(key, value));
 
 		return true;
 	}

@@ -38,14 +38,6 @@ import java.util.concurrent.TimeUnit;
 import com.google.gson.stream.JsonReader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.server.Server;
-import org.javacord.api.event.message.MessageCreateEvent;
-import org.javacord.api.event.message.MessageEditEvent;
-import org.javacord.api.listener.ChainableGloballyAttachableListenerManager;
-import org.javacord.api.listener.message.MessageCreateListener;
-import org.javacord.api.listener.message.MessageEditListener;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.config.ConfigKey;
@@ -59,8 +51,14 @@ import net.fabricmc.discord.bot.database.query.FilterQueries.GlobalFilterListExc
 import net.fabricmc.discord.bot.filter.FilterType.MessageMatcher;
 import net.fabricmc.discord.bot.util.DiscordUtil;
 import net.fabricmc.discord.bot.util.HttpUtil;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.GlobalEventHolder;
+import net.fabricmc.discord.io.GlobalEventHolder.MessageCreateHandler;
+import net.fabricmc.discord.io.GlobalEventHolder.MessageEditHandler;
+import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.Server;
 
-public final class FilterHandler implements MessageCreateListener, MessageEditListener {
+public final class FilterHandler implements MessageCreateHandler, MessageEditHandler {
 	private static final int filterListUpdatePeriodMin = 60;
 
 	private static final Logger LOGGER = LogManager.getLogger(FilterHandler.class);
@@ -68,7 +66,7 @@ public final class FilterHandler implements MessageCreateListener, MessageEditLi
 
 	private final DiscordBot bot;
 	private volatile List<CompiledFilter> filters = Collections.emptyList();
-	private volatile TextChannel alertChannel;
+	private volatile Channel alertChannel;
 	private final Map<FilterType, Set<String>> knownInvalidPatterns = new EnumMap<>(FilterType.class);
 
 	public FilterHandler(DiscordBot bot) {
@@ -251,7 +249,7 @@ public final class FilterHandler implements MessageCreateListener, MessageEditLi
 		long channelId = bot.getConfigEntry(ALERT_CHANNEL);
 
 		if (channelId >= 0) {
-			TextChannel channel = DiscordUtil.getTextChannel(server, channelId);
+			Channel channel = server.getTextChannel(channelId);
 
 			if (channel == null) {
 				LOGGER.warn("invalid alert channel: {}", channelId);
@@ -269,33 +267,33 @@ public final class FilterHandler implements MessageCreateListener, MessageEditLi
 		return bot;
 	}
 
-	public TextChannel getAlertChannel() {
+	public Channel getAlertChannel() {
 		return alertChannel;
 	}
 
-	public void registerEarlyHandlers(ChainableGloballyAttachableListenerManager src) {
-		src.addMessageCreateListener(this);
-		src.addMessageEditListener(this);
+	public void registerEarlyHandlers(GlobalEventHolder holder) {
+		holder.registerMessageCreate(this);
+		holder.registerMessageEdit(this);
 	}
 
 	@Override
-	public void onMessageCreate(MessageCreateEvent event) {
-		Server server = event.getServer().orElse(null);
+	public void onMessageCreate(Message message) {
+		Server server = message.getChannel().getServer();
 		if (server == null || server.getId() != bot.getServerId()) return;
 
-		handleMessage(event.getMessage(), false);
+		handleMessage(message, false);
 	}
 
 	@Override
-	public void onMessageEdit(MessageEditEvent event) {
-		Server server = event.getServer().orElse(null);
+	public void onMessageEdit(Message message) {
+		Server server = message.getChannel().getServer();
 		if (server == null || server.getId() != bot.getServerId()) return;
 
-		handleMessage(event.getMessage(), true);
+		handleMessage(message, true);
 	}
 
 	private void handleMessage(Message message, boolean isEdit) {
-		if (!message.getAuthor().isUser()) return;
+		if (message.isFromWebhook()) return;
 		if (!DiscordUtil.canDeleteMessages(message.getChannel())) return;
 		if (bot.getUserHandler().hasImmunity(message.getAuthor(), bot.getUserHandler().getBotUserId(), false)) return;
 

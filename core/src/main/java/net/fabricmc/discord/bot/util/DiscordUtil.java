@@ -16,91 +16,47 @@
 
 package net.fabricmc.discord.bot.util;
 
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.regex.Pattern;
 
-import org.javacord.api.entity.Nameable;
-import org.javacord.api.entity.channel.ChannelType;
-import org.javacord.api.entity.channel.ServerChannel;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.MessageBuilder;
-import org.javacord.api.entity.message.Messageable;
-import org.javacord.api.entity.message.mention.AllowedMentions;
-import org.javacord.api.entity.message.mention.AllowedMentionsBuilder;
-import org.javacord.api.entity.server.Server;
-import org.javacord.api.exception.DiscordException;
-import org.jetbrains.annotations.Nullable;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.Permission;
+import net.fabricmc.discord.io.Server;
 
 public final class DiscordUtil {
-	public static <T> T join(CompletableFuture<T> future) throws DiscordException {
-		try {
-			return future.join();
-		} catch (CompletionException e) {
-			Throwable cause = e.getCause();
-
-			if (cause instanceof DiscordException) {
-				throw (DiscordException) cause;
-			} else if (cause instanceof RuntimeException) {
-				throw (RuntimeException) cause;
-			} else {
-				throw e;
-			}
-		}
+	public static Instant getCreationTime(long entityId) {
+		return Instant.ofEpochMilli((entityId >>> 22) + 1420070400000L);
 	}
 
-	public static @Nullable TextChannel getTextChannel(Server server, long id) {
-		ServerChannel ret = server.getChannelById(id).orElse(null);
+	public static List<? extends Channel> getTextChannels(Server server) {
+		List<? extends Channel> channels = server.getChannels();
+		List<Channel> ret = new ArrayList<>(channels.size());
 
-		return ret instanceof TextChannel ? (TextChannel) ret : null;
-	}
-
-	public static List<TextChannel> getTextChannels(Server server) {
-		List<ServerChannel> channels = server.getChannels();
-		List<TextChannel> ret = new ArrayList<>(channels.size());
-
-		for (ServerChannel channel : channels) {
-			if (channel instanceof TextChannel) ret.add((TextChannel) channel);
+		for (Channel channel : channels) {
+			if (channel.getType().text) ret.add(channel);
 		}
 
 		return ret;
 	}
 
-	public static void sortTextChannelsByName(List<TextChannel> channels) {
-		channels.sort((a, b) -> {
-			if (a instanceof Nameable) {
-				if (b instanceof Nameable) {
-					return ((Nameable) a).getName().compareTo(((Nameable) b).getName());
-				} else {
-					return -1;
-				}
-			} else if (b instanceof Nameable) {
-				return 1;
-			} else {
-				return 0;
-			}
-		});
+	public static void sortTextChannelsByName(List<Channel> channels) {
+		channels.sort(Comparator.nullsLast(Comparator.comparing(Channel::getName)));
 	}
 
-	public static final AllowedMentions NO_MENTIONS = new AllowedMentionsBuilder().build();
-
-	public static CompletableFuture<Message> sendMentionlessMessage(Messageable target, CharSequence message) {
-		return new MessageBuilder().append(message).setAllowedMentions(NO_MENTIONS).send(target);
+	public static Message sendMentionlessMessage(Channel target, CharSequence message) {
+		return target.send(new Message.Builder().content(message.toString()).noAllowedMentions().build());
 	}
 
-	public static boolean canDeleteMessages(TextChannel channel) {
-		return channel.canYouSee() && channel.canYouReadMessageHistory() && channel.canYouManageMessages();
+	public static boolean canDeleteMessages(Channel channel) {
+		return channel.canYouSee() && channel.haveYouPermission(Permission.READ_MESSAGE_HISTORY) && channel.haveYouPermission(Permission.MANAGE_MESSAGES);
 	}
 
-	public static boolean canRemoveReactions(TextChannel channel) {
-		ChannelType type = channel.getType();
-
-		return channel.canYouRemoveReactionsOfOthers()
-				&& type != ChannelType.PRIVATE_CHANNEL
-				&& type != ChannelType.GROUP_CHANNEL; // no permissions in DMs
+	public static boolean canRemoveReactions(Channel channel) {
+		return channel.haveYouPermission(Permission.MANAGE_MESSAGES);
 	}
 
 	public static String getMessageLink(Server server, long channelId, long messageId) {

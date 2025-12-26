@@ -18,20 +18,19 @@ package net.fabricmc.discord.bot;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.server.Server;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
-import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.Server;
 
 public final class LogHandler {
 	private static final Logger LOGGER = LogManager.getLogger(LogHandler.class);
 	private static final ConfigKey<Long> LOG_CHANNEL = new ConfigKey<>("logChannel", ValueSerializers.LONG);
 
 	private final DiscordBot bot;
-	private volatile TextChannel logChannel;
+	private volatile Channel logChannel;
 
 	LogHandler(DiscordBot bot) {
 		this.bot = bot;
@@ -47,7 +46,7 @@ public final class LogHandler {
 		long channelId = bot.getConfigEntry(LOG_CHANNEL);
 
 		if (channelId >= 0) {
-			TextChannel channel = DiscordUtil.getTextChannel(server, channelId);
+			Channel channel = server.getTextChannel(channelId);
 
 			if (channel == null) {
 				LOGGER.warn("invalid log channel: {}", channelId);
@@ -61,7 +60,7 @@ public final class LogHandler {
 		logChannel = null;
 	}
 
-	public @Nullable TextChannel getLogChannel() {
+	public @Nullable Channel getLogChannel() {
 		return logChannel;
 	}
 }

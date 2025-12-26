@@ -42,7 +42,6 @@ import org.eclipse.jgit.api.PullResult;
 import org.eclipse.jgit.api.RebaseResult;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
-import org.javacord.api.DiscordApi;
 
 import net.fabricmc.discord.bot.CommandStringHandler;
 import net.fabricmc.discord.bot.DiscordBot;
@@ -52,6 +51,7 @@ import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
 import net.fabricmc.discord.bot.util.Collections2;
+import net.fabricmc.discord.io.Discord;
 import net.fabricmc.tag.TagFrontMatter;
 import net.fabricmc.tag.TagLoadResult;
 import net.fabricmc.tag.TagParser;
@@ -90,7 +90,7 @@ public final class TagModule implements Module, CommandStringHandler {
 	}
 
 	@Override
-	public void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
+	public void setup(DiscordBot bot, Discord discord, Logger logger, Path dataDir) {
 		this.bot = bot;
 		this.logger = logger;
 		this.gitDir = dataDir.resolve("git");
@@ -267,8 +267,8 @@ public final class TagModule implements Module, CommandStringHandler {
 		if (tag == null) {
 			// TODO: Improve message
 			// TODO: Remove sender's message and this message after time to replicate current logic
-			context.channel().sendMessage(String.format("%s: Unknown tag, use `%s%s` to see all available tags",
-					context.user().getNicknameMentionTag(),
+			context.channel().send(String.format("%s: Unknown tag, use `%s%s` to see all available tags",
+					context.user().getNickMentionTag(),
 					context.bot().getCommandPrefix(),
 					context.bot().getCommand(TagCommand.class).name()));
 			return;

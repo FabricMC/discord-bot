@@ -68,7 +68,7 @@ public final class YarnMethodCommand extends Command {
 		Collection<MethodMapping> results = data.findMethods(name, data.resolveNamespaces(queryNamespaces, false));
 
 		if (results.isEmpty()) {
-			context.channel().sendMessage("no matches for the given method name, MC version and query namespace");
+			context.channel().send("no matches for the given method name, MC version and query namespace");
 			return true;
 		}
 

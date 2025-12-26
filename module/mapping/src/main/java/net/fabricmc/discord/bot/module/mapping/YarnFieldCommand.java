@@ -68,7 +68,7 @@ public final class YarnFieldCommand extends Command {
 		Collection<FieldMapping> results = data.findFields(name, data.resolveNamespaces(queryNamespaces, false));
 
 		if (results.isEmpty()) {
-			context.channel().sendMessage("no matches for the given field name, MC version and query namespace");
+			context.channel().send("no matches for the given field name, MC version and query namespace");
 			return true;
 		}
 

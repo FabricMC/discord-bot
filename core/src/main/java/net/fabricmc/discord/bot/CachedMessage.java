@@ -18,19 +18,18 @@ package net.fabricmc.discord.bot;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.function.ToLongFunction;
 
-import org.javacord.api.entity.DiscordEntity;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.MessageAttachment;
-import org.javacord.api.entity.message.MessageAuthor;
-import org.javacord.api.entity.message.MessageType;
-import org.javacord.api.entity.server.Server;
-import org.javacord.api.exception.DiscordException;
-import org.javacord.api.exception.NotFoundException;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.DiscordException;
+import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.MessageAttachment;
+import net.fabricmc.discord.io.Role;
+import net.fabricmc.discord.io.Server;
+import net.fabricmc.discord.io.User;
 
 public final class CachedMessage {
 	CachedMessage(Message message) {
@@ -38,13 +37,13 @@ public final class CachedMessage {
 		this.type = message.getType();
 		this.channelId = message.getChannel().getId();
 
-		MessageAuthor author = message.getAuthor();
-		this.authorId = author.isWebhook() ? -1 : author.getId();
+		User author = message.getAuthor();
+		this.authorId = message.isFromWebhook() ? -1 : author.getId();
 
 		this.content = message.getContent();
 		this.attachments = serializeAttachments(message.getAttachments());
-		this.userMentions = serializeMentions(message.getMentionedUsers());
-		this.roleMentions = serializeMentions(message.getMentionedRoles());
+		this.userMentions = serializeMentions(message.getMentionedUsers(), User::getId);
+		this.roleMentions = serializeMentions(message.getMentionedRoles(), Role::getId);
 		this.prev = null;
 		this.editTime = null;
 	}
@@ -62,7 +61,7 @@ public final class CachedMessage {
 		this.editTime = editTime;
 	}
 
-	private static CachedMessageAttachment[] serializeAttachments(List<MessageAttachment> list) {
+	private static CachedMessageAttachment[] serializeAttachments(List<? extends MessageAttachment> list) {
 		int size = list.size();
 		if (size == 0) return emptyAttachments;
 
@@ -75,14 +74,14 @@ public final class CachedMessage {
 		return ret;
 	}
 
-	private static long[] serializeMentions(List<? extends DiscordEntity> list) {
+	private static <T> long[] serializeMentions(List<T> list, ToLongFunction<T> serializer) {
 		int size = list.size();
 		if (size == 0) return emptyMentions;
 
 		long[] ret = new long[size];
 
 		for (int i = 0; i < size; i++) {
-			ret[i] = list.get(i).getId();
+			ret[i] = serializer.applyAsLong(list.get(i));
 		}
 
 		return ret;
@@ -92,20 +91,20 @@ public final class CachedMessage {
 		return id;
 	}
 
-	public MessageType getType() {
+	public Message.Type getType() {
 		return type;
 	}
 
 	public Instant getCreationTime() {
-		return DiscordEntity.getCreationTimestamp(id);
+		return DiscordUtil.getCreationTime(id);
 	}
 
 	public long getChannelId() {
 		return channelId;
 	}
 
-	public @Nullable TextChannel getChannel(Server server) {
-		return DiscordUtil.getTextChannel(server, channelId);
+	public @Nullable Channel getChannel(Server server) {
+		return server.getTextChannel(channelId);
 	}
 
 	public long getAuthorDiscordId() {
@@ -139,24 +138,20 @@ public final class CachedMessage {
 	public boolean delete(Server server, String reason) throws DiscordException {
 		if (isDeleted()) return true;
 
-		try {
-			DiscordUtil.join(Message.delete(server.getApi(), channelId, id, reason));
-			deleted = true;
-			return true;
-		} catch (NotFoundException e) {
-			return false;
-		}
+		Channel channel = getChannel(server);
+		if (channel == null) return false;
+
+		channel.deleteMessage(id, reason); // TODO: catch exc and return false
+		deleted = true;
+
+		return true;
 	}
 
 	public @Nullable Message toMessage(Server server) throws DiscordException {
-		TextChannel channel = getChannel(server);
+		Channel channel = getChannel(server);
 		if (channel == null) return null;
 
-		try {
-			return DiscordUtil.join(channel.getMessageById(id));
-		} catch (NotFoundException e) {
-			return null;
-		}
+		return channel.getMessage(id); // TODO: catch exc and return null
 	}
 
 	/**
@@ -170,7 +165,7 @@ public final class CachedMessage {
 	private static final long[] emptyMentions = new long[0];
 
 	private final long id;
-	private final MessageType type;
+	private final Message.Type type;
 	private final long channelId;
 	private final long authorId;
 	private final String content;

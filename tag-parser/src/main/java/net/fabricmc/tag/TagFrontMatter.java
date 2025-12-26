@@ -19,7 +19,7 @@ package net.fabricmc.tag;
 import java.util.List;
 import java.util.function.Predicate;
 
-import org.javacord.api.entity.message.embed.EmbedBuilder;
+import net.fabricmc.discord.io.MessageEmbed;
 
 public interface TagFrontMatter {
 	TagFrontMatter TEXT = new TagFrontMatter() {
@@ -31,6 +31,6 @@ public interface TagFrontMatter {
 	record Alias(String target) implements TagFrontMatter {
 	}
 
-	record Embed(EmbedBuilder embed) implements TagFrontMatter {
+	record Embed(MessageEmbed.Builder embed) implements TagFrontMatter {
 	}
 }

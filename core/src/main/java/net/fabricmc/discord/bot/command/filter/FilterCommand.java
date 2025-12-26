@@ -59,7 +59,7 @@ public final class FilterCommand extends Command {
 			List<FilterEntry> filters = new ArrayList<>(FilterQueries.getFilters(context.bot().getDatabase(), group));
 
 			if (filters.isEmpty()) {
-				context.channel().sendMessage(String.format("No filters in group %s", group));
+				context.channel().send(String.format("No filters in group %s", group));
 			} else {
 				filters.sort(Comparator.comparing(FilterEntry::type).thenComparing(FilterEntry::pattern));
 
@@ -102,7 +102,7 @@ public final class FilterCommand extends Command {
 			if (id < 0) throw new CommandException("Filter addition failed, invalid group or conflicting with another filter");
 
 			context.bot().getFilterHandler().reloadFilters();
-			context.channel().sendMessage("Filter %d added".formatted(id));
+			context.channel().send("Filter %d added".formatted(id));
 
 			return true;
 		}
@@ -116,9 +116,9 @@ public final class FilterCommand extends Command {
 			} else if (result.newPatterns() == 0 && result.invalidPatterns().isEmpty()) {
 				throw new CommandException("Filter addition failed, invalid group or all conflicting with existing filters");
 			} else if (result.invalidPatterns().isEmpty()) {
-				context.channel().sendMessage("%d / %d filters added".formatted(result.newPatterns(), result.totalPatterns()));
+				context.channel().send("%d / %d filters added".formatted(result.newPatterns(), result.totalPatterns()));
 			} else {
-				context.channel().sendMessage("%d / %d filters added, invalid: %s".formatted(result.newPatterns(), result.totalPatterns(), result.invalidPatterns()));
+				context.channel().send("%d / %d filters added, invalid: %s".formatted(result.newPatterns(), result.totalPatterns(), result.invalidPatterns()));
 			}
 
 			return true;
@@ -129,7 +129,7 @@ public final class FilterCommand extends Command {
 			}
 
 			context.bot().getFilterHandler().reloadFilters();
-			context.channel().sendMessage("Filter removed");
+			context.channel().send("Filter removed");
 
 			return true;
 		case "clear": {
@@ -137,7 +137,7 @@ public final class FilterCommand extends Command {
 			if (count == 0) throw new CommandException("Filter removal failed, unknown/empty group");
 
 			context.bot().getFilterHandler().reloadFilters();
-			context.channel().sendMessage("%d filters removed".formatted(count));
+			context.channel().send("%d filters removed".formatted(count));
 
 			return true;
 		}
@@ -154,7 +154,7 @@ public final class FilterCommand extends Command {
 			}
 
 			context.bot().getFilterHandler().reloadFilters();
-			context.channel().sendMessage("Filter pattern updated");
+			context.channel().send("Filter pattern updated");
 
 			return true;
 		}
@@ -164,7 +164,7 @@ public final class FilterCommand extends Command {
 			}
 
 			context.bot().getFilterHandler().reloadFilters();
-			context.channel().sendMessage("Filter group updated");
+			context.channel().send("Filter group updated");
 
 			return true;
 		}

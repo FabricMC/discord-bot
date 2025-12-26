@@ -22,10 +22,10 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpResponse;
 
-import org.javacord.api.entity.message.MessageAttachment;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.util.HttpUtil;
+import net.fabricmc.discord.io.MessageAttachment;
 
 public final class CachedMessageAttachment {
 	CachedMessageAttachment(MessageAttachment attachment) {

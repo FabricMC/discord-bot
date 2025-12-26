@@ -26,20 +26,19 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
-import org.javacord.api.entity.channel.ServerChannel;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.MessageAttachment;
-import org.javacord.api.entity.server.Server;
-import org.javacord.api.entity.user.User;
-import org.javacord.api.exception.DiscordException;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.CachedMessage;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.util.DiscordUtil;
 import net.fabricmc.discord.bot.util.HttpUtil;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.DiscordException;
+import net.fabricmc.discord.io.MessageAttachment;
+import net.fabricmc.discord.io.Permission;
+import net.fabricmc.discord.io.Server;
+import net.fabricmc.discord.io.User;
 
 public abstract class Command {
 	/**
@@ -113,13 +112,13 @@ public abstract class Command {
 		return ret;
 	}
 
-	public static ServerChannel getChannel(CommandContext context, String channel) throws CommandException {
+	public static Channel getChannel(CommandContext context, String channel) throws CommandException {
 		Objects.requireNonNull(channel, "null channel");
 
-		ServerChannel ret = getChannelUnchecked(context, channel);
+		Channel ret = getChannelUnchecked(context, channel);
 
 		if (!ret.canYouSee()
-				|| ret instanceof TextChannel && !((TextChannel) ret).canYouReadMessageHistory()
+				|| ret.getType().text && !ret.haveYouPermission(Permission.READ_MESSAGE_HISTORY)
 				|| !ret.canSee(context.user())) {
 			throw new CommandException("Inaccessible channel");
 		}
@@ -127,14 +126,14 @@ public abstract class Command {
 		return ret;
 	}
 
-	private static ServerChannel getChannelUnchecked(CommandContext context, String channel) throws CommandException {
+	private static Channel getChannelUnchecked(CommandContext context, String channel) throws CommandException {
 		Server server = context.server();
 		if (server == null) throw new CommandException("No server context (DM?)");
 
 		if (channel.startsWith("#")) {
 			String name = channel.substring(1);
 
-			List<ServerChannel> matches = server.getChannelsByName(name);
+			List<? extends Channel> matches = server.getChannelsByName(name);
 			if (matches.isEmpty()) matches = server.getChannelsByNameIgnoreCase(name);
 			if (matches.size() == 1) return matches.get(0);
 		}
@@ -150,23 +149,23 @@ public abstract class Command {
 			}
 
 			long id = Long.parseUnsignedLong(channel.substring(start, channel.length() + end));
-			Optional<ServerChannel> ret = server.getChannelById(id);
+			Channel ret = server.getChannel(id);
 
-			if (ret.isPresent()) return ret.get();
+			if (ret != null) return ret;
 		} catch (NumberFormatException e) { }
 
-		List<ServerChannel> matches = server.getChannelsByName(channel);
+		List<? extends Channel> matches = server.getChannelsByName(channel);
 		if (matches.isEmpty()) matches = server.getChannelsByNameIgnoreCase(channel);
 		if (matches.size() != 1) throw new CommandException("Unknown or ambiguous channel");
 
 		return matches.get(0);
 	}
 
-	public static TextChannel getTextChannel(CommandContext context, String channel) throws CommandException {
-		ServerChannel ret = getChannel(context, channel);
+	public static Channel getTextChannel(CommandContext context, String channel) throws CommandException {
+		Channel ret = getChannel(context, channel);
 
-		if (ret instanceof TextChannel) {
-			return (TextChannel) ret;
+		if (ret.getType().text) {
+			return ret;
 		} else {
 			throw new CommandException("Not a text channel");
 		}
@@ -219,15 +218,15 @@ public abstract class Command {
 		}
 	}
 
-	public static void checkMessageDeleteAccess(CommandContext context, TextChannel channel) throws CommandException {
+	public static void checkMessageDeleteAccess(CommandContext context, Channel channel) throws CommandException {
 		if (!hasMessageDeleteAccess(context, channel)) throw new CommandException("Inaccessible channel");
 	}
 
-	public static boolean hasMessageDeleteAccess(CommandContext context, TextChannel channel) {
+	public static boolean hasMessageDeleteAccess(CommandContext context, Channel channel) {
 		return hasMessageDeleteAccess(context.user(), channel);
 	}
 
-	public static boolean hasMessageDeleteAccess(User user, TextChannel channel) {
+	public static boolean hasMessageDeleteAccess(User user, Channel channel) {
 		return DiscordUtil.canDeleteMessages(channel) && channel.canSee(user);
 	}
 
@@ -274,14 +273,14 @@ public abstract class Command {
 
 			return sb.toString();
 		} else {
-			List<MessageAttachment> attachments = context.message().getAttachments();
+			List<? extends MessageAttachment> attachments = context.message().getAttachments();
 			if (attachments.isEmpty()) throw new CommandException("Missing content attachment / contentUrl");
 			if (attachments.size() > 1) throw new CommandException("Multiple content attachments");
 
 			MessageAttachment attachment = attachments.get(0);
 			if (attachment.getSize() > 20_000_000) throw new CommandException("Oversized content attachment");
 
-			return new String(attachment.asByteArray().join(), StandardCharsets.UTF_8).replace("\r\n", "\n");
+			return new String(attachment.getBytes(), StandardCharsets.UTF_8).replace("\r\n", "\n");
 		}
 	}
 }

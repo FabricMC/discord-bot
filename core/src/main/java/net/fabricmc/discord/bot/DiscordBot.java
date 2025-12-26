@@ -47,11 +47,6 @@ import java.util.function.Supplier;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.DiscordApi;
-import org.javacord.api.DiscordApiBuilder;
-import org.javacord.api.entity.intent.Intent;
-import org.javacord.api.entity.server.Server;
-import org.javacord.api.entity.user.User;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.command.Command;
@@ -68,6 +63,12 @@ import net.fabricmc.discord.bot.database.query.UserConfigQueries;
 import net.fabricmc.discord.bot.filter.FilterHandler;
 import net.fabricmc.discord.bot.util.Collections2;
 import net.fabricmc.discord.bot.util.DaemonThreadFactory;
+import net.fabricmc.discord.io.Discord;
+import net.fabricmc.discord.io.DiscordBuilder;
+import net.fabricmc.discord.io.DiscordBuilder.Intent;
+import net.fabricmc.discord.io.GlobalEventHolder;
+import net.fabricmc.discord.io.Server;
+import net.fabricmc.discord.io.User;
 
 public final class DiscordBot {
 	public static void start(String[] args) throws IOException {
@@ -120,27 +121,22 @@ public final class DiscordBot {
 		loadRuntimeConfig();
 		activeHandler.init();
 
-		DiscordApiBuilder builder = new DiscordApiBuilder();
-
 		// early event registrations to ensure nothing will be missed
-		activeHandler.registerEarlyHandlers(builder);
-		userHandler.registerEarlyHandlers(builder);
-		messageIndex.registerEarlyHandlers(builder);
-		actionSyncHandler.registerEarlyHandlers(builder);
-		filterHandler.registerEarlyHandlers(builder);
+		GlobalEventHolder holder = new GlobalEventHolder();
+		activeHandler.registerEarlyHandlers(holder);
+		userHandler.registerEarlyHandlers(holder);
+		messageIndex.registerEarlyHandlers(holder);
+		actionSyncHandler.registerEarlyHandlers(holder);
+		filterHandler.registerEarlyHandlers(holder);
 
-		builder
-		.setWaitForUsersOnStartup(true)
-		.setIntents(Intent.GUILDS, Intent.GUILD_MEMBERS, Intent.GUILD_PRESENCES,
-				Intent.GUILD_MESSAGES, Intent.GUILD_MESSAGE_REACTIONS, Intent.DIRECT_MESSAGES, Intent.DIRECT_MESSAGE_REACTIONS, Intent.MESSAGE_CONTENT,
-				Intent.GUILD_BANS)
-		.setToken(this.config.getToken())
-		.login()
-		.thenAccept(api -> this.setup(api, dataDir))
-		.exceptionally(exc -> {
-			DiscordBot.LOGGER.error("Error occurred while initializing bot", exc);
-			return null;
-		});
+		Discord discord = DiscordBuilder.create(config.getToken(), holder)
+				.intents(Intent.GUILDS, Intent.GUILD_MEMBERS, Intent.GUILD_PRESENCES,
+						Intent.GUILD_MESSAGES, Intent.GUILD_MESSAGE_REACTIONS, Intent.DIRECT_MESSAGES, Intent.DIRECT_MESSAGE_REACTIONS, Intent.MESSAGE_CONTENT,
+						Intent.GUILD_MODERATION)
+				.cacheUsers(true)
+				.build();
+
+		setup(discord, dataDir);
 	}
 
 	public long getServerId() {
@@ -425,14 +421,14 @@ public final class DiscordBot {
 		}
 	}
 
-	private void setup(DiscordApi api, Path dataDir) {
+	private void setup(Discord discord, Path dataDir) {
 		// Must only iterate accepted modules
 		for (Module module : this.getModules()) {
-			module.setup(this, api, LogManager.getLogger(module.getName()), dataDir);
+			module.setup(this, discord, LogManager.getLogger(module.getName()), dataDir);
 		}
 
 		for (Module module : this.getModules()) {
-			module.onAllSetup(this, api);
+			module.onAllSetup(this, discord);
 		}
 
 		final StringBuilder moduleList = new StringBuilder();
@@ -450,7 +446,7 @@ public final class DiscordBot {
 
 		DiscordBot.LOGGER.info("Loaded {} modules:\n{}", this.modules.size(), moduleList.toString());
 
-		Server server = api.getServerById(config.getGuildId()).orElse(null);
+		Server server = discord.getServer(Long.parseLong(config.getGuildId()));
 
 		if (server != null) {
 			activeHandler.onServerReady(server);
@@ -529,7 +525,7 @@ public final class DiscordBot {
 				return; // handled by command string handler
 			} else if (commandRecord == null
 					|| !checkAccess(context.user(), context.server(), commandRecord.command())) {
-				context.channel().sendMessage("%s: Unknown command".formatted(context.user().getNicknameMentionTag()));
+				context.channel().send("%s: Unknown command".formatted(context.user().getNickMentionTag()));
 				return;
 			}
 
@@ -546,16 +542,16 @@ public final class DiscordBot {
 					reason = "Missing or invalid parameters, usage: `%s`".formatted(usage);
 				}
 
-				context.channel().sendMessage("%s: Invalid command syntax: %s".formatted(context.user().getNicknameMentionTag(), reason));
+				context.channel().send("%s: Invalid command syntax: %s".formatted(context.user().getNickMentionTag(), reason));
 				return;
 			}
 
 			commandRecord.command().run(context, arguments);
 		} catch (CommandException e) {
-			context.channel().sendMessage(e.getMessage());
+			context.channel().send(e.getMessage());
 		} catch (Throwable t) {
 			LOGGER.warn("Error executing command "+content, t);
-			context.channel().sendMessage("Error executing command: "+t);
+			context.channel().send("Error executing command: "+t);
 		}
 	}
 

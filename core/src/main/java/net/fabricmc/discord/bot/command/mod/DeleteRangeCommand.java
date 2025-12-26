@@ -22,23 +22,17 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-
-import org.javacord.api.entity.DiscordEntity;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.MessageSet;
 
 import net.fabricmc.discord.bot.CachedMessage;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
-import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.Message;
 
 public final class DeleteRangeCommand extends Command {
 	private static final int MESSAGE_COUNT_LIMIT = 100;
@@ -72,22 +66,13 @@ public final class DeleteRangeCommand extends Command {
 			Message firstMessage = firstCachedMessage.toMessage(context.server());
 			if (firstMessage == null) throw new CommandException("Can't resolve firstMessage");
 
-			TextChannel channel = firstMessage.getChannel();
+			Channel channel = firstMessage.getChannel();
 			checkMessageDeleteAccess(context, channel);
 
 			List<Message> messages = new ArrayList<>();
 			messages.add(firstMessage);
-
-			long maxTime = DiscordEntity.getCreationTimestamp(lastCachedMessage.getId()).toEpochMilli() + 10_000; // +10s
-			AtomicInteger msgCount = new AtomicInteger(1);
-
-			MessageSet res = DiscordUtil.join(firstMessage.getMessagesAfterUntil(msg ->
-			msgCount.incrementAndGet() >= MESSAGE_COUNT_LIMIT
-			|| msg.getId() == lastCachedMessage.getId()
-			|| msg.getCreationTimestamp().toEpochMilli() >= maxTime));
-
-			messages.addAll(res);
-			if (messages.get(messages.size() - 1).getCreationTimestamp().toEpochMilli() >= maxTime) messages.remove(messages.size() - 1);
+			messages.addAll(channel.getMessagesBetween(firstMessage.getId(), lastCachedMessage.getId(), MESSAGE_COUNT_LIMIT));
+			messages.add(lastCachedMessage.toMessage(context.server()));
 
 			Function<Long, Boolean> immunityCheck = targetDUId ->  context.bot().getUserHandler().hasImmunity(targetDUId, context.userId(), true);
 			Map<Long, Boolean> immunityData = new HashMap<>();
@@ -113,7 +98,7 @@ public final class DeleteRangeCommand extends Command {
 				pendingActions.put(id, new ActionEntry(messages, arguments.get("reason")));
 				context.bot().getScheduledExecutor().schedule(() -> pendingActions.remove(id), 5, TimeUnit.MINUTES);
 
-				context.channel().sendMessage(String.format("You are about to delete %d messages by %s from <#%d>, use `%s%s confirm %d` to continue",
+				context.channel().send(String.format("You are about to delete %d messages by %s from <#%d>, use `%s%s confirm %d` to continue",
 						messages.size(),
 						String.join(", ", users),
 						channel.getId(),
@@ -125,9 +110,11 @@ public final class DeleteRangeCommand extends Command {
 			ActionEntry entry = pendingActions.remove(Integer.parseInt(arguments.get("id")));
 			if (entry == null) throw new CommandException("Invalid id");
 
-			DiscordUtil.join(CompletableFuture.allOf(entry.messages.stream().map(msg -> msg.delete(entry.reason)).toArray(CompletableFuture[]::new)));
+			for (Message m : entry.messages) { // TODO: bulk delete / parallel execution
+				m.delete(entry.reason);
+			}
 
-			context.channel().sendMessage("Messages deleted");
+			context.channel().send("Messages deleted");
 		}
 
 		return true;
