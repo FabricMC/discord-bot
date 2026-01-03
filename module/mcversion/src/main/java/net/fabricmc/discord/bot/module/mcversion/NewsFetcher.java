@@ -24,12 +24,7 @@ import java.net.URISyntaxException;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoField;
-import java.time.temporal.IsoFields;
-import java.time.temporal.TemporalAccessor;
 import java.util.Collections;
 import java.util.Locale;
 import java.util.Map;
@@ -45,64 +40,53 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import net.fabricmc.discord.bot.DiscordBot;
-import net.fabricmc.discord.bot.config.ConfigKey;
-import net.fabricmc.discord.bot.config.ValueSerializers;
 import net.fabricmc.discord.bot.util.HttpUtil;
 
 final class NewsFetcher {
 	private static final String HOST = "www.minecraft.net";
-	private static final String PATH = "/content/minecraft-net/_jcr_content.articles.grid";
-	private static final String QUERY = "tileselection=auto&tagsPath=minecraft:article/news,minecraft:stockholm/news,minecraft:stockholm/minecraft-build,%d&offset=0&count=4&pageSize=4&locale=en-us&lang=/content/minecraft-net/language-masters/en-us";
+	private static final String PATH = "/content/minecraftnet/language-masters/en-us/jcr:content/root/container/image_grid_a_copy_64.articles.page-1.json";
+	private static final String QUERY = "cache=%d";
 	private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd MMMM y HH:mm:ss zzz", Locale.ENGLISH);
-	private static final Pattern TEXT_SNAPSHOT_PATTERN = Pattern.compile(" (\\d{2})w(\\d{1,2})([a-z]) ");
-	private static final Pattern TEXT_RELEASE_PATTERN = Pattern.compile(" 1\\.\\d{2}[ \\.]");
-	private static final Pattern SNAPSHOT_PATTERN = Pattern.compile("(\\d{2})w(\\d{1,2})[a-z]");
-
-	private static final String SNAPSHOT_ARTICLE_PATH = "/en-us/article/minecraft-snapshot-%dw%02da";
-	private static final Pattern ARTICLE_TITLE_PATTERN = Pattern.compile("<meta\\s+property\\s*=\\s*\"og:title\"\\s+content\\s*=\\s*\"(.+?)\"");
-	private static final Pattern ARTICLE_SUBTITLE_PATTERN = Pattern.compile("<meta\\s+property\\s*=\\s*\"og:description\"\\s+content\\s*=\\s*\"(.+?)\"");
-	private static final Pattern ARTICLE_DATE_PATTERN = Pattern.compile("<meta\\s+property\\s*=\\s*\"article:published_time\"\\s+content\\s*=\\s*\"(.+?)\"");
-
-	private static final ConfigKey<Long> ANNOUNCED_NEWS_DATE = new ConfigKey<>("mcversion.announcedNewsDate", ValueSerializers.LONG);
+	private static final Pattern TEXT_SNAPSHOT_PATTERN = Pattern.compile(" (\\d{2})\\.(\\d+)(?:\\.(\\d+))?(?: (snapshot|pre[- ]?release|release candidate) (\\d+))? ");
+	private static final Pattern SNAPSHOT_PATTERN = Pattern.compile("(\\d{2})\\.(\\d+)(?:\\.(\\d+))?(?:-(snapshot|pre|rc).(\\d+))?");
 
 	private static final Logger LOGGER = LogManager.getLogger("mcversion/news");
 
 	private final McVersionModule mcVersionModule;
 	private final Set<String> announcedNews = Collections.newSetFromMap(new ConcurrentHashMap<>());
-	private int announcedSnapshotYear; // 2 digit, e.g. 21
-	private int announcedSnapshotWeek; // e.g. 18
+	private NewVersionUtil.Version announced;
 
 	NewsFetcher(McVersionModule mcVersionModule) {
 		this.mcVersionModule = mcVersionModule;
 	}
 
 	void register(DiscordBot bot) {
-		bot.registerConfigEntry(ANNOUNCED_NEWS_DATE, () -> System.currentTimeMillis());
 	}
 
 	void init(String announcedSnapshotVersion) {
 		Matcher matcher = SNAPSHOT_PATTERN.matcher(announcedSnapshotVersion);
-		SnapshotVersion version = matcher.find() ? SnapshotVersion.get(matcher) : SnapshotVersion.getCurrent();
+		NewVersionUtil.Version version;
+
+		if (matcher.find()) {
+			version = NewVersionUtil.Version.get(matcher);
+		} else {
+			LOGGER.warn("Unable to parse version {}", announcedSnapshotVersion);
+			version = NewVersionUtil.Version.DEFAULT;
+		}
+
 		setAnnouncedSnapshot(version);
 	}
 
 	void update() throws IOException, URISyntaxException, InterruptedException {
 		updateNewsByQuery();
-
-		SnapshotVersion version = SnapshotVersion.getCurrent();
-
-		if (!hasAnnouncedSnapshot(version) && version.daysDue() <= 0) {
-			updateNewsByArticlePoll(version);
-		}
 	}
 
-	private boolean hasAnnouncedSnapshot(SnapshotVersion version) {
-		return version.year() < announcedSnapshotYear || version.year() == announcedSnapshotYear && version.week() <= announcedSnapshotWeek;
+	private boolean hasAnnouncedSnapshot(NewVersionUtil.Version version) {
+		return announced.compareTo(version) >= 0;
 	}
 
-	private void setAnnouncedSnapshot(SnapshotVersion version) {
-		announcedSnapshotYear = version.year();
-		announcedSnapshotWeek = version.week();
+	private void setAnnouncedSnapshot(NewVersionUtil.Version version) {
+		announced = version;
 	}
 
 	private void updateNewsByQuery() throws IOException, URISyntaxException, InterruptedException {
@@ -130,7 +114,6 @@ final class NewsFetcher {
 					String title = null;
 					String subTitle = "";
 					String path = null;
-					Instant date = null;
 
 					while (reader.hasNext()) {
 						switch (reader.nextName()) {
@@ -148,41 +131,33 @@ final class NewsFetcher {
 							reader.endObject();
 						}
 						case "article_url" -> path = reader.nextString();
-						case "publish_date" -> date = Instant.from(DATE_FORMATTER.parse(reader.nextString()));
 						default -> reader.skipValue();
 						}
 					}
 
 					reader.endObject();
 
-					if (title == null || path == null || date == null) {
+					if (title == null || path == null) {
 						LOGGER.warn("Missing title/path/date in article listing");
 						continue;
 					}
 
-					checkArticle(title, subTitle, path, date);
+					checkArticle(title, subTitle, path);
 				}
 			}
 		}
 	}
 
-	private void checkArticle(String title, String subTitle, String path, Instant date) throws IOException, URISyntaxException, InterruptedException {
-		long dateMs = date.toEpochMilli();
-		long announcedNewsDate = mcVersionModule.getBot().getConfigEntry(ANNOUNCED_NEWS_DATE);
-		if (dateMs <= announcedNewsDate) return;
-
+	private void checkArticle(String title, String subTitle, String path) throws IOException, URISyntaxException, InterruptedException {
 		String content = String.format(" %s %s %s ", title, subTitle, path).toLowerCase(Locale.ENGLISH);
-		Matcher snapshotMatcher = null;
+		Matcher matcher = null;
 
-		if ((content.contains("snapshot") && (snapshotMatcher = TEXT_SNAPSHOT_PATTERN.matcher(content)).find()
-				|| content.contains("java") && TEXT_RELEASE_PATTERN.matcher(content).find())
-				&& !content.contains("bedrock")
+		if (content.contains("java") && (matcher = TEXT_SNAPSHOT_PATTERN.matcher(content)).find()
 				&& !announcedNews.contains(path)) {
-			SnapshotVersion version = snapshotMatcher != null ? SnapshotVersion.get(snapshotMatcher) : null;
+			NewVersionUtil.Version version = NewVersionUtil.Version.get(matcher);
 
-			if (version == null
-					|| !hasAnnouncedSnapshot(version) && !McVersionModule.isOldVersion(version.toString())) {
-				LOGGER.info("Announcing MC-News {} (regular, version {})", path, version != null ? version.toString() : "(unknown)");
+			if (!hasAnnouncedSnapshot(version) && !McVersionModule.isOldVersion(version.toString())) {
+				LOGGER.info("Announcing MC-News {} (regular, version {})", path, version.toString());
 
 				if (!mcVersionModule.sendAnnouncement(mcVersionModule.getUpdateChannel(), "https://"+HOST+path)) {
 					return; // skip ANNOUNCED_NEWS_DATE record update
@@ -190,79 +165,9 @@ final class NewsFetcher {
 			}
 
 			announcedNews.add(path);
-
-			if (version != null) {
-				setAnnouncedSnapshot(version);
-			}
-
-			mcVersionModule.getBot().setConfigEntry(ANNOUNCED_NEWS_DATE, dateMs);
+			setAnnouncedSnapshot(version);
 		}
 	}
-
-	private void updateNewsByArticlePoll(SnapshotVersion version) throws IOException, URISyntaxException, InterruptedException {
-		String path = SNAPSHOT_ARTICLE_PATH.formatted(version.year(), version.week());
-		NewsData data = requestHtmlNews(HttpUtil.toUri(HOST, path));
-		if (data == null) return;
-
-		long dateMs = data.date().toEpochMilli();
-		long announcedNewsDate = mcVersionModule.getBot().getConfigEntry(ANNOUNCED_NEWS_DATE);
-
-		if (dateMs > announcedNewsDate
-				&& !announcedNews.contains(path)
-				&& !McVersionModule.isOldVersion(version.toString())) {
-			LOGGER.info("Announcing MC-News {} (url poll, version {})", path, version);
-
-			if (!mcVersionModule.sendAnnouncement(mcVersionModule.getUpdateChannel(), "https://"+HOST+path)) {
-				return; // skip ANNOUNCED_NEWS_DATE record update
-			}
-		}
-
-		announcedNews.add(path);
-		setAnnouncedSnapshot(version);
-		mcVersionModule.getBot().setConfigEntry(ANNOUNCED_NEWS_DATE, dateMs + 20_000); // add 20s in case the time stamp isn't accurate
-	}
-
-	void updateNewsByArticlePoll(String url) throws IOException, URISyntaxException, InterruptedException {
-		NewsData data = requestHtmlNews(new URI(url));
-		if (data == null) return;
-
-		checkArticle(data.title(), data.subTitle(), data.path(), data.date());
-	}
-
-	private NewsData requestHtmlNews(URI uri) throws IOException, InterruptedException {
-		HttpResponse<InputStream> response = requestNews(uri, false);
-
-		if (response.statusCode() != 200) {
-			if (response.statusCode() != 404) LOGGER.warn("Poll request failed: {}", response.statusCode());
-			response.body().close();
-			return null;
-		}
-
-		String content;
-
-		try (InputStream is = getNewsIs(response)) {
-			content = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-		}
-
-		Matcher titleMatcher = ARTICLE_TITLE_PATTERN.matcher(content);
-		boolean hasTitle = titleMatcher.find();
-		Matcher subTitleMatcher = ARTICLE_SUBTITLE_PATTERN.matcher(content);
-		boolean hasSubTitle = subTitleMatcher.find();
-		Matcher dateMatcher = ARTICLE_DATE_PATTERN.matcher(content);
-		boolean hasDate = dateMatcher.find();
-
-		if (!hasTitle || !hasSubTitle || !hasDate) {
-			throw new IOException(String.format("can't parse news article html (title=%b, subtitle=%b, date=%b)", hasTitle, hasSubTitle, hasDate));
-		} else {
-			return new NewsData(titleMatcher.group(1),
-					subTitleMatcher.group(1),
-					response.request().uri().getPath(),
-					Instant.from(DateTimeFormatter.ISO_INSTANT.parse(dateMatcher.group(1))));
-		}
-	}
-
-	private record NewsData(String title, String subTitle, String path, Instant date) { }
-
 	private static HttpResponse<InputStream> requestNews(URI uri, boolean json) throws IOException, InterruptedException {
 		return HttpUtil.makeRequest(uri, Map.of("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36",
 				"Accept", (json ? "application/json" : "text/html"),
@@ -280,20 +185,7 @@ final class NewsFetcher {
 		return ret;
 	}
 
-	private record SnapshotVersion(int year, int week, int daysDue) {
-		public static SnapshotVersion getCurrent() {
-			TemporalAccessor now = ZonedDateTime.now(ZoneOffset.UTC);
+	private record NewsData(String title, String subTitle, String path, Instant date) { }
 
-			return new SnapshotVersion(now.get(ChronoField.YEAR) % 100, now.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR), 3 - now.get(ChronoField.DAY_OF_WEEK));
-		}
 
-		public static SnapshotVersion get(Matcher matcher) {
-			return new SnapshotVersion(Integer.parseUnsignedInt(matcher.group(1)), Integer.parseUnsignedInt(matcher.group(2)), 0);
-		}
-
-		@Override
-		public String toString() {
-			return "%dw%02da".formatted(year, week);
-		}
-	}
 }

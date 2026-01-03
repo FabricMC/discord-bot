@@ -37,6 +37,7 @@ public final class MappingModule implements Module {
 	// global properties
 	static final ConfigKey<List<String>> DEFAULT_NAMESPACES = new ConfigKey<>("mapping.defaultNamespaces", ValueSerializers.STRING_LIST);
 	static final ConfigKey<List<String>> PUBLIC_NAMESPACES = new ConfigKey<>("mapping.publicNamespaces", ValueSerializers.STRING_LIST);
+	static final ConfigKey<List<Long>> PRIVATE_NAMESPACE_BLOCKLIST = new ConfigKey<>("mapping.privateNamespaceBlocklist", ValueSerializers.LONG_LIST);
 
 	// user properties
 	static final ConfigKey<List<String>> QUERY_NAMESPACES = new ConfigKey<>("mapping.queryNamespaces", ValueSerializers.STRING_LIST);
@@ -58,6 +59,7 @@ public final class MappingModule implements Module {
 	public void registerConfigEntries(DiscordBot bot) {
 		bot.registerConfigEntry(DEFAULT_NAMESPACES, () -> defaultNamespaces);
 		bot.registerConfigEntry(PUBLIC_NAMESPACES, () -> publicNamespaces);
+		bot.registerConfigEntry(PRIVATE_NAMESPACE_BLOCKLIST, () -> List.of());
 	}
 
 	@Override

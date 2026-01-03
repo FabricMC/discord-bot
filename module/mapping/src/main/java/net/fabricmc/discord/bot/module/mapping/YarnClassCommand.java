@@ -53,7 +53,14 @@ public final class YarnClassCommand extends Command {
 
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
-		String mcVersion = MappingCommandUtil.getMcVersion(context, arguments);
+		String mcVersion;
+		boolean ripYarn = false;
+		try {
+			mcVersion = MappingCommandUtil.getMcVersion(context, arguments);
+		} catch (MappingCommandUtil.RipYarnException rip) {
+			mcVersion = rip.lastYarnVersion();
+			ripYarn = true;
+		}
 		MappingData data = MappingCommandUtil.getMappingData(repo, mcVersion);
 		String name = arguments.get("className");
 
@@ -74,6 +81,11 @@ public final class YarnClassCommand extends Command {
 		StringBuilder sb = new StringBuilder(400);
 
 		for (ClassMapping result : results) {
+			if (ripYarn) {
+				sb.append("**Note**: This query is for the last available version, %s.".formatted(data.mcVersion));
+				sb.append("There is no data available for the latest version.\n");
+			}
+
 			sb.append("**Names**\n\n");
 
 			for (String ns : namespaces) {

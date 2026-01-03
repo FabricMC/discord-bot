@@ -22,6 +22,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
@@ -30,13 +31,36 @@ import net.fabricmc.discord.bot.module.mapping.repo.MappingData;
 import net.fabricmc.discord.bot.module.mapping.repo.MappingRepository;
 import net.fabricmc.discord.bot.module.mcversion.McVersionRepo;
 
-final class MappingCommandUtil {
-	public static String getMcVersion(CommandContext context, Map<String, String> arguments) throws CommandException {
+public final class MappingCommandUtil {
+	public static final String LAST_YARN_VERSION = "1.21.11";
+	public static final Pattern NEW_VERSION_PATTERN = Pattern.compile("^\\d{2}\\.");
+
+	public static class RipYarnException extends Exception {
+		public static final RipYarnException INSTANCE = new RipYarnException();
+
+		RipYarnException() {
+			super("", null, false, false);
+		}
+
+		public String lastYarnVersion() {
+			return LAST_YARN_VERSION;
+		}
+	}
+
+	public static boolean isRipYarn(String mcVersion) {
+		return NEW_VERSION_PATTERN.matcher(mcVersion).matches();
+	}
+
+	public static String getMcVersion(CommandContext context, Map<String, String> arguments) throws CommandException, RipYarnException {
 		String ret = arguments.get("mcVersion");
 		if (ret == null) ret = arguments.get("unnamed_1");
+		boolean[] isLatest = {false};
 
-		ret = McVersionRepo.get(context.bot()).resolve(context, ret);
+		ret = McVersionRepo.get(context.bot()).resolve(context, ret, isLatest);
 		if (ret == null) throw new CommandException("invalid version or latest version data is unavailable");
+		if (isLatest[0] && isRipYarn(ret)) {
+			throw RipYarnException.INSTANCE;
+		}
 
 		return ret;
 	}
@@ -108,7 +132,7 @@ final class MappingCommandUtil {
 		// trim to allowed only
 		boolean removedPrivateNs = false;
 
-		if (checkPublic && !context.isPrivateMessage()) {
+		if (checkPublic && isPrivateNsCensored(context)) {
 			List<String> privateNs = getPrivateNamespaces(context, ret);
 
 			if (!privateNs.isEmpty()) {
@@ -125,7 +149,7 @@ final class MappingCommandUtil {
 			ret.retainAll(MappingModule.supportedNamespaces);
 		}
 
-		if (ret.isEmpty()) throw new CommandException(removedPrivateNs ? "all selected namespaces are DM only" : "no valid namespaces");
+		if (ret.isEmpty()) throw new CommandException(removedPrivateNs ? "all selected namespaces are prohibited in this channel" : "no valid namespaces");
 
 		return ret;
 	}
@@ -148,5 +172,9 @@ final class MappingCommandUtil {
 		}
 
 		return ret != null ? ret : Collections.emptyList();
+	}
+
+	public static boolean isPrivateNsCensored(CommandContext context) {
+		return !context.isPrivateMessage() && Command.getConfig(context, MappingModule.PRIVATE_NAMESPACE_BLOCKLIST).contains(context.channel().getId());
 	}
 }

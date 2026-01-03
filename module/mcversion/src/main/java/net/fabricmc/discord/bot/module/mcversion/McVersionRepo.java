@@ -111,12 +111,19 @@ public final class McVersionRepo {
 	 * Resolve latest/latestStable to the actual versions, null to the latest stable version, otherwise pass through.
 	 */
 	public @Nullable String resolve(CommandContext context, String name) {
+		return resolve(context, name, null);
+	}
+
+	public @Nullable String resolve(CommandContext context, String name, boolean[] isLatest) {
 		if (name == null) name = Command.getUserConfig(context, McVersionModule.DEFAULT_VERSION);
 		if (name == null) name = DEFAULT_VERSION;
+		if (isLatest != null) isLatest[0] = false;
 
 		if (name.equalsIgnoreCase("latestStable")) {
+			if (isLatest != null) isLatest[0] = true;
 			return latestStable;
 		} else if (name.equalsIgnoreCase("latest")) {
+			if (isLatest != null) isLatest[0] = true;
 			return latest;
 		} else if (isValidVersion(name)) {
 			return name;
