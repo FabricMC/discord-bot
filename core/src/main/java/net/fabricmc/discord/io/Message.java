@@ -78,7 +78,7 @@ public interface Message {
 			Arrays.fill(INDEX, OTHER);
 
 			for (Type t : VALUES) {
-				INDEX[t.id] = t;
+				if (t.id  >= 0) INDEX[t.id] = t;
 			}
 		}
 	}

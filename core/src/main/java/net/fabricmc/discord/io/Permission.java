@@ -87,6 +87,7 @@ public enum Permission {
 
 		while (mask != 0) {
 			int flag = Long.numberOfTrailingZeros(mask);
+			mask ^= 1L << flag;
 			Permission perm = fromFlag(flag);
 
 			if (perm != null) ret.add(perm);
