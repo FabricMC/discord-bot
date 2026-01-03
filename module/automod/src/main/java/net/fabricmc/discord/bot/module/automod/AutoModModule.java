@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -39,19 +40,24 @@ import net.fabricmc.discord.bot.command.mod.UserActionType;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
 import net.fabricmc.discord.bot.util.DiscordUtil;
+import org.javacord.api.event.user.UserChangeNicknameEvent;
+import org.javacord.api.listener.user.UserChangeNicknameListener;
 
-public final class AutoModModule implements Module, MessageCreateHandler {
+public final class AutoModModule implements Module, MessageCreateHandler, UserChangeNicknameListener {
 	private static final Logger LOGGER = LogManager.getLogger(AutoModModule.class);
 
 	private static final ConfigKey<List<Long>> REQUESTS_CHANNELS = new ConfigKey<>("automod.requestsChannels", ValueSerializers.LONG_LIST);
 	private static final ConfigKey<String> REQUESTS_ACTION_REASON = new ConfigKey<>("automod.requestsActionReason", ValueSerializers.STRING);
 	private static final ConfigKey<List<Long>> SHOWCASE_CHANNELS = new ConfigKey<>("automod.showcaseChannels", ValueSerializers.LONG_LIST);
 	private static final ConfigKey<String> SHOWCASE_ACTION_REASON = new ConfigKey<>("automod.showcaseActionReason", ValueSerializers.STRING);
+	private static final ConfigKey<String> DISALLOWED_NICKNAME_PATTERN = new ConfigKey<>("automod.disallowedNicknamePattern", ValueSerializers.STRING);
+	private static final ConfigKey<String> DISALLOWED_NICKNAME_REASON = new ConfigKey<>("automod.disallowedNicknameReason", ValueSerializers.STRING);
 
 	private DiscordBot bot;
 	private volatile Server server;
 	private volatile List<TextChannel> requestsChannels;
 	private volatile List<TextChannel> showcaseChannels;
+	private volatile Pattern disallowedNicknamePattern;
 
 	@Override
 	public String getName() {
@@ -64,6 +70,8 @@ public final class AutoModModule implements Module, MessageCreateHandler {
 		bot.registerConfigEntry(REQUESTS_ACTION_REASON, () -> "please use the appropriate channel");
 		bot.registerConfigEntry(SHOWCASE_CHANNELS, () -> Collections.emptyList());
 		bot.registerConfigEntry(SHOWCASE_ACTION_REASON, () -> "please use the appropriate channel");
+		bot.registerConfigEntry(DISALLOWED_NICKNAME_PATTERN, () -> "!.*");
+		bot.registerConfigEntry(DISALLOWED_NICKNAME_REASON, () -> "Nickname '%s' is not allowed!");
 	}
 
 	@SuppressWarnings("unchecked")
@@ -73,6 +81,8 @@ public final class AutoModModule implements Module, MessageCreateHandler {
 			requestsChannels = getChannels(server, "requests", (List<Long>) value);
 		} else if (key == SHOWCASE_CHANNELS) {
 			showcaseChannels = getChannels(server, "showcase", (List<Long>) value);
+		} else if (key == DISALLOWED_NICKNAME_PATTERN) {
+			disallowedNicknamePattern = Pattern.compile((String) value);
 		}
 	}
 
@@ -101,12 +111,14 @@ public final class AutoModModule implements Module, MessageCreateHandler {
 		bot.getActiveHandler().registerReadyHandler(this::onReady);
 		bot.getActiveHandler().registerGoneHandler(this::onGone);
 		bot.getMessageIndex().registerCreateHandler(this);
+		api.addUserChangeNicknameListener(this);
 	}
 
 	private void onReady(Server server, long prevActive) {
 		this.server = server;
 		this.requestsChannels = getChannels(server, "requests", bot.getConfigEntry(REQUESTS_CHANNELS));
 		this.showcaseChannels = getChannels(server, "showcase", bot.getConfigEntry(SHOWCASE_CHANNELS));
+		this.disallowedNicknamePattern = Pattern.compile(bot.getConfigEntry(DISALLOWED_NICKNAME_PATTERN));
 	}
 
 	private void onGone(Server server) {
@@ -163,5 +175,19 @@ public final class AutoModModule implements Module, MessageCreateHandler {
 		}
 
 		return true;
+	}
+
+	@Override
+	public void onUserChangeNickname(UserChangeNicknameEvent event) {
+		if (!disallowedNicknamePattern.matcher(event.getNewNickname().orElse("")).matches()) return;
+
+
+		final String reason = bot.getConfigEntry(DISALLOWED_NICKNAME_REASON).formatted(event.getNewNickname().get());
+
+		if (event.getOldNickname().isEmpty() || disallowedNicknamePattern.matcher(event.getOldNickname().get()).matches())
+			server.resetNickname(event.getUser(), reason);
+		else server.updateNickname(event.getUser(), event.getOldNickname().get(), reason);
+
+		event.getUser().sendMessage(reason);
 	}
 }
