@@ -35,11 +35,11 @@ import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.util.HttpUtil;
+import net.fabricmc.discord.io.MessageEmbed;
 
 final class LauncherNewsFetcher {
 	private static final String HOST = "launchercontent.mojang.com";
@@ -64,8 +64,8 @@ final class LauncherNewsFetcher {
 	}
 
 	long getLastUpdateTimeMs() {
-        return lastUpdateTimeMs;
-    }
+		return lastUpdateTimeMs;
+	}
 
 	void update() throws IOException, URISyntaxException, InterruptedException, DateTimeParseException {
 		fetchLatest();
@@ -116,51 +116,51 @@ final class LauncherNewsFetcher {
 							}
 
 							switch (reader.nextName()) {
-								case "title" -> {
-									title = reader.nextString();
-								}
-								case "version" -> {
-									version = reader.nextString();
-								}
-								case "date" -> {
-									date = reader.nextString();
-									releaseDateTime = ZonedDateTime.parse(date);
+							case "title" -> {
+								title = reader.nextString();
+							}
+							case "version" -> {
+								version = reader.nextString();
+							}
+							case "date" -> {
+								date = reader.nextString();
+								releaseDateTime = ZonedDateTime.parse(date);
 
-									if (
-											(readSnapshot && latestSnapshot != null && releaseDateTime.isBefore(latestSnapshot.date)) ||
-													(readRelease && latestRelease != null && releaseDateTime.isBefore(latestRelease.date))) {
-										skipTheRest = true;
+								if (
+										(readSnapshot && latestSnapshot != null && releaseDateTime.isBefore(latestSnapshot.date)) ||
+										(readRelease && latestRelease != null && releaseDateTime.isBefore(latestRelease.date))) {
+									skipTheRest = true;
+								}
+							}
+							case "image" -> {
+								reader.beginObject();
+								while (reader.peek() == JsonToken.NAME) {
+									if (reader.nextName().equals("url")) {
+										imagePath = reader.nextString();
+									} else {
+										reader.skipValue();
 									}
 								}
-								case "image" -> {
-									reader.beginObject();
-									while (reader.peek() == JsonToken.NAME) {
-                                        if (reader.nextName().equals("url")) {
-                                            imagePath = reader.nextString();
-                                        } else {
-                                            reader.skipValue();
-                                        }
-									}
-									reader.endObject();
-								}
-								case "shortText" -> {
-									shortText = reader.nextString();
-								}
-								case "type" -> {
-									type = reader.nextString();
-									readSnapshot = type.equals("snapshot");
-									readRelease = type.equals("release");
+								reader.endObject();
+							}
+							case "shortText" -> {
+								shortText = reader.nextString();
+							}
+							case "type" -> {
+								type = reader.nextString();
+								readSnapshot = type.equals("snapshot");
+								readRelease = type.equals("release");
 
-				        			if (
-                                            releaseDateTime != null &&
-								        	(
-                                                    (readSnapshot && latestSnapshot != null && releaseDateTime.isBefore(latestSnapshot.date)) ||
-                                                            (readRelease && latestRelease != null && releaseDateTime.isBefore(latestRelease.date)))
-                                    ) {
-										skipTheRest = true;
-									}
+								if (
+										releaseDateTime != null &&
+										(
+												(readSnapshot && latestSnapshot != null && releaseDateTime.isBefore(latestSnapshot.date)) ||
+												(readRelease && latestRelease != null && releaseDateTime.isBefore(latestRelease.date)))
+										) {
+									skipTheRest = true;
 								}
-								default -> reader.skipValue();
+							}
+							default -> reader.skipValue();
 							}
 						}
 
@@ -186,7 +186,7 @@ final class LauncherNewsFetcher {
 								imageUri,
 								Objects.requireNonNull(shortText, "A new update was released!"),
 								releaseDateTime
-						);
+								);
 
 						if (readRelease) {
 							latestRelease = latest;
@@ -216,15 +216,16 @@ final class LauncherNewsFetcher {
 		private static final String URL_PREFIX = "https://www.minecraft.net/en-us/article";
 		private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^a-z0-9]");
 
-        EmbedBuilder toEmbed() {
-			EmbedBuilder builder = new EmbedBuilder();
-			builder.setTitle(title);
-			builder.setDescription(shortText + "...");
-			if (image != null) builder.setThumbnail(image.toString());
-			builder.setTimestamp(date.toInstant());
-			builder.setUrl(getUrl());
-			builder.setFooter("URL is automatically generated and might not be valid.");
-			return builder;
+		MessageEmbed toEmbed() {
+			MessageEmbed.Builder builder = new MessageEmbed.Builder()
+					.title(title, getUrl())
+					.description(shortText + "...")
+					.time(date.toInstant())
+					.footer("URL is automatically generated and might not be valid.");
+
+			if (image != null) builder.thumbnail(image.toString());
+
+			return builder.build();
 		}
 
 		String getUrl() {

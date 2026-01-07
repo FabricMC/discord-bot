@@ -24,13 +24,6 @@ import java.util.Collections;
 import it.unimi.dsi.fastutil.longs.LongList;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.entity.channel.ServerChannel;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
-import org.javacord.api.entity.permission.Role;
-import org.javacord.api.entity.server.Server;
-import org.javacord.api.entity.user.User;
-import org.javacord.api.exception.DiscordException;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.CachedMessage;
@@ -47,37 +40,43 @@ import net.fabricmc.discord.bot.database.query.ActionQueries.ActionData;
 import net.fabricmc.discord.bot.database.query.ActionQueries.ActionEntry;
 import net.fabricmc.discord.bot.database.query.ActionQueries.ActiveActionEntry;
 import net.fabricmc.discord.bot.database.query.ActionQueries.ExpiringActionEntry;
-import net.fabricmc.discord.bot.util.DiscordUtil;
 import net.fabricmc.discord.bot.util.FormatUtil;
 import net.fabricmc.discord.bot.util.FormatUtil.OutputType;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.DiscordException;
+import net.fabricmc.discord.io.Member;
+import net.fabricmc.discord.io.MessageEmbed;
+import net.fabricmc.discord.io.Role;
+import net.fabricmc.discord.io.Server;
+import net.fabricmc.discord.io.User;
 
 public final class ActionUtil {
 	static final Logger LOGGER = LogManager.getLogger("action");
 	private static final ConfigKey<String> APPEAL_MESSAGE = new ConfigKey<>("action.appealMessage", ValueSerializers.STRING);
 
 	public static void registerConfig(DiscordBot bot) {
-		bot.registerConfigEntry(APPEAL_MESSAGE, () -> "Please contact the moderation to appeal this action.");
+		bot.registerConfigEntry(APPEAL_MESSAGE, "Please contact the moderation to appeal this action.");
 		ActionRole.registerConfig(bot);
 	}
 
-	static boolean hasRole(Server server, User target, ActionRole actionRole, DiscordBot bot) {
-		Role role = actionRole.resolve(server, bot);
+	static boolean hasRole(Member target, ActionRole actionRole, DiscordBot bot) {
+		Role role = actionRole.resolve(target.getServer(), bot);
 
-		return role != null && target.getRoles(server).contains(role);
+		return role != null && target.getRoles().contains(role);
 	}
 
-	static void addRole(Server server, User target, ActionRole actionRole, String reason, DiscordBot bot) throws DiscordException {
-		Role role = actionRole.resolve(server, bot);
+	static void addRole(Member target, ActionRole actionRole, String reason, DiscordBot bot) throws DiscordException {
+		Role role = actionRole.resolve(target.getServer(), bot);
 		if (role == null) throw new IllegalArgumentException("role unconfigured/missing");
 
-		DiscordUtil.join(server.addRoleToUser(target, role, reason));
+		target.addRole(role, reason);
 	}
 
-	static void removeRole(Server server, User target, ActionRole actionRole, String reason, DiscordBot bot) throws DiscordException {
-		Role role = actionRole.resolve(server, bot);
+	static void removeRole(Member target, ActionRole actionRole, String reason, DiscordBot bot) throws DiscordException {
+		Role role = actionRole.resolve(target.getServer(), bot);
 		if (role == null) return;
 
-		DiscordUtil.join(server.removeRoleFromUser(target, role, reason));
+		target.removeRole(role, reason);
 	}
 
 	/**
@@ -96,7 +95,7 @@ public final class ActionUtil {
 	public static void applyUserAction(ActionType type, long data, int targetUserId, @Nullable String duration, String reason,
 			@Nullable CachedMessage targetMessage, UserMessageAction targetMessageAction,
 			boolean notifyTarget, String privateReason,
-			DiscordBot bot, Server server, @Nullable TextChannel actingChannel, User actor, int actorUserId) throws Exception {
+			DiscordBot bot, Server server, @Nullable Channel actingChannel, User actor, int actorUserId) throws Exception {
 		boolean validTargetMessageAction = targetMessageAction != UserMessageAction.NONE
 				&& (targetMessage != null || !targetMessageAction.needsContext);
 		String extraBodyDesc;
@@ -124,7 +123,7 @@ public final class ActionUtil {
 			Collection<CachedMessage> extraDeleted = switch (targetMessageAction) {
 			case CLEAN -> CleanCommand.clean(targetUserId, null, deleteReason, bot, server, actor);
 			case CLEAN_LOCAL -> {
-				TextChannel channel;
+				Channel channel;
 
 				if (targetMessage != null
 						&& (channel = targetMessage.getChannel(server)) != null) {
@@ -138,10 +137,10 @@ public final class ActionUtil {
 
 			if (actingChannel != null) {
 				count += extraDeleted.size();
-				actingChannel.sendMessage("Deleted %d message%s".formatted(count, count != 1 ? "s" : ""));
+				actingChannel.send("Deleted %d message%s".formatted(count, count != 1 ? "s" : ""));
 			}
 		} else if (targetMessageAction != UserMessageAction.NONE && actingChannel != null) {
-			actingChannel.sendMessage("Skipping %s, missing message context".formatted(targetMessageAction.desc));
+			actingChannel.send("Skipping %s, missing message context".formatted(targetMessageAction.desc));
 		}
 	}
 
@@ -172,7 +171,7 @@ public final class ActionUtil {
 
 	static void applyChannelAction(ActionType type, long data, long targetChannelId, String duration, @Nullable String reason,
 			@Nullable String extraBodyDesc,
-			DiscordBot bot, Server server, TextChannel actingChannel, @Nullable User actor, int actorUserId) throws Exception {
+			DiscordBot bot, Server server, Channel actingChannel, @Nullable User actor, int actorUserId) throws Exception {
 		applyAction(type, data, targetChannelId, duration, reason, null,
 				extraBodyDesc, false, null,
 				bot, server, actingChannel, actor, actorUserId);
@@ -181,7 +180,7 @@ public final class ActionUtil {
 	private static int applyAction(ActionType type, long data, long targetId, @Nullable String duration, @Nullable String reason,
 			CachedMessage targetMessageContext,
 			@Nullable String extraBodyDesc, boolean notifyTarget, @Nullable String privateReason,
-			DiscordBot bot, Server server, TextChannel actingChannel, @Nullable User actor, int actorUserId) throws Exception {
+			DiscordBot bot, Server server, Channel actingChannel, @Nullable User actor, int actorUserId) throws Exception {
 		// check for conflict
 
 		int prevId = -1;
@@ -290,7 +289,7 @@ public final class ActionUtil {
 
 	static void suspendAction(ActionType type, long targetId, @Nullable String reason,
 			boolean notifyTarget, @Nullable String privateReason,
-			DiscordBot bot, Server server, @Nullable TextChannel actingChannel, @Nullable User actor, int actorUserId) throws Exception {
+			DiscordBot bot, Server server, @Nullable Channel actingChannel, @Nullable User actor, int actorUserId) throws Exception {
 		if (!type.hasDuration()) throw new RuntimeException("Actions without a duration can't be suspended");
 
 		// determine action to suspend
@@ -360,7 +359,7 @@ public final class ActionUtil {
 			long targetId,
 			long creation, long expiration, @Nullable String reason,
 			int actionId, CachedMessage targetMessageContext,
-			DiscordBot bot, Server server, @Nullable TextChannel actingChannel, @Nullable User actor,
+			DiscordBot bot, Server server, @Nullable Channel actingChannel, @Nullable User actor,
 			boolean notifyTarget, boolean alreadyNotified, @Nullable String privateReason) {
 		// log to original channel
 
@@ -373,7 +372,7 @@ public final class ActionUtil {
 			targetName = Integer.toString(targetUserId);
 			targetListSuffix = FormatUtil.formatUserList(bot.getUserHandler().getDiscordUserIds(targetUserId), bot, server);
 		} else {
-			ServerChannel targetChannel = server.getChannelById(targetId).orElse(null);
+			Channel targetChannel = server.getChannel(targetId);
 
 			targetName = targetChannel != null ? targetChannel.getName() : "(unknown)";
 			targetListSuffix = "";
@@ -390,16 +389,16 @@ public final class ActionUtil {
 				.trim(); // to remove trailing \n if there's neither duration nor reason
 
 		String actionRef = formatActionRef(type.getKind(), actionId);
-		TextChannel logChannel = bot.getLogHandler().getLogChannel();
+		Channel logChannel = bot.getLogHandler().getLogChannel();
 
-		EmbedBuilder msg = new EmbedBuilder()
-				.setTitle(title)
-				.setDescription(description.concat(formatReasonSuffix(reason)))
-				.setFooter(actionRef)
-				.setTimestamp(Instant.ofEpochMilli(creation));
+		MessageEmbed.Builder msgBuilder = new MessageEmbed.Builder()
+				.title(title)
+				.description(description.concat(formatReasonSuffix(reason)))
+				.footer(actionRef)
+				.time(Instant.ofEpochMilli(creation));
 
 		if (actingChannel != null && actingChannel != logChannel) {
-			actingChannel.sendMessage(msg);
+			actingChannel.send(msgBuilder.build());
 		}
 
 		// log to log channel
@@ -434,9 +433,9 @@ public final class ActionUtil {
 				description = "%s\n**Moderator:** %s".formatted(description, UserHandler.formatDiscordUser(actor));
 			}
 
-			msg.setDescription(description);
+			msgBuilder.description(description);
 
-			logChannel.sendMessage(msg);
+			logChannel.send(msgBuilder.build());
 		}
 
 		// message target user
@@ -458,28 +457,29 @@ public final class ActionUtil {
 
 		String appealSuffix = !reversal ? "\n\n%s".formatted(bot.getConfigEntry(APPEAL_MESSAGE)) : "";
 
-		EmbedBuilder userMsg = new EmbedBuilder()
-				.setTitle(String.format("%s%s!", // e.g. 'Unbanned'' (expiration)'!
+		MessageEmbed userMsg = new MessageEmbed.Builder()
+				.title(String.format("%s%s!", // e.g. 'Unbanned'' (expiration)'!
 						FormatUtil.capitalize(ActionDesc.getShort(type, reversal)), formatOptionalSuffix(extraTitleDesc)))
-				.setDescription(String.format("%s%s%s.%s%s", // e.g. 'You have been unbanned'' automatically' +exp/reason/appeal
+				.description(String.format("%s%s%s.%s%s", // e.g. 'You have been unbanned'' automatically' +exp/reason/appeal
 						FormatUtil.capitalize(ActionDesc.getSecondPerson(type, reversal)),
 						formatOptionalSuffix(extraBodyDesc),
 						formatExpirationSuffix(reversal, expiration),
 						formatReasonSuffix(reason),
 						appealSuffix))
-				.setFooter(formatActionRef(type.getKind(), actionId))
-				.setTimestamp(Instant.ofEpochMilli(creation));
+				.footer(formatActionRef(type.getKind(), actionId))
+				.time(Instant.ofEpochMilli(creation))
+				.build();
 
 		boolean ret = false;
 
 		for (long targetDiscordId : targetDiscordIds) {
-			User user = server.getMemberById(targetDiscordId).orElse(null);
+			Member member = server.getMember(targetDiscordId);
 
-			if (user != null) {
+			if (member != null) {
 				try {
-					DiscordUtil.join(user.sendMessage(userMsg));
+					member.getUser().dm().send(userMsg);
 					ret = true;
-				} catch (DiscordException e) {
+				} catch (Exception e) {
 					LOGGER.warn("Error notifying target {}/{}: {}", targetId, targetDiscordId, e.toString());
 				}
 			}

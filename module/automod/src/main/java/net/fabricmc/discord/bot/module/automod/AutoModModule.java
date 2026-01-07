@@ -23,11 +23,6 @@ import java.util.List;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.DiscordApi;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.MessageType;
-import org.javacord.api.entity.server.Server;
 
 import net.fabricmc.discord.bot.CachedMessage;
 import net.fabricmc.discord.bot.DiscordBot;
@@ -38,7 +33,10 @@ import net.fabricmc.discord.bot.command.mod.ActionUtil.UserMessageAction;
 import net.fabricmc.discord.bot.command.mod.UserActionType;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
-import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.Discord;
+import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.Server;
 
 public final class AutoModModule implements Module, MessageCreateHandler {
 	private static final Logger LOGGER = LogManager.getLogger(AutoModModule.class);
@@ -50,8 +48,8 @@ public final class AutoModModule implements Module, MessageCreateHandler {
 
 	private DiscordBot bot;
 	private volatile Server server;
-	private volatile List<TextChannel> requestsChannels;
-	private volatile List<TextChannel> showcaseChannels;
+	private volatile List<Channel> requestsChannels;
+	private volatile List<Channel> showcaseChannels;
 
 	@Override
 	public String getName() {
@@ -60,10 +58,10 @@ public final class AutoModModule implements Module, MessageCreateHandler {
 
 	@Override
 	public void registerConfigEntries(DiscordBot bot) {
-		bot.registerConfigEntry(REQUESTS_CHANNELS, () -> Collections.emptyList());
-		bot.registerConfigEntry(REQUESTS_ACTION_REASON, () -> "please use the appropriate channel");
-		bot.registerConfigEntry(SHOWCASE_CHANNELS, () -> Collections.emptyList());
-		bot.registerConfigEntry(SHOWCASE_ACTION_REASON, () -> "please use the appropriate channel");
+		bot.registerConfigEntry(REQUESTS_CHANNELS, Collections.emptyList());
+		bot.registerConfigEntry(REQUESTS_ACTION_REASON, "please use the appropriate channel");
+		bot.registerConfigEntry(SHOWCASE_CHANNELS, Collections.emptyList());
+		bot.registerConfigEntry(SHOWCASE_ACTION_REASON, "please use the appropriate channel");
 	}
 
 	@SuppressWarnings("unchecked")
@@ -76,13 +74,13 @@ public final class AutoModModule implements Module, MessageCreateHandler {
 		}
 	}
 
-	private static List<TextChannel> getChannels(Server server, String type, List<Long> ids) {
+	private static List<Channel> getChannels(Server server, String type, List<Long> ids) {
 		if (server == null || ids.isEmpty()) return null;
 
-		List<TextChannel> ret = new ArrayList<>();
+		List<Channel> ret = new ArrayList<>();
 
 		for (long id : ids) {
-			TextChannel channel = DiscordUtil.getTextChannel(server, id);
+			Channel channel = server.getTextChannel(id);
 
 			if (channel == null) {
 				LOGGER.warn("invalid {} channel: {}", type, id);
@@ -95,7 +93,7 @@ public final class AutoModModule implements Module, MessageCreateHandler {
 	}
 
 	@Override
-	public void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
+	public void setup(DiscordBot bot, Discord discord, Logger logger, Path dataDir) {
 		this.bot = bot;
 
 		bot.getActiveHandler().registerReadyHandler(this::onReady);
@@ -117,7 +115,7 @@ public final class AutoModModule implements Module, MessageCreateHandler {
 
 	@Override
 	public void onMessageCreated(CachedMessage message, Server server) {
-		if (message.getType() != MessageType.REPLY) return;
+		if (message.getType() != Message.Type.REPLY) return;
 
 		if (bot.getUserHandler().hasImmunity(message.getAuthorDiscordId(), bot.getUserHandler().getBotUserId(), false)) {
 			return;
@@ -128,12 +126,12 @@ public final class AutoModModule implements Module, MessageCreateHandler {
 		}
 	}
 
-	private boolean checkReply(CachedMessage message, Server server, List<TextChannel> channels, ConfigKey<String> reasonKey) {
+	private boolean checkReply(CachedMessage message, Server server, List<Channel> channels, ConfigKey<String> reasonKey) {
 		if (channels == null) return false;
 
-		TextChannel channel = null;
+		Channel channel = null;
 
-		for (TextChannel c : channels) {
+		for (Channel c : channels) {
 			if (message.getChannelId() == c.getId()) {
 				channel = c;
 				break;
@@ -143,7 +141,7 @@ public final class AutoModModule implements Module, MessageCreateHandler {
 		if (channel == null) return false;
 
 		try {
-			Message refMsg = message.toMessage(server).getReferencedMessage().orElse(null);
+			Message refMsg = message.toMessage(server).getReferencedMessage();
 
 			if (refMsg == null
 					|| refMsg.getAuthor().getId() == message.getAuthorDiscordId() // self-reply

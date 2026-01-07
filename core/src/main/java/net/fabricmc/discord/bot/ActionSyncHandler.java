@@ -19,6 +19,7 @@ package net.fabricmc.discord.bot;
 import java.sql.SQLException;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Future;
@@ -26,18 +27,6 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.entity.auditlog.AuditLog;
-import org.javacord.api.entity.auditlog.AuditLogActionType;
-import org.javacord.api.entity.auditlog.AuditLogEntry;
-import org.javacord.api.entity.auditlog.AuditLogEntryTarget;
-import org.javacord.api.entity.server.Ban;
-import org.javacord.api.entity.server.Server;
-import org.javacord.api.entity.user.User;
-import org.javacord.api.event.server.member.ServerMemberBanEvent;
-import org.javacord.api.event.server.member.ServerMemberJoinEvent;
-import org.javacord.api.listener.ChainableGloballyAttachableListenerManager;
-import org.javacord.api.listener.server.member.ServerMemberBanListener;
-import org.javacord.api.listener.server.member.ServerMemberJoinListener;
 
 import net.fabricmc.discord.bot.command.mod.ActionUtil;
 import net.fabricmc.discord.bot.command.mod.ActionUtil.UserMessageAction;
@@ -46,6 +35,16 @@ import net.fabricmc.discord.bot.database.query.ActionQueries;
 import net.fabricmc.discord.bot.database.query.ActionQueries.ActionEntry;
 import net.fabricmc.discord.bot.database.query.ActionQueries.ActiveActionEntry;
 import net.fabricmc.discord.bot.database.query.ActionQueries.ExpiringActionEntry;
+import net.fabricmc.discord.io.GlobalEventHolder;
+import net.fabricmc.discord.io.GlobalEventHolder.MemberBanHandler;
+import net.fabricmc.discord.io.GlobalEventHolder.MemberJoinHandler;
+import net.fabricmc.discord.io.Member;
+import net.fabricmc.discord.io.Permission;
+import net.fabricmc.discord.io.Server;
+import net.fabricmc.discord.io.Server.AuditLogEntry;
+import net.fabricmc.discord.io.Server.AuditLogType;
+import net.fabricmc.discord.io.Server.Ban;
+import net.fabricmc.discord.io.User;
 
 /**
  * Mechanism to keep Discord up to date with the bot's actions.
@@ -53,7 +52,7 @@ import net.fabricmc.discord.bot.database.query.ActionQueries.ExpiringActionEntry
  * <p>This handles time based expiration of temporary actions and re-application of actions that Discord doesn't
  * persistently enforce itself.
  */
-public final class ActionSyncHandler implements ServerMemberJoinListener, ServerMemberBanListener {
+public final class ActionSyncHandler implements MemberJoinHandler, MemberBanHandler {
 	private static final int expirationWindowMinutes = 120; // only schedule tasks for the near future in Java
 	private static final int retryDelayMinutes = 5;
 
@@ -185,27 +184,25 @@ public final class ActionSyncHandler implements ServerMemberJoinListener, Server
 		if (future != null) future.cancel(false);
 	}
 
-	void registerEarlyHandlers(ChainableGloballyAttachableListenerManager src) {
-		src.addServerMemberJoinListener(this);
-		src.addServerMemberBanListener(this);
+	void registerEarlyHandlers(GlobalEventHolder holder) {
+		holder.registerMemberJoin(this);
+		holder.registerMemberBan(this);
 	}
 
 	@Override
-	public void onServerMemberJoin(ServerMemberJoinEvent event) {
-		Server server = event.getServer();
+	public void onMemberJoin(Member member) {
+		Server server = member.getServer();
 		if (server.getId() != bot.getServerId()) return;
-
-		User user = event.getUser();
 
 		try {
 			synchronized (this) {
-				Collection<ActiveActionEntry> actions = ActionQueries.getActiveDiscordUserActions(bot.getDatabase(), user.getId());
+				Collection<ActiveActionEntry> actions = ActionQueries.getActiveDiscordUserActions(bot.getDatabase(), member.getId());
 				long time = System.currentTimeMillis();
 
 				for (ActiveActionEntry action : actions) {
 					if (action.expirationTime() < 0 || action.expirationTime() > time) {
 						try {
-							action.type().activate(server, user.getId(), true, action.data() != null ? action.data().data() : 0, action.reason(), bot);
+							action.type().activate(server, member.getId(), true, action.data() != null ? action.data().data() : 0, action.reason(), bot);
 						} catch (Exception e) {
 							LOGGER.warn("Error re-activating action on join", e);
 						}
@@ -217,20 +214,20 @@ public final class ActionSyncHandler implements ServerMemberJoinListener, Server
 		}
 	}
 
-	public boolean applyNickLock(Server server, User user) {
+	public boolean applyNickLock(Member member) {
 		try {
-			String displayName = user.getDisplayName(server);
-			String lockedNick = ActionQueries.getLockedNick(bot.getDatabase(), user.getId());
+			String displayName = member.getDisplayName();
+			String lockedNick = ActionQueries.getLockedNick(bot.getDatabase(), member.getId());
 
 			if (lockedNick == null // no active nicklock
 					|| lockedNick.equals(displayName)) { // permitted nick change
 				return false;
 			}
 
-			if (user.getName().equals(lockedNick)) { // user name is fine, drop nick
-				user.resetNickname(server, "nicklock");
+			if (member.getUser().getGlobalDisplayName().equals(lockedNick)) { // user name is fine, drop nick
+				member.setNickName(null, "nicklock");
 			} else {
-				user.updateNickname(server, lockedNick, "nicklock");
+				member.setNickName(lockedNick, "nicklock");
 			}
 
 			return true;
@@ -263,13 +260,12 @@ public final class ActionSyncHandler implements ServerMemberJoinListener, Server
 	}
 
 	@Override
-	public void onServerMemberBan(ServerMemberBanEvent event) {
-		Server server = event.getServer();
+	public void onMemberBan(User user, Server server) {
 		if (server.getId() != bot.getServerId()) return;
 
 		bot.getExecutor().execute(() -> {
 			try {
-				int targetUserId = bot.getUserHandler().getUserId(event.getUser());
+				int targetUserId = bot.getUserHandler().getUserId(user);
 				if (targetUserId < 0) return; // unknown target user
 
 				if (ActionQueries.getActiveAction(bot.getDatabase(), targetUserId, UserActionType.BAN) != null) {
@@ -277,29 +273,26 @@ public final class ActionSyncHandler implements ServerMemberJoinListener, Server
 					return;
 				}
 
-				Ban ban = event.requestBan().join();
+				Ban ban = server.getBan(user);
 				if (ban == null) return; // not banned
 
-				String reason = ban.getReason().orElse(null);
+				String reason = ban.reason();
 				if ("null".equals(reason)) reason = null; // appears to use "null" string value for unknown reasons..
 
 				User actor = null;
 
-				if (server.canYouViewAuditLog()) {
+				if (server.getYourself().hasPermission(Permission.VIEW_AUDIT_LOG)) {
 					for (int i = 0; i < 10; i++) {
 						if (i > 0) Thread.sleep(100 << (i - 1)); // retry with .1, .2, .4, .8, 1.6, 3.2, 6.4, 12.8, 25.6 s delay
 
-						AuditLog log = server.getAuditLog(10, AuditLogActionType.MEMBER_BAN_ADD).join();
+						List<AuditLogEntry> log = server.getAuditLog(AuditLogType.MEMBER_BAN_ADD, 10);
 						long latestMatch = -1;
 
-						for (AuditLogEntry entry : log.getEntries()) {
-							if (entry.getId() <= latestMatch) continue; // the most significant bits of the id are a high resolution timestamp, so it can be compared directly
+						for (AuditLogEntry entry : log) {
+							if (entry.id() <= latestMatch) continue; // the most significant bits of the id are a high resolution timestamp, so it can be compared directly
 
-							AuditLogEntryTarget target = entry.getTarget().orElse(null);
-							String curReason = entry.getReason().orElse(null);
-
-							if (target != null && target.getId() == ban.getUser().getId() && Objects.equals(reason, curReason)) {
-								actor = entry.getUser().join();
+							if (entry.targetId() == user.getId() && Objects.equals(reason, entry.reason())) {
+								actor = entry.actor();
 							}
 						}
 
@@ -307,7 +300,7 @@ public final class ActionSyncHandler implements ServerMemberJoinListener, Server
 					}
 				}
 
-				if (actor != null && actor.getId() == bot.getUserHandler().getBotDiscordUserId()) {
+				if (actor != null && actor.isYourself()) {
 					// banned by the bot
 					return;
 				}

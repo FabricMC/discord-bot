@@ -16,13 +16,13 @@
 
 package net.fabricmc.discord.bot.command;
 
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.server.Server;
-import org.javacord.api.entity.user.User;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.DiscordBot;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.Server;
+import net.fabricmc.discord.io.User;
 
 /**
  * An object which represents the context in which a command is being executed.
@@ -31,7 +31,7 @@ public record CommandContext(
 		CommandResponder responder,
 		DiscordBot bot,
 		@Nullable Server server,
-		TextChannel channel,
+		Channel channel,
 		Message message,
 		User user,
 		int userId,

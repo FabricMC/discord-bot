@@ -16,6 +16,7 @@
 
 package net.fabricmc.discord.bot.module.mapping;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -24,19 +25,17 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-
-import org.javacord.api.entity.emoji.Emoji;
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
-import org.javacord.api.event.message.reaction.ReactionAddEvent;
-import org.javacord.api.listener.message.reaction.ReactionAddListener;
 
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.util.CommonEmotes;
 import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.Emoji;
+import net.fabricmc.discord.io.GlobalEventHolder.MessageReactionAddHandler;
+import net.fabricmc.discord.io.GlobalEventHolder.TemporaryRegistration;
+import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.MessageEmbed;
 
 public final class SetNamespaceCommand extends Command {
 	private final NamespaceApplication subType;
@@ -87,9 +86,9 @@ public final class SetNamespaceCommand extends Command {
 
 			if (!privateNs.isEmpty()) {
 				privateNs = new LinkedHashSet<>(privateNs);
-				context.channel().sendMessage("Settings updated, restricted: "+String.join(", ", privateNs));
+				context.channel().send("Settings updated, restricted: "+String.join(", ", privateNs));
 			} else {
-				context.channel().sendMessage("Settings updated");
+				context.channel().send("Settings updated");
 			}
 		} else if ("reset".equals(arguments.get("unnamed_0"))) {
 			if (subType.isDisplay) {
@@ -100,7 +99,7 @@ public final class SetNamespaceCommand extends Command {
 				removeUserConfig(context, MappingModule.QUERY_NAMESPACES);
 			}
 
-			context.channel().sendMessage("Settings reset");
+			context.channel().send("Settings reset");
 		} else {
 			new InteractiveMsg(context, subType).post(false);
 		}
@@ -126,10 +125,11 @@ public final class SetNamespaceCommand extends Command {
 		public final boolean isQuery;
 	}
 
-	static final class InteractiveMsg implements ReactionAddListener {
+	static final class InteractiveMsg implements MessageReactionAddHandler {
 		private final CommandContext context;
 		private final NamespaceApplication application;
 		private volatile Message message;
+		private volatile TemporaryRegistration tempEventReg;
 
 		InteractiveMsg(CommandContext context, NamespaceApplication application) {
 			this.context = context;
@@ -137,31 +137,27 @@ public final class SetNamespaceCommand extends Command {
 		}
 
 		public void post(boolean error) {
-			context.channel().sendMessage(getEmbed(error))
-			.thenCompose(msg -> {
-				this.message = msg;
-				List<CompletableFuture<Void>> futures = new ArrayList<>(MappingModule.supportedNamespaces.size() + 1);
+			this.message = context.channel().send(getEmbed(error));
 
-				for (int i = 0; i < MappingModule.supportedNamespaces.size(); i++) {
-					futures.add(msg.addReactions(CommonEmotes.DIGITS[i + 1]));
-				}
+			List<Emoji> emotes = new ArrayList<>(MappingModule.supportedNamespaces.size() + 1);
 
-				if (DiscordUtil.canRemoveReactions(message.getChannel())) {
-					futures.add(msg.addReaction(CommonEmotes.X));
-				}
+			for (int i = 0; i < MappingModule.supportedNamespaces.size(); i++) {
+				emotes.add(Emoji.fromUnicode(CommonEmotes.DIGITS[i + 1]));
+			}
 
-				return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
-						.thenAccept(ignore -> {
-							msg.addReactionAddListener(this).removeAfter(200, TimeUnit.SECONDS).addRemoveHandler(this::destroy);
-						});
-			})
-			.exceptionally(exc -> {
-				exc.printStackTrace();
-				return null;
-			});
+			if (DiscordUtil.canRemoveReactions(message.getChannel())) {
+				emotes.add(Emoji.fromUnicode(CommonEmotes.X));
+			}
+
+			tempEventReg = context.channel().getDiscord().getGlobalEvents().registerTemporary(MessageReactionAddHandler.class,
+					this,
+					this::destroy,
+					Duration.ofSeconds(200));
+
+			message.addReactions(emotes);
 		}
 
-		private EmbedBuilder getEmbed(boolean error) {
+		private MessageEmbed getEmbed(boolean error) {
 			StringBuilder supported = new StringBuilder();
 			int i = 0;
 
@@ -204,9 +200,10 @@ public final class SetNamespaceCommand extends Command {
 					+ "Use reactions to select/deselect, at least one has to remain selected.%s%s",
 					supported, selected, privateSuffix, errorSuffix);
 
-			return new EmbedBuilder()
-					.setTitle("%sNamespace Config".formatted(application.subName.isEmpty() ? "" : application.subName.concat(" ")))
-					.setDescription(description);
+			return new MessageEmbed.Builder()
+					.title("%sNamespace Config".formatted(application.subName.isEmpty() ? "" : application.subName.concat(" ")))
+					.description(description)
+					.build();
 		}
 
 		private void destroy() {
@@ -214,7 +211,9 @@ public final class SetNamespaceCommand extends Command {
 
 			if (message != null) {
 				this.message = null;
-				message.removeListener(ReactionAddListener.class, this);
+
+				TemporaryRegistration tempEventReg = this.tempEventReg;
+				if (tempEventReg != null) tempEventReg.cancel();
 
 				if (DiscordUtil.canRemoveReactions(message.getChannel())) {
 					message.removeAllReactions();
@@ -225,65 +224,56 @@ public final class SetNamespaceCommand extends Command {
 		}
 
 		@Override
-		public void onReactionAdd(ReactionAddEvent event) {
-			if (event.getUserId() != context.user().getId()) {
-				return;
-			}
+		public void onMessageReactionAdd(long messageId, Emoji emoji, long userId, Channel channel) {
+			Message message = this.message;
+			if (message == null || messageId != message.getId()) return;
 
-			Emoji emoji = event.getEmoji();
-			String emojiStr;
+			if (userId != context.user().getId()) return;
+			if (emoji.isCustom()) return;
 
-			if (emoji.equalsEmoji(CommonEmotes.X)) {
+			String emojiStr = emoji.getName();
+
+			if (emojiStr.equals(CommonEmotes.X)) {
 				destroy();
 				return;
-			} else if ((emojiStr = emoji.asUnicodeEmoji().orElse(null)) != null) {
-				for (int i = 0; i < MappingModule.supportedNamespaces.size(); i++) {
-					if (!emojiStr.equals(CommonEmotes.DIGITS[i + 1])) continue;
-
-					String ns = MappingModule.supportedNamespaces.get(i);
-
-					List<String> selDisplayNs = application.isDisplay ? MappingCommandUtil.getConfiguredNamespaces(context, false) : null;
-					List<String> selQueryNs = application.isQuery ? MappingCommandUtil.getConfiguredNamespaces(context, true) : null;
-
-					boolean remove = (selDisplayNs == null || selDisplayNs.contains(ns)) && (selQueryNs == null || selQueryNs.contains(ns));
-
-					List<String> newDisplayNs = toggleNs(selDisplayNs, ns, remove);
-					List<String> newQueryNs = toggleNs(selQueryNs, ns, remove);
-
-					boolean error = application.isDisplay && newDisplayNs == null || application.isQuery && newQueryNs == null;
-
-					if (!error) {
-						if (application.isDisplay) setUserConfig(context, MappingModule.DISPLAY_NAMESPACES, newDisplayNs);
-						if (application.isQuery) setUserConfig(context, MappingModule.QUERY_NAMESPACES, newQueryNs);
-					}
-
-					Message msg = this.message;
-
-					if (msg != null) {
-						CompletableFuture<?> future;
-
-						if (DiscordUtil.canRemoveReactions(event.getChannel())) {
-							future = msg.edit(getEmbed(error));
-						} else {
-							future = msg.delete().thenRun(() -> post(error));
-						}
-
-						future.exceptionally(exc -> {
-							exc.printStackTrace();
-							return null;
-						});
-					}
-
-					break;
-				}
 			}
 
-			if (DiscordUtil.canRemoveReactions(event.getChannel())) { // requires the user to remove reactions manually (double click to advance)
-				event.removeReaction()
-				.exceptionally(e -> {
-					e.printStackTrace();
-					return null;
-				});
+			for (int i = 0; i < MappingModule.supportedNamespaces.size(); i++) {
+				if (!emojiStr.equals(CommonEmotes.DIGITS[i + 1])) continue;
+
+				String ns = MappingModule.supportedNamespaces.get(i);
+
+				List<String> selDisplayNs = application.isDisplay ? MappingCommandUtil.getConfiguredNamespaces(context, false) : null;
+				List<String> selQueryNs = application.isQuery ? MappingCommandUtil.getConfiguredNamespaces(context, true) : null;
+
+				boolean remove = (selDisplayNs == null || selDisplayNs.contains(ns)) && (selQueryNs == null || selQueryNs.contains(ns));
+
+				List<String> newDisplayNs = toggleNs(selDisplayNs, ns, remove);
+				List<String> newQueryNs = toggleNs(selQueryNs, ns, remove);
+
+				boolean error = application.isDisplay && newDisplayNs == null || application.isQuery && newQueryNs == null;
+
+				if (!error) {
+					if (application.isDisplay) setUserConfig(context, MappingModule.DISPLAY_NAMESPACES, newDisplayNs);
+					if (application.isQuery) setUserConfig(context, MappingModule.QUERY_NAMESPACES, newQueryNs);
+				}
+
+				Message msg = this.message;
+
+				if (msg != null) {
+					if (DiscordUtil.canRemoveReactions(channel)) {
+						msg.edit(getEmbed(error));
+					} else {
+						msg.delete("reaction update");
+						post(error);
+					}
+				}
+
+				break;
+			}
+
+			if (DiscordUtil.canRemoveReactions(channel)) { // requires the user to remove reactions manually (double click to advance)
+				message.removeReaction(emoji, userId);
 			}
 		}
 

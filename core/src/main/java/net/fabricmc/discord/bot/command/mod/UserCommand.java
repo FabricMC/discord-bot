@@ -22,12 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import org.javacord.api.entity.DiscordEntity;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
-import org.javacord.api.entity.permission.Role;
-import org.javacord.api.entity.server.Server;
-import org.javacord.api.entity.user.User;
-import org.javacord.api.entity.user.UserStatus;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.UserHandler;
@@ -41,7 +35,12 @@ import net.fabricmc.discord.bot.database.query.UserQueries.DiscordUserData;
 import net.fabricmc.discord.bot.database.query.UserQueries.UserData;
 import net.fabricmc.discord.bot.message.Paginator;
 import net.fabricmc.discord.bot.message.Paginator.Page;
+import net.fabricmc.discord.bot.util.DiscordUtil;
 import net.fabricmc.discord.bot.util.FormatUtil;
+import net.fabricmc.discord.io.Member;
+import net.fabricmc.discord.io.MessageEmbed;
+import net.fabricmc.discord.io.Role;
+import net.fabricmc.discord.io.Server;
 
 public final class UserCommand extends Command {
 	@Override
@@ -90,17 +89,17 @@ public final class UserCommand extends Command {
 			for (DiscordUserData du : userData.discordUsers()) {
 				if (firstDiscordUser == null) firstDiscordUser = du;
 
-				created = Math.min(created, DiscordEntity.getCreationTimestamp(du.id()).toEpochMilli());
+				created = Math.min(created, DiscordUtil.getCreationTime(du.id()).toEpochMilli());
 				firstSeen = Math.min(firstSeen, du.firstSeen());
 				lastSeen = Math.max(lastSeen, du.lastSeen());
 
-				User user;
+				Member member;
 
 				if (server != null
-						&& (user = server.getMemberById(du.id()).orElse(null)) != null) {
+						&& (member = server.getMember(du.id())) != null) {
 					lastSeen = currentTime;
 
-					Instant curJoinTime = user.getJoinedAtTimestamp(server).orElse(null);
+					Instant curJoinTime = member.getJoinTime();
 					if (curJoinTime != null) firstSeen = Math.min(firstSeen, curJoinTime.toEpochMilli());
 				}
 
@@ -140,13 +139,13 @@ public final class UserCommand extends Command {
 		}
 
 		if (userData.discordUsers().size() <= 1) {
-			EmbedBuilder msg = new EmbedBuilder()
-					.setTitle(title)
-					.setDescription(firstPageSb.toString())
-					.setTimestamp(Instant.ofEpochMilli(currentTime));
-			if (firstThumbnail != null) msg.setThumbnail(firstThumbnail);
+			MessageEmbed.Builder msgBuilder = new MessageEmbed.Builder()
+					.title(title)
+					.description(firstPageSb.toString())
+					.time(Instant.ofEpochMilli(currentTime));
+			if (firstThumbnail != null) msgBuilder.thumbnail(firstThumbnail);
 
-			context.channel().sendMessage(msg);
+			context.channel().send(msgBuilder.build());
 		} else {
 			Paginator.Builder builder = new Paginator.Builder(context.user()).title(title);
 			builder.page(new Page.Builder(firstPageSb).thumbnail(firstThumbnail).build());
@@ -175,8 +174,8 @@ public final class UserCommand extends Command {
 	}
 
 	private static String formatDiscordUser(int num, DiscordUserData data, long currentTime, @Nullable Server server, boolean showAllTimes) {
-		User user = server != null ? server.getMemberById(data.id()).orElse(null) : null;
-		UserStatus status = user != null ? user.getStatus() : null;
+		Member member = server != null ? server.getMember(data.id()) : null;
+		Member.Status status = member != null ? member.getStatus() : null;
 
 		return String.format("**Discord User #%d**\n\n"
 				+ "**ID:** `%s`\n"
@@ -189,14 +188,14 @@ public final class UserCommand extends Command {
 				data.id(),
 				data.username(), data.discriminator(),
 				(data.nickname() != null ? data.nickname() : "-"),
-				(status != null ? status.getStatusString() : "absent"),
-				formatDiscordUserTimes(data, user, server, currentTime, showAllTimes),
-				(user != null ? user.getRoles(server).stream().filter(r -> !r.isEveryoneRole()).map(Role::getMentionTag).collect(Collectors.joining(" ")) : "-"));
+				(status != null ? status.name : "absent"),
+				formatDiscordUserTimes(data, member, server, currentTime, showAllTimes),
+				(member != null ? member.getRoles().stream().filter(r -> r.getId() != r.getServer().getEveryoneRole().getId()).map(Role::getMentionTag).collect(Collectors.joining(" ")) : "-"));
 	}
 
-	private static CharSequence formatDiscordUserTimes(DiscordUserData data, @Nullable User user, @Nullable Server server, long currentTime, boolean showAllTimes) {
-		Instant createdTime = DiscordEntity.getCreationTimestamp(data.id());
-		Instant joinTime = user != null ? user.getJoinedAtTimestamp(server).orElse(null) : null;
+	private static CharSequence formatDiscordUserTimes(DiscordUserData data, @Nullable Member user, @Nullable Server server, long currentTime, boolean showAllTimes) {
+		Instant createdTime = DiscordUtil.getCreationTime(data.id());
+		Instant joinTime = user != null ? user.getJoinTime() : null;
 		Instant firstSeenTime = Instant.ofEpochMilli(data.firstSeen());
 		Instant lastSeenTime = user != null ? Instant.ofEpochMilli(currentTime) : Instant.ofEpochMilli(data.lastSeen());
 
@@ -229,8 +228,8 @@ public final class UserCommand extends Command {
 	private static String getAvatarUrl(long discordUserId, @Nullable Server server) {
 		if (server == null) return null;
 
-		User user = server.getMemberById(discordUserId).orElse(null);
+		Member user = server.getMember(discordUserId);
 
-		return user != null ? user.getAvatar().getUrl().toString() : null;
+		return user != null ? user.getAvatarUrl() : null;
 	}
 }

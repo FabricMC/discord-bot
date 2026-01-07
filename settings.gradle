@@ -2,6 +2,8 @@ rootProject.name = "thimble"
 
 include("core")
 include("tag-parser")
+include("ioimpl:javacord")
+include("ioimpl:jda")
 
 ["automod", "joinlog", "fabricversion", "mapping", "mcversion", "tag", "test"].each {
     include(it)

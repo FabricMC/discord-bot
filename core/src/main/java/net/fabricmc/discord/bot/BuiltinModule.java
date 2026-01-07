@@ -19,11 +19,6 @@ package net.fabricmc.discord.bot;
 import java.nio.file.Path;
 
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.DiscordApi;
-import org.javacord.api.entity.message.MessageAuthor;
-import org.javacord.api.entity.user.User;
-import org.javacord.api.event.message.MessageCreateEvent;
-import org.javacord.api.listener.message.MessageCreateListener;
 
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandResponder;
@@ -31,6 +26,7 @@ import net.fabricmc.discord.bot.command.core.ConfigCommand;
 import net.fabricmc.discord.bot.command.core.GroupCommand;
 import net.fabricmc.discord.bot.command.core.HelpCommand;
 import net.fabricmc.discord.bot.command.core.PermissionCommand;
+import net.fabricmc.discord.bot.command.core.UserConfigCommand;
 import net.fabricmc.discord.bot.command.filter.FilterActionCommand;
 import net.fabricmc.discord.bot.command.filter.FilterCommand;
 import net.fabricmc.discord.bot.command.filter.FilterGroupCommand;
@@ -53,6 +49,10 @@ import net.fabricmc.discord.bot.command.util.ExportChannelCommand;
 import net.fabricmc.discord.bot.command.util.ExportMessageCommand;
 import net.fabricmc.discord.bot.command.util.ImportChannelCommand;
 import net.fabricmc.discord.bot.command.util.MessageCacheCommand;
+import net.fabricmc.discord.io.Discord;
+import net.fabricmc.discord.io.GlobalEventHolder.MessageCreateHandler;
+import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.User;
 
 /**
  * The builtin module of the discord bot.
@@ -61,9 +61,9 @@ import net.fabricmc.discord.bot.command.util.MessageCacheCommand;
  *
  * <p>The builtin module handles the dispatch of commands.
  */
-final class BuiltinModule implements Module, MessageCreateListener {
+final class BuiltinModule implements Module, MessageCreateHandler {
 	private DiscordBot bot;
-	private DiscordApi api;
+	private Discord discord;
 
 	@Override
 	public String getName() {
@@ -81,13 +81,14 @@ final class BuiltinModule implements Module, MessageCreateListener {
 	}
 
 	@Override
-	public void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
+	public void setup(DiscordBot bot, Discord discord, Logger logger, Path dataDir) {
 		this.bot = bot;
-		this.api = api;
+		this.discord = discord;
 
 		bot.registerCommand(new HelpCommand());
 
 		bot.registerCommand(new ConfigCommand());
+		bot.registerCommand(new UserConfigCommand());
 		bot.registerCommand(new GroupCommand());
 		bot.registerCommand(new PermissionCommand());
 
@@ -127,29 +128,30 @@ final class BuiltinModule implements Module, MessageCreateListener {
 		bot.registerCommand(new ExportMessageCommand());
 		bot.registerCommand(new MessageCacheCommand());
 
-		api.addMessageCreateListener(this);
+		discord.getGlobalEvents().registerMessageCreate(this);
 	}
 
 	@Override
-	public void onMessageCreate(MessageCreateEvent event) {
-		String content = event.getMessageContent();
+	public void onMessageCreate(Message message) {
+		if (message.isFromWebhook()) return;
+
+		String content = message.getContent();
 		String prefix = bot.getCommandPrefix();
 
 		if (content.length() <= prefix.length() || !content.startsWith(prefix)) {
 			return;
 		}
 
-		MessageAuthor author = event.getMessageAuthor();
-		User user = author.asUser().orElse(null);
-		if (user == null) return; // should only happen for webhook messages
+		User user = message.getAuthor();
+		assert user != null; // webhooks are already filtered above
 
 		// We intentionally don't pass the event since we may want to support editing the original message to execute the command again such as if an error was made in syntax
 		final CommandContext context = new CommandContext(
-				new CommandResponder(event),
+				new CommandResponder(message),
 				this.bot,
-				event.getServer().orElse(null),
-				event.getChannel(),
-				event.getMessage(),
+				message.getChannel().getServer(),
+				message.getChannel(),
+				message,
 				user,
 				bot.getUserHandler().getUserId(user),
 				content);

@@ -20,7 +20,6 @@ import java.nio.file.Path;
 import java.util.List;
 
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.DiscordApi;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.Module;
@@ -28,6 +27,7 @@ import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
 import net.fabricmc.discord.bot.module.mapping.SetNamespaceCommand.NamespaceApplication;
 import net.fabricmc.discord.bot.module.mapping.repo.MappingRepository;
+import net.fabricmc.discord.io.Discord;
 
 public final class MappingModule implements Module {
 	static final List<String> supportedNamespaces = List.of("official", "intermediary", "yarn", "mojmap", "srg", "mcp");
@@ -57,13 +57,16 @@ public final class MappingModule implements Module {
 
 	@Override
 	public void registerConfigEntries(DiscordBot bot) {
-		bot.registerConfigEntry(DEFAULT_NAMESPACES, () -> defaultNamespaces);
-		bot.registerConfigEntry(PUBLIC_NAMESPACES, () -> publicNamespaces);
-		bot.registerConfigEntry(PRIVATE_NAMESPACE_BLOCKLIST, () -> List.of());
+		bot.registerConfigEntry(DEFAULT_NAMESPACES, defaultNamespaces);
+		bot.registerConfigEntry(PUBLIC_NAMESPACES, publicNamespaces);
+		bot.registerConfigEntry(PRIVATE_NAMESPACE_BLOCKLIST, List.of());
+
+		bot.registerUserConfigEntry(QUERY_NAMESPACES, defaultNamespaces);
+		bot.registerUserConfigEntry(DISPLAY_NAMESPACES, defaultNamespaces);
 	}
 
 	@Override
-	public void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
+	public void setup(DiscordBot bot, Discord discord, Logger logger, Path dataDir) {
 		repo = new MappingRepository(bot, dataDir);
 
 		bot.registerCommand(new MappingStatusCommand(repo));

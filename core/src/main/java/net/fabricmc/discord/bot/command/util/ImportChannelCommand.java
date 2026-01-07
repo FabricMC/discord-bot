@@ -33,14 +33,14 @@ import java.util.Map;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.MessageBuilder;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
 
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
-import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.MessageAttachment;
+import net.fabricmc.discord.io.MessageEmbed;
 
 public final class ImportChannelCommand extends Command {
 	@Override
@@ -60,7 +60,7 @@ public final class ImportChannelCommand extends Command {
 
 	@Override
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
-		TextChannel channel = getTextChannel(context, arguments.get("channel"));
+		Channel channel = getTextChannel(context, arguments.get("channel"));
 		String content = retrieveContent(context, arguments.get("contentUrl"));
 
 		List<Tag> tags = new ArrayList<>();
@@ -94,9 +94,9 @@ public final class ImportChannelCommand extends Command {
 				}
 			}
 
-			MessageBuilder mb = new MessageBuilder()
-					.setContent(content.substring(startPos, endPos))
-					.setAllowedMentions(DiscordUtil.NO_MENTIONS);
+			Message.Builder mb = new Message.Builder()
+					.content(content.substring(startPos, endPos))
+					.noAllowedMentions();
 
 			for (int i = firstTagIdx; i < tags.size(); i++) {
 				Tag tag = tags.get(i);
@@ -104,34 +104,47 @@ public final class ImportChannelCommand extends Command {
 
 				String type = tag.data.get("type").getAsString();
 
-
 				switch (type) {
-				case "attachment" -> {
+				case "attachment": {
+					MessageAttachment.Builder builder = new MessageAttachment.Builder()
+							.name(tag.data.get("fileName").getAsString())
+							.description(tag.data.has("description") ? tag.data.get("description").getAsString() : null);
+
 					if (tag.data.has("data")) {
-						mb.addAttachment(Base64.getDecoder().decode(tag.data.get("data").getAsString()), tag.data.get("fileName").getAsString());
+						builder.data(Base64.getDecoder().decode(tag.data.get("data").getAsString()));
 					} else {
-						mb.addAttachment(new URL(tag.data.get("url").getAsString()));
+						builder.data(new URL(tag.data.get("url").getAsString()));
 					}
+
+					mb.attachment(builder.build());
+
+					break;
 				}
-				case"embed" -> mb.setEmbed(new EmbedBuilder()
-						.setTitle(tag.data.has("title") ? tag.data.get("title").getAsString() : null)
-						.setDescription(tag.data.has("description") ? tag.data.get("description").getAsString() : null)
-						.setUrl(tag.data.has("url") ? tag.data.get("url").getAsString() : null)
-						.setTimestamp(tag.data.has("timestamp") ? Instant.ofEpochMilli(tag.data.get("timestamp").getAsLong()) : null)
-						.setColor(tag.data.has("color") ? new Color(tag.data.get("color").getAsInt(), true) : null));
-				default -> throw new IOException("Invalid type: "+type);
+				case"embed":
+					if (tag.data.get("embedType").getAsString().equals("rich")) {
+						mb.embed(new MessageEmbed.Builder()
+								.title(tag.data.has("title") ? tag.data.get("title").getAsString() : null, tag.data.has("url") ? tag.data.get("url").getAsString() : null)
+								.description(tag.data.has("description") ? tag.data.get("description").getAsString() : null)
+								.time(tag.data.has("timestamp") ? Instant.ofEpochMilli(tag.data.get("timestamp").getAsLong()) : null)
+								.color(tag.data.has("color") ? new Color(tag.data.get("color").getAsInt(), true) : null)
+								.build());
+					}
+
+					break;
+				default:
+					throw new IOException("Invalid type: "+type);
 				}
 
 				firstTagIdx = i + 1;
 			}
 
-			DiscordUtil.join(mb.send(channel));
+			channel.send(mb.build());
 			msgCount++;
 
 			startPos = endPos + delimiterSize;
 		}
 
-		context.channel().sendMessage("Imported %d messages".formatted(msgCount));
+		context.channel().send("Imported %d messages".formatted(msgCount));
 
 		return true;
 	}

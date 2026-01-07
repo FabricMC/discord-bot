@@ -22,13 +22,6 @@ import java.time.temporal.ChronoUnit;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.DiscordApi;
-import org.javacord.api.entity.DiscordEntity;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.server.Server;
-import org.javacord.api.entity.user.User;
-import org.javacord.api.event.server.member.ServerMemberJoinEvent;
-import org.javacord.api.listener.server.member.ServerMemberJoinListener;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.Module;
@@ -37,15 +30,21 @@ import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
 import net.fabricmc.discord.bot.util.DiscordUtil;
 import net.fabricmc.discord.bot.util.FormatUtil;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.Discord;
+import net.fabricmc.discord.io.GlobalEventHolder.MemberJoinHandler;
+import net.fabricmc.discord.io.Member;
+import net.fabricmc.discord.io.Server;
+import net.fabricmc.discord.io.User;
 
-public final class JoinLogModule implements Module, ServerMemberJoinListener {
+public final class JoinLogModule implements Module, MemberJoinHandler {
 	private static final Logger LOGGER = LogManager.getLogger(JoinLogModule.class);
 
 	private static final ConfigKey<Long> JOINLOG_CHANNEL = new ConfigKey<>("joinlog.channel", ValueSerializers.LONG);
 
 	private DiscordBot bot;
 	private volatile Server server;
-	private volatile TextChannel channel;
+	private volatile Channel channel;
 
 	@Override
 	public String getName() {
@@ -54,7 +53,7 @@ public final class JoinLogModule implements Module, ServerMemberJoinListener {
 
 	@Override
 	public void registerConfigEntries(DiscordBot bot) {
-		bot.registerConfigEntry(JOINLOG_CHANNEL, () -> -1L);
+		bot.registerConfigEntry(JOINLOG_CHANNEL, -1L);
 	}
 
 	@Override
@@ -64,10 +63,10 @@ public final class JoinLogModule implements Module, ServerMemberJoinListener {
 		}
 	}
 
-	private static TextChannel getChannel(Server server, String type, long id) {
+	private static Channel getChannel(Server server, String type, long id) {
 		if (server == null || id <= 0) return null;
 
-		TextChannel channel = DiscordUtil.getTextChannel(server, id);
+		Channel channel = server.getTextChannel(id);
 
 		if (channel == null) {
 			LOGGER.warn("invalid {} channel: {}", type, id);
@@ -77,12 +76,12 @@ public final class JoinLogModule implements Module, ServerMemberJoinListener {
 	}
 
 	@Override
-	public void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
+	public void setup(DiscordBot bot, Discord discord, Logger logger, Path dataDir) {
 		this.bot = bot;
 
 		bot.getActiveHandler().registerReadyHandler(this::onReady);
 		bot.getActiveHandler().registerGoneHandler(this::onGone);
-		api.addServerMemberJoinListener(this);
+		discord.getGlobalEvents().registerMemberJoin(this);
 	}
 
 	private void onReady(Server server, long prevActive) {
@@ -96,15 +95,15 @@ public final class JoinLogModule implements Module, ServerMemberJoinListener {
 	}
 
 	@Override
-	public void onServerMemberJoin(ServerMemberJoinEvent event) {
-		User user = event.getUser();
+	public void onMemberJoin(Member member) {
+		User user = member.getUser();
 		if (user.isBot()) return;
 
-		TextChannel channel = this.channel;
+		Channel channel = this.channel;
 		if (channel == null) return;
 
 		DiscordUtil.sendMentionlessMessage(channel, String.format("%s %s",
 				UserHandler.formatDiscordUser(user),
-				FormatUtil.formatDuration(DiscordEntity.getCreationTimestamp(user.getId()).until(Instant.now(), ChronoUnit.MILLIS), 2)));
+				FormatUtil.formatDuration(DiscordUtil.getCreationTime(user.getId()).until(Instant.now(), ChronoUnit.MILLIS), 2)));
 	}
 }

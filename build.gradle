@@ -35,7 +35,6 @@ allprojects {
 	// Common dependencies
 	dependencies {
 		compileOnly("org.jetbrains:annotations:20.1.0")
-		implementation("org.javacord:javacord:$javacordVersion")
 
 		// tag parser artifact does not need a full db
 		if (project != rootProject.project(":tag-parser")) {
@@ -45,8 +44,8 @@ allprojects {
 		}
 
 		// Logging
-		implementation("org.apache.logging.log4j:log4j-core:2.17.1")
-		implementation("org.apache.logging.log4j:log4j-slf4j-impl:2.17.1")
+		implementation("org.apache.logging.log4j:log4j-core:2.17.2")
+		implementation("org.apache.logging.log4j:log4j-slf4j-impl:2.17.2")
 
 		// Json Serialization
 		implementation("com.google.code.gson:gson:2.8.6")
@@ -90,14 +89,56 @@ application {
 	executableDir = "run"
 }
 
+configurations {
+	javacord {
+		extendsFrom implementation
+	}
+	jda {
+		extendsFrom implementation
+	}
+}
+
 // Setup dependencies for big boi jar
 dependencies {
-	afterEvaluate {
-		subprojects.each {
+	subprojects.each {
+		if (!it.path.startsWith(":ioimpl")) {
 			implementation(it)
 		}
 	}
+
+	javacord project(":ioimpl:javacord")
+	jda project(":ioimpl:jda")
 }
+
+jar {
+	enabled = false
+}
+shadowJar {
+	enabled = false
+}
+
+def createImplementationJar(String name, Configuration configuration) {
+	return tasks.register("${name}Jar", com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar) {
+		configurations = [configuration]
+		archiveClassifier = name
+		from(sourceSets.main.output)
+
+		manifest {
+			attributes 'Main-Class': 'net.fabricmc.discord.bot.Main'
+		}
+
+		exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+	}
+}
+
+def javacordJar = createImplementationJar("javacord", project.configurations.javacord)
+def jdaJar = createImplementationJar("jda", project.configurations.jda)
+
+tasks.named("assemble") {
+	dependsOn(javacordJar)
+	dependsOn(jdaJar)
+}
+
 
 // Propagate core dependency to subprojects
 subprojects {

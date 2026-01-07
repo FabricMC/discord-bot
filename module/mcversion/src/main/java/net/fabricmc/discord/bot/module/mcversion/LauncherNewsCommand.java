@@ -65,7 +65,7 @@ public final class LauncherNewsCommand extends Command {
 			throw new CommandException("Version not loaded");
 		}
 
-		context.channel().sendMessage(version.toEmbed());
+		context.channel().send(version.toEmbed());
 		return true;
 	}
 }

@@ -21,7 +21,6 @@ import java.util.Collection;
 import java.util.Map;
 
 import it.unimi.dsi.fastutil.longs.LongList;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
 
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
@@ -30,6 +29,7 @@ import net.fabricmc.discord.bot.database.query.ActionQueries;
 import net.fabricmc.discord.bot.database.query.ActionQueries.ActionEntry;
 import net.fabricmc.discord.bot.message.Paginator;
 import net.fabricmc.discord.bot.util.FormatUtil;
+import net.fabricmc.discord.io.MessageEmbed;
 
 public final class ActionCommand extends Command {
 	private static final int LIST_PAGE_ENTRIES = 20;
@@ -58,7 +58,7 @@ public final class ActionCommand extends Command {
 			Collection<ActionEntry> actions = ActionQueries.getActions(context.bot().getDatabase(), ActionType.Kind.USER, userId);
 
 			if (actions.isEmpty()) {
-				context.channel().sendMessage(String.format("No actions for user %d", userId));
+				context.channel().send(String.format("No actions for user %d", userId));
 			} else {
 				Paginator.Builder builder = new Paginator.Builder(context.user()).title("User %d Actions".formatted(userId));
 				StringBuilder sb = new StringBuilder();
@@ -172,16 +172,17 @@ public final class ActionCommand extends Command {
 
 			LongList targets = context.bot().getUserHandler().getDiscordUserIds((int) action.targetId());
 
-			context.channel().sendMessage(new EmbedBuilder()
-					.setTitle("Action %d details".formatted(action.id()))
-					.setDescription(String.format("**User %d:**%s\n**Type:** %s\n**Status:** %s\n**Moderator:** %s\n**Creation:** %s%s%s%s%s",
+			context.channel().send(new MessageEmbed.Builder()
+					.title("Action %d details".formatted(action.id()))
+					.description(String.format("**User %d:**%s\n**Type:** %s\n**Status:** %s\n**Moderator:** %s\n**Creation:** %s%s%s%s%s",
 							action.targetId(),
 							FormatUtil.formatUserList(targets, context),
 							action.type().getId(),
 							status,
 							context.bot().getUserHandler().formatUser(action.actorUserId(), context.server()),
 							FormatUtil.dateTimeFormatter.format(Instant.ofEpochMilli(action.creationTime())),
-							expirationSuffix, durationSuffix, suspensionSuffix, reasonSuffix)));
+							expirationSuffix, durationSuffix, suspensionSuffix, reasonSuffix))
+					.build());
 
 			return true;
 		}
@@ -190,7 +191,7 @@ public final class ActionCommand extends Command {
 			if (!ActionQueries.setReason(context.bot().getDatabase(), Integer.parseInt(arguments.get("id")), arguments.get("reason"))) {
 				throw new CommandException("Unknown action");
 			} else {
-				context.channel().sendMessage("Action reason updated");
+				context.channel().send("Action reason updated");
 			}
 
 			return true;

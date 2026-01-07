@@ -22,19 +22,12 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.server.Server;
-import org.javacord.api.entity.user.User;
-import org.javacord.api.exception.DiscordException;
-import org.javacord.api.exception.NotFoundException;
 
 import net.fabricmc.discord.bot.CachedMessage;
 import net.fabricmc.discord.bot.DiscordBot;
@@ -42,6 +35,10 @@ import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.DiscordException;
+import net.fabricmc.discord.io.Server;
+import net.fabricmc.discord.io.User;
 
 public final class CleanCommand extends Command {
 	private final Map<Integer, List<ChannelEntry>> pendingActions = new ConcurrentHashMap<>();
@@ -68,7 +65,7 @@ public final class CleanCommand extends Command {
 			checkImmunity(context, targetDiscordUserId, true);
 
 			String targetChannelName = arguments.get("channel");
-			TextChannel targetChannel = targetChannelName != null ? getTextChannel(context, targetChannelName) : null;
+			Channel targetChannel = targetChannelName != null ? getTextChannel(context, targetChannelName) : null;
 
 			List<ChannelEntry> actions = new ArrayList<>();
 			int count = gatherActions(LongSet.of(targetDiscordUserId), targetChannel, context.bot(), context.server(), context.user(), actions);
@@ -93,17 +90,17 @@ public final class CleanCommand extends Command {
 
 			applyActions(actions, null);
 
-			context.channel().sendMessage("Messages deleted");
+			context.channel().send("Messages deleted");
 		}
 
 		return true;
 	}
 
-	private static int gatherActions(LongSet targetDiscordUserIds, TextChannel targetChannel, DiscordBot bot, Server server, User actor, List<ChannelEntry> actions) {
-		Collection<TextChannel> targetChannels = targetChannel != null ? Collections.singletonList(targetChannel) : DiscordUtil.getTextChannels(server);
+	private static int gatherActions(LongSet targetDiscordUserIds, Channel targetChannel, DiscordBot bot, Server server, User actor, List<ChannelEntry> actions) {
+		Collection<? extends Channel> targetChannels = targetChannel != null ? Collections.singletonList(targetChannel) : DiscordUtil.getTextChannels(server);
 		int count = 0;
 
-		for (TextChannel channel : targetChannels) {
+		for (Channel channel : targetChannels) {
 			if (!hasMessageDeleteAccess(actor, channel)) continue;
 
 			Collection<CachedMessage> messages = bot.getMessageIndex().getAllByAuthors(targetDiscordUserIds, channel, false);
@@ -118,14 +115,12 @@ public final class CleanCommand extends Command {
 	}
 
 	private static void applyActions(List<ChannelEntry> actions, String reason) throws DiscordException {
-		List<CompletableFuture<Void>> futures = new ArrayList<>();
-
 		for (ChannelEntry entry : actions) {
 			if (entry.messages().size() == 1) {
 				CachedMessage msg = entry.messages().iterator().next();
 
 				if (!msg.isDeleted()) { // reduce delete race potential
-					futures.add(Message.delete(entry.channel().getApi(), entry.channel().getId(), msg.getId(), reason));
+					entry.channel().deleteMessage(msg.getId(), reason);
 				}
 			} else {
 				long[] msgIds = new long[entry.messages().size()];
@@ -139,20 +134,12 @@ public final class CleanCommand extends Command {
 
 				if (writeIdx != msgIds.length) msgIds = Arrays.copyOf(msgIds, writeIdx);
 
-				futures.add(entry.channel().deleteMessages(msgIds));
-			}
-		}
-
-		for (CompletableFuture<?> future : futures) {
-			try {
-				DiscordUtil.join(future);
-			} catch (NotFoundException e) {
-				// ignore, presumably already deleted
+				entry.channel().deleteMessages(msgIds, reason);
 			}
 		}
 	}
 
-	static Collection<CachedMessage> clean(int targetUserId, TextChannel targetChannel, String reason, DiscordBot bot, Server server, User actor) throws DiscordException {
+	static Collection<CachedMessage> clean(int targetUserId, Channel targetChannel, String reason, DiscordBot bot, Server server, User actor) throws DiscordException {
 		LongSet targetDiscordUserIds = new LongOpenHashSet(bot.getUserHandler().getDiscordUserIds(targetUserId));
 
 		List<ChannelEntry> actions = new ArrayList<>();
@@ -168,5 +155,5 @@ public final class CleanCommand extends Command {
 		return ret;
 	}
 
-	private record ChannelEntry(TextChannel channel, Collection<CachedMessage> messages) { }
+	private record ChannelEntry(Channel channel, Collection<CachedMessage> messages) { }
 }

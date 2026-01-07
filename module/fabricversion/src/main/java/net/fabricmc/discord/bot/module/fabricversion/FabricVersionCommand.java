@@ -32,7 +32,6 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
 import com.google.gson.stream.JsonReader;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.jetbrains.annotations.Nullable;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
@@ -43,6 +42,7 @@ import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.module.mcversion.McVersionRepo;
 import net.fabricmc.discord.bot.util.HttpUtil;
+import net.fabricmc.discord.io.MessageEmbed;
 
 public final class FabricVersionCommand extends Command {
 	private static final String metaHost = "meta.fabricmc.net";
@@ -130,10 +130,11 @@ public final class FabricVersionCommand extends Command {
 				+ "(e.g. 1.16.5 or 1.15.2) due to implementation limitations. "
 				+ "Check [Modrinth](https://modrinth.com/mod/fabric-api/versions) for a more precise listing.");
 
-		context.channel().sendMessage(new EmbedBuilder()
-				.setTitle("%s Fabric versions".formatted(data.mcVersion))
-				.setDescription(sb.toString())
-				.setTimestampToNow());
+		context.channel().send(new MessageEmbed.Builder()
+				.title("%s Fabric versions".formatted(data.mcVersion))
+				.description(sb.toString())
+				.timeNow()
+				.build());
 
 		return true;
 	}

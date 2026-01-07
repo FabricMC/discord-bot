@@ -19,8 +19,6 @@ package net.fabricmc.discord.bot.command.mod;
 import java.util.List;
 import java.util.Map;
 
-import org.javacord.api.entity.user.User;
-
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
@@ -28,6 +26,7 @@ import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.database.query.ActionQueries;
 import net.fabricmc.discord.bot.database.query.ActionQueries.ActionEntry;
 import net.fabricmc.discord.bot.database.query.UserQueries.DiscordUserData;
+import net.fabricmc.discord.io.Member;
 
 public final class NickCommand extends Command {
 	@Override
@@ -60,7 +59,7 @@ public final class NickCommand extends Command {
 		long targetDiscordUserId = getDiscordUserId(context, user);
 		checkImmunity(context, targetDiscordUserId, false);
 
-		User target = context.server().getMemberById(targetDiscordUserId).orElse(null);
+		Member target = context.server().getMember(targetDiscordUserId);
 
 		if (target == null && ActionQueries.getLockedNick(context.bot().getDatabase(), targetDiscordUserId) == null) {
 			throw new CommandException("Target user is absent and not nicklocked");
@@ -70,8 +69,8 @@ public final class NickCommand extends Command {
 		String oldNick;
 
 		if (target != null) {
-			oldNick = target.getDisplayName(context.server());
-			if (newNick == null) newNick = target.getName();
+			oldNick = target.getDisplayName();
+			if (newNick == null) newNick = target.getUser().getGlobalDisplayName();
 		} else {
 			DiscordUserData data = userHandler.getDiscordUserData(targetDiscordUserId, false, false);
 			oldNick = data.nickname() != null ? data.nickname() : data.username();
@@ -104,10 +103,10 @@ public final class NickCommand extends Command {
 		// apply discord action
 
 		if (target != null) {
-			if (target.getName().equals(newNick)) {
-				context.server().resetNickname(target, reason);
+			if (target.getUser().getGlobalDisplayName().equals(newNick)) {
+				target.setNickName(null, reason);
 			} else {
-				context.server().updateNickname(target, newNick, reason);
+				target.setNickName(newNick, reason);
 			}
 		}
 	}

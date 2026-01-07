@@ -25,9 +25,6 @@ import java.util.Locale;
 import java.util.Map;
 
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-import org.javacord.api.entity.Nameable;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
 
 import net.fabricmc.discord.bot.CachedMessage;
 import net.fabricmc.discord.bot.CachedMessageAttachment;
@@ -39,6 +36,9 @@ import net.fabricmc.discord.bot.message.Paginator;
 import net.fabricmc.discord.bot.util.DiscordUtil;
 import net.fabricmc.discord.bot.util.FormatUtil;
 import net.fabricmc.discord.bot.util.FormatUtil.OutputType;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.MessageEmbed;
+import net.fabricmc.discord.io.Permission;
 
 public final class MessageCacheCommand extends Command {
 	private static final int LIST_PAGE_ENTRIES = 10;
@@ -70,8 +70,15 @@ public final class MessageCacheCommand extends Command {
 			List<CachedMessage> messages;
 
 			try {
-				TextChannel channel = getTextChannel(context, target);
-				targetDesc = "channel %s".formatted(channel instanceof Nameable ? "#%s".formatted(((Nameable) channel).getName()) : channel.getIdAsString());
+				Channel channel = getTextChannel(context, target);
+				String name = channel.getName();
+
+				if (name != null && !name.isBlank()) {
+					targetDesc = "channel #%s".formatted(name);
+				} else {
+					targetDesc = "channel %d".formatted(channel.getId());
+				}
+
 				messages = new ArrayList<>(context.bot().getMessageIndex().getAll(channel, true));
 			} catch (CommandException e) {
 				try {
@@ -85,7 +92,7 @@ public final class MessageCacheCommand extends Command {
 			}
 
 			if (messages.isEmpty()) {
-				context.channel().sendMessage(String.format("No messages for %s", targetDesc));
+				context.channel().send(String.format("No messages for %s", targetDesc));
 			} else {
 				messages.sort(Comparator.comparing(CachedMessage::getCreationTime));
 
@@ -138,9 +145,9 @@ public final class MessageCacheCommand extends Command {
 						(attachment.hasDataCached() ? ", cached" : "")));
 			}
 
-			context.channel().sendMessage(new EmbedBuilder()
-					.setTitle("Message %d details".formatted(message.getId()))
-					.setDescription(String.format("**User %d:** %s\n**Channel:** <#%d>\n**Creation:** %s\n**Status:** %s\n**Content:**%s\n**Attachments:** %d%s",
+			context.channel().send(new MessageEmbed.Builder()
+					.title("Message %d details".formatted(message.getId()))
+					.description(String.format("**User %d:** %s\n**Channel:** <#%d>\n**Creation:** %s\n**Status:** %s\n**Content:**%s\n**Attachments:** %d%s",
 							context.bot().getUserHandler().getUserId(message.getAuthorDiscordId()),
 							context.bot().getUserHandler().formatDiscordUser(message.getAuthorDiscordId(), context.server()),
 							message.getChannelId(),
@@ -148,20 +155,21 @@ public final class MessageCacheCommand extends Command {
 							(message.isDeleted() ? "deleted" : "normal"),
 							FormatUtil.escape(FormatUtil.truncateMessage(message.getContent(), 600), OutputType.CODE, true),
 							message.getAttachments().length,
-							attachmentsSuffix)));
+							attachmentsSuffix))
+					.build());
 
 			return true;
 		}
 		case "stats": {
 			MessageIndex messageIndex = context.bot().getMessageIndex();
-			List<TextChannel> channels = new ArrayList<>(messageIndex.getCachedChannels());
+			List<Channel> channels = new ArrayList<>(messageIndex.getCachedChannels());
 			DiscordUtil.sortTextChannelsByName(channels);
 
 			StringBuilder sb = new StringBuilder();
 			int total = 0;
 
-			for (TextChannel channel : channels) {
-				if (!channel.canSee(context.user()) || !channel.canReadMessageHistory(context.user())) continue;
+			for (Channel channel : channels) {
+				if (!channel.canSee(context.user()) || !channel.hasPermission(context.user(), Permission.READ_MESSAGE_HISTORY)) continue;
 
 				int size = messageIndex.getSize(channel);
 				if (size == 0) continue;
@@ -174,7 +182,7 @@ public final class MessageCacheCommand extends Command {
 			if (sb.length() > 0) sb.append('\n');
 			sb.append(String.format("Total: %d", total));
 
-			context.channel().sendMessage(sb.toString());
+			context.channel().send(sb.toString());
 
 			return true;
 		}

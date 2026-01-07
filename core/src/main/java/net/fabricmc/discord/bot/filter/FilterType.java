@@ -20,9 +20,8 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.javacord.api.entity.message.Message;
-
 import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.io.Message;
 
 public enum FilterType {
 	CONTENT("content") {

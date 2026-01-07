@@ -19,16 +19,15 @@ package net.fabricmc.discord.bot.module.tag;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.MessageEmbed;
 
 public abstract class TagInstance {
 	private final String name;
@@ -43,7 +42,7 @@ public abstract class TagInstance {
 
 	public abstract int getArgCount();
 
-	public abstract CompletableFuture<Message> send(CommandContext context, String arguments) throws CommandException;
+	public abstract Message send(CommandContext context, String arguments) throws CommandException;
 
 	public static final class PlainText extends TagInstance {
 		private final String text;
@@ -59,7 +58,7 @@ public abstract class TagInstance {
 		}
 
 		@Override
-		public CompletableFuture<Message> send(CommandContext context, String arguments) {
+		public Message send(CommandContext context, String arguments) {
 			return DiscordUtil.sendMentionlessMessage(context.channel(), text);
 		}
 
@@ -150,7 +149,7 @@ public abstract class TagInstance {
 		}
 
 		@Override
-		public CompletableFuture<Message> send(CommandContext context, String arguments) throws CommandException {
+		public Message send(CommandContext context, String arguments) throws CommandException {
 			arguments = arguments.trim();
 			StringBuilder sb = new StringBuilder();
 			List<String> args;
@@ -240,12 +239,12 @@ public abstract class TagInstance {
 	}
 
 	public static final class Embed extends TagInstance {
-		private final EmbedBuilder embed;
+		private final MessageEmbed embed;
 
-		public Embed(String name, @Nullable String content, EmbedBuilder embed) {
+		public Embed(String name, @Nullable String content, MessageEmbed.Builder embed) {
 			super(name);
-			this.embed = embed;
-			if (content != null) embed.setDescription(content);
+			if (content != null) embed.description(content);
+			this.embed = embed.build();
 		}
 
 		@Override
@@ -254,8 +253,8 @@ public abstract class TagInstance {
 		}
 
 		@Override
-		public CompletableFuture<Message> send(CommandContext context, String arguments) {
-			return context.channel().sendMessage(embed);
+		public Message send(CommandContext context, String arguments) {
+			return context.channel().send(embed);
 		}
 
 		@Override
@@ -292,7 +291,7 @@ public abstract class TagInstance {
 		}
 
 		@Override
-		public CompletableFuture<Message> send(CommandContext context, String arguments) throws CommandException {
+		public Message send(CommandContext context, String arguments) throws CommandException {
 			return this.delegate.send(context, arguments);
 		}
 	}

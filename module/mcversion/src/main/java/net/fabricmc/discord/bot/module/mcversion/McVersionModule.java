@@ -32,19 +32,18 @@ import java.util.concurrent.TimeUnit;
 import com.google.gson.stream.JsonReader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.DiscordApi;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.message.embed.EmbedBuilder;
-import org.javacord.api.entity.server.Server;
 
 import net.fabricmc.discord.bot.CachedMessage;
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.Module;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.config.ValueSerializers;
-import net.fabricmc.discord.bot.util.DiscordUtil;
 import net.fabricmc.discord.bot.util.HttpUtil;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.Discord;
+import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.MessageEmbed;
+import net.fabricmc.discord.io.Server;
 
 /**
  * Checks for and announces new MC versions
@@ -89,8 +88,8 @@ public final class McVersionModule implements Module {
 	private McVersionRepo repo;
 	private Future<?> future;
 	private volatile Server server;
-	private volatile TextChannel announceChannel;
-	private volatile TextChannel updateChannel;
+	private volatile Channel announceChannel;
+	private volatile Channel updateChannel;
 	private int newsCycleCouter;
 
 	private final Set<String> announcedVersions = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -106,11 +105,13 @@ public final class McVersionModule implements Module {
 
 	@Override
 	public void registerConfigEntries(DiscordBot bot) {
-		bot.registerConfigEntry(ANNOUNCE_CHANNEL, () -> -1L);
-		bot.registerConfigEntry(UPDATE_CHANNEL, () -> -1L);
-		bot.registerConfigEntry(ANNOUNCED_RELEASE_VERSION, () -> "0");
-		bot.registerConfigEntry(ANNOUNCED_SNAPSHOT_VERSION, () -> "0");
-		bot.registerConfigEntry(ANNOUNCED_PENDING_VERSION, () -> "0");
+		bot.registerConfigEntry(ANNOUNCE_CHANNEL, -1L);
+		bot.registerConfigEntry(UPDATE_CHANNEL, -1L);
+		bot.registerConfigEntry(ANNOUNCED_RELEASE_VERSION, "0");
+		bot.registerConfigEntry(ANNOUNCED_SNAPSHOT_VERSION, "0");
+		bot.registerConfigEntry(ANNOUNCED_PENDING_VERSION, "0");
+
+		bot.registerUserConfigEntry(DEFAULT_VERSION, McVersionRepo.DEFAULT_VERSION);
 
 		newsFetcher.register(bot);
 	}
@@ -124,10 +125,10 @@ public final class McVersionModule implements Module {
 		}
 	}
 
-	private static TextChannel getChannel(Server server, String type, long id) {
+	private static Channel getChannel(Server server, String type, long id) {
 		if (server == null || id <= 0) return null;
 
-		TextChannel channel = DiscordUtil.getTextChannel(server, id);
+		Channel channel = server.getTextChannel(id);
 
 		if (channel == null) {
 			LOGGER.warn("invalid {} channel: {}", type, id);
@@ -137,7 +138,7 @@ public final class McVersionModule implements Module {
 	}
 
 	@Override
-	public void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
+	public void setup(DiscordBot bot, Discord discord, Logger logger, Path dataDir) {
 		this.bot = bot;
 		this.repo = new McVersionRepo(bot);
 
@@ -157,11 +158,11 @@ public final class McVersionModule implements Module {
 		return repo;
 	}
 
-	TextChannel getAnnounceChannel() {
+	Channel getAnnounceChannel() {
 		return announceChannel;
 	}
 
-	TextChannel getUpdateChannel() {
+	Channel getUpdateChannel() {
 		return updateChannel;
 	}
 
@@ -260,7 +261,7 @@ public final class McVersionModule implements Module {
 		}
 	}
 
-	boolean sendAnnouncement(TextChannel channel, String msg) {
+	boolean sendAnnouncement(Channel channel, String msg) {
 		if (channel == null) return false;
 
 		for (CachedMessage m : bot.getMessageIndex().getAllByAuthor(bot.getUserHandler().getBotDiscordUserId(), channel, false)) {
@@ -273,40 +274,40 @@ public final class McVersionModule implements Module {
 		Message message;
 
 		try {
-			message = channel.sendMessage(msg).join();
+			message = channel.send(msg);
 		} catch (Throwable t) {
 			LOGGER.warn("Announcement failed", t);
 			return false;
 		}
 
 		//if (channel.getType() == ChannelType.SERVER_NEWS_CHANNEL) { TODO: check once javacord exposes this properly
-		message.crossPost()
-		.exceptionally(exc -> {
-			LOGGER.warn("Message crossposting failed: "+exc); // fails with MissingPermissionsException for non-news channel
-			return null;
-		});
+		try {
+			message.crosspost();
+		} catch (Exception e) {
+			LOGGER.warn("Message crossposting failed: "+e); // fails with MissingPermissionsException for non-news channel
+		}
 		//}
 
 		return true;
 	}
 
-	boolean sendAnnouncement(TextChannel channel, EmbedBuilder embed) {
+	boolean sendAnnouncement(Channel channel, MessageEmbed embed) {
 		if (channel == null) return false;
 
 		Message message;
 
 		try {
-			message = channel.sendMessage(embed).join();
+			message = channel.send(embed);
 		} catch (Throwable t) {
 			LOGGER.warn("Announcement failed", t);
 			return false;
 		}
 
-		message.crossPost()
-				.exceptionally(exc -> {
-					LOGGER.warn("Message crossposting failed: "+exc); // fails with MissingPermissionsException for non-news channel
-					return null;
-				});
+		try {
+			message.crosspost();
+		} catch (Exception e) {
+			LOGGER.warn("Message crossposting failed: "+e); // fails with MissingPermissionsException for non-news channel
+		}
 
 		return true;
 	}

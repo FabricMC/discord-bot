@@ -20,14 +20,13 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import org.javacord.api.entity.message.embed.EmbedBuilder;
-
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.module.mapping.repo.MappingData;
 import net.fabricmc.discord.bot.module.mapping.repo.MappingRepository;
 import net.fabricmc.discord.bot.module.mcversion.McVersionRepo;
+import net.fabricmc.discord.io.MessageEmbed;
 import net.fabricmc.mappingio.tree.MappingTree;
 
 public final class MappingStatusCommand extends Command {
@@ -56,7 +55,7 @@ public final class MappingStatusCommand extends Command {
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
 		if (!arguments.containsKey("unnamed_0") && !arguments.containsKey("mcVersion")) {
 			Collection<String> versions = repo.getLoadedVersions();
-			context.channel().sendMessage("Loaded %d versions: %s".formatted(versions.size(), versions.stream().sorted().collect(Collectors.joining(", "))));
+			context.channel().send("Loaded %d versions: %s".formatted(versions.size(), versions.stream().sorted().collect(Collectors.joining(", "))));
 		} else {
 			String mcVersion = arguments.get("mcVersion");
 			if (mcVersion == null) mcVersion = arguments.get("unnamed_0");
@@ -64,9 +63,9 @@ public final class MappingStatusCommand extends Command {
 			MappingData data = MappingCommandUtil.getMappingData(repo, mcVersion);
 			MappingTree tree = data.mappingTree;
 
-			context.channel().sendMessage(new EmbedBuilder()
-					.setTitle("%s data".formatted(mcVersion))
-					.setDescription(String.format("**Namespaces:** %s, %s\n"
+			context.channel().send(new MessageEmbed.Builder()
+					.title("%s data".formatted(mcVersion))
+					.description(String.format("**Namespaces:** %s, %s\n"
 							+ "**Classes:** %d\n"
 							+ "**Yarn version:** %s\n"
 							+ "**MCP version:** %s\n"
@@ -76,7 +75,8 @@ public final class MappingStatusCommand extends Command {
 							(data.yarnMavenId != null ? data.yarnMavenId.substring(data.yarnMavenId.lastIndexOf(':') + 1) : "-"),
 							(data.mcpVersion != null ? data.mcpVersion : "-"),
 							(data.hasYarnJavadoc ? "yes" : "no")))
-					.setTimestampToNow());
+					.timeNow()
+					.build());
 		}
 
 		return true;

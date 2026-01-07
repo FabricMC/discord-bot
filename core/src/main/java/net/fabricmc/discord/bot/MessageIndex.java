@@ -40,38 +40,24 @@ import it.unimi.dsi.fastutil.longs.LongList;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.entity.channel.Channel;
-import org.javacord.api.entity.channel.ServerChannel;
-import org.javacord.api.entity.channel.TextChannel;
-import org.javacord.api.entity.message.Message;
-import org.javacord.api.entity.server.Server;
-import org.javacord.api.event.channel.server.ServerChannelChangeOverwrittenPermissionsEvent;
-import org.javacord.api.event.channel.server.ServerChannelCreateEvent;
-import org.javacord.api.event.channel.server.ServerChannelDeleteEvent;
-import org.javacord.api.event.channel.thread.ThreadCreateEvent;
-import org.javacord.api.event.channel.thread.ThreadDeleteEvent;
-import org.javacord.api.event.message.MessageCreateEvent;
-import org.javacord.api.event.message.MessageDeleteEvent;
-import org.javacord.api.event.message.MessageEditEvent;
-import org.javacord.api.exception.DiscordException;
-import org.javacord.api.exception.NotFoundException;
-import org.javacord.api.listener.ChainableGloballyAttachableListenerManager;
-import org.javacord.api.listener.channel.server.ServerChannelChangeOverwrittenPermissionsListener;
-import org.javacord.api.listener.channel.server.ServerChannelCreateListener;
-import org.javacord.api.listener.channel.server.ServerChannelDeleteListener;
-import org.javacord.api.listener.channel.server.thread.ServerThreadChannelCreateListener;
-import org.javacord.api.listener.channel.server.thread.ServerThreadChannelDeleteListener;
-import org.javacord.api.listener.message.MessageCreateListener;
-import org.javacord.api.listener.message.MessageDeleteListener;
-import org.javacord.api.listener.message.MessageEditListener;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.DiscordException;
+import net.fabricmc.discord.io.GlobalEventHolder;
+import net.fabricmc.discord.io.GlobalEventHolder.ChannelCreateHandler;
+import net.fabricmc.discord.io.GlobalEventHolder.ChannelDeleteHandler;
+import net.fabricmc.discord.io.GlobalEventHolder.ChannelPermissionChangeHandler;
+import net.fabricmc.discord.io.GlobalEventHolder.MessageCreateHandler;
+import net.fabricmc.discord.io.GlobalEventHolder.MessageDeleteHandler;
+import net.fabricmc.discord.io.GlobalEventHolder.MessageEditHandler;
+import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.Permission;
+import net.fabricmc.discord.io.Server;
 
-public final class MessageIndex implements MessageCreateListener, MessageDeleteListener,
-ServerChannelCreateListener, ServerChannelDeleteListener,
-ServerThreadChannelCreateListener, ServerThreadChannelDeleteListener,
-ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
+public final class MessageIndex implements ChannelCreateHandler, ChannelDeleteHandler, ChannelPermissionChangeHandler,
+MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 	private static final int INIT_LIMIT = 1000;
 	private static final int MESSAGE_LIMIT = 10000;
 
@@ -84,7 +70,7 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 	private final DiscordBot bot;
 	private final List<MessageCreateHandler> createHandlers = new CopyOnWriteArrayList<>();
 	private final List<MessageDeleteHandler> deleteHandlers = new CopyOnWriteArrayList<>();
-	private final Map<TextChannel, ChannelMessageCache> channelCaches = new ConcurrentHashMap<>();
+	private final Map<Channel, ChannelMessageCache> channelCaches = new ConcurrentHashMap<>();
 	private final Long2ObjectMap<CachedMessage> globalIndex = new Long2ObjectOpenHashMap<>();
 
 	public MessageIndex(DiscordBot bot) {
@@ -114,7 +100,7 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 		return ret != null ? ret : new CachedMessage(message);
 	}
 
-	public @Nullable CachedMessage get(TextChannel channel, long id) {
+	public @Nullable CachedMessage get(Channel channel, long id) {
 		ChannelMessageCache cache = channelCaches.get(channel);
 		if (cache == null) return null;
 
@@ -123,7 +109,7 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 		}
 	}
 
-	public Collection<CachedMessage> getAll(TextChannel channel, boolean includeDeleted) {
+	public Collection<CachedMessage> getAll(Channel channel, boolean includeDeleted) {
 		List<CachedMessage> ret = new ArrayList<>();
 
 		accept(channel, msg -> {
@@ -149,7 +135,7 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 		return ret;
 	}
 
-	public Collection<CachedMessage> getAllByAuthor(long authorId, TextChannel channel, boolean includeDeleted) {
+	public Collection<CachedMessage> getAllByAuthor(long authorId, Channel channel, boolean includeDeleted) {
 		List<CachedMessage> ret = new ArrayList<>();
 
 		accept(channel, msg -> {
@@ -177,7 +163,7 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 		return ret;
 	}
 
-	public Collection<CachedMessage> getAllByAuthors(LongSet authorDiscordIds, TextChannel channel, boolean includeDeleted) {
+	public Collection<CachedMessage> getAllByAuthors(LongSet authorDiscordIds, Channel channel, boolean includeDeleted) {
 		if (authorDiscordIds.isEmpty()) return Collections.emptyList();
 
 		List<CachedMessage> ret = new ArrayList<>();
@@ -200,18 +186,15 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 			String guild = matcher.group(1);
 
 			if (!guild.equals("@me") && server != null && server.getId() == Long.parseUnsignedLong(guild)) {
-				TextChannel channel = DiscordUtil.getTextChannel(server, Long.parseUnsignedLong(matcher.group(2)));
+				Channel channel = server.getTextChannel(Long.parseUnsignedLong(matcher.group(2)));
 				if (channel == null) return null;
 
 				long msgId = Long.parseUnsignedLong(matcher.group(3));
 				CachedMessage msg = get(channel, msgId);
 
 				if (msg == null) {
-					try {
-						msg = new CachedMessage(DiscordUtil.join(channel.getMessageById(msgId)));
-					} catch (NotFoundException e) {
-						// ignore
-					}
+					Message rawMsg = channel.getMessage(msgId);
+					if (rawMsg != null) msg = new CachedMessage(rawMsg);
 				}
 
 				return msg;
@@ -237,7 +220,7 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 		}
 	}
 
-	public void accept(TextChannel channel, Visitor visitor, boolean includeDeleted) {
+	public void accept(Channel channel, Visitor visitor, boolean includeDeleted) {
 		Objects.requireNonNull(channel, "null channel");
 
 		ChannelMessageCache cache = channelCaches.get(channel);
@@ -248,11 +231,11 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 		}
 	}
 
-	public Collection<TextChannel> getCachedChannels() {
+	public Collection<Channel> getCachedChannels() {
 		return channelCaches.keySet();
 	}
 
-	public int getSize(TextChannel channel) {
+	public int getSize(Channel channel) {
 		ChannelMessageCache cache = channelCaches.get(channel);
 		if (cache == null) return 0;
 
@@ -261,15 +244,13 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 		}
 	}
 
-	void registerEarlyHandlers(ChainableGloballyAttachableListenerManager src) {
-		src.addServerChannelCreateListener(this);
-		src.addServerChannelDeleteListener(this);
-		src.addServerThreadChannelCreateListener(this);
-		src.addServerThreadChannelDeleteListener(this);
-		src.addServerChannelChangeOverwrittenPermissionsListener(this);
-		src.addMessageCreateListener(this);
-		src.addMessageEditListener(this);
-		src.addMessageDeleteListener(this);
+	void registerEarlyHandlers(GlobalEventHolder holder) {
+		holder.registerChannelCreate(this);
+		holder.registerChannelDelete(this);
+		holder.registerChannelPermissionChange(this);
+		holder.registerMessageCreate(this);
+		holder.registerMessageDelete(this);
+		holder.registerMessageEdit(this);
 	}
 
 	private void init(Server server, long lastActiveTime) {
@@ -277,7 +258,7 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 			try {
 				LongList invalidChannels = new LongArrayList();
 
-				for (TextChannel channel : DiscordUtil.getTextChannels(server)) {
+				for (Channel channel : DiscordUtil.getTextChannels(server)) {
 					if (isValidChannel(channel)) {
 						initChannel(channel);
 					} else {
@@ -301,62 +282,36 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 	}
 
 	private boolean isValidChannel(Channel channel) {
-		if (!(channel instanceof TextChannel)) return false;
+		if (!channel.getType().text) return false;
 
-		TextChannel textChannel = (TextChannel) channel;
-
-		return textChannel.canYouSee() && textChannel.canYouReadMessageHistory();
+		return channel.canYouSee() && channel.haveYouPermission(Permission.READ_MESSAGE_HISTORY);
 	}
 
-	private void initChannel(TextChannel channel) {
+	private void initChannel(Channel channel) {
 		ChannelMessageCache cache = channelCaches.computeIfAbsent(channel, ignore -> new ChannelMessageCache());
 
 		synchronized (cache) {
-			try {
-				for (Message message : DiscordUtil.join(channel.getMessages(Math.min(INIT_LIMIT, MESSAGE_LIMIT)))) {
-					cache.add(new CachedMessage(message));
-				}
-			} catch (DiscordException e) {
-				LOGGER.warn("Error initializing channel {}", channel.getId(), e);
+			for (Message message : channel.getMessages(Math.min(INIT_LIMIT, MESSAGE_LIMIT))) {
+				cache.add(new CachedMessage(message));
 			}
 		}
 	}
 
 	@Override
-	public void onServerChannelCreate(ServerChannelCreateEvent event) {
-		onChannelCreate(event.getChannel());
-	}
-
-	@Override
-	public void onServerChannelDelete(ServerChannelDeleteEvent event) {
-		onChannelDelete(event.getChannel());
-	}
-
-	@Override
-	public void onThreadCreate(ThreadCreateEvent event) {
-		onChannelCreate(event.getChannel());
-	}
-
-	@Override
-	public void onThreadDelete(ThreadDeleteEvent event) {
-		onChannelDelete(event.getChannel());
-	}
-
-	private void onChannelCreate(ServerChannel channel) {
-		if (channel.getServer().getId() != bot.getServerId()) return;
+	public void onChannelCreate(Channel channel) {
+		if (channel.getServer() == null || channel.getServer().getId() != bot.getServerId()) return;
 
 		if (isValidChannel(channel)) {
-			initChannel((TextChannel) channel);
+			initChannel(channel);
 		}
 	}
 
-	private void onChannelDelete(ServerChannel channel) {
-		if (channel.getServer().getId() != bot.getServerId()) return;
-		if (!(channel instanceof TextChannel)) return;
+	@Override
+	public void onChannelDelete(Channel channel) {
+		if (channel.getServer() == null || channel.getServer().getId() != bot.getServerId()) return;
+		if (!channel.getType().text) return;
 
-		TextChannel textChannel = (TextChannel) channel;
-
-		ChannelMessageCache prev = channelCaches.remove(textChannel);
+		ChannelMessageCache prev = channelCaches.remove(channel);
 
 		if (prev != null) {
 			prev.clear();
@@ -364,11 +319,9 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 	}
 
 	@Override
-	public void onServerChannelChangeOverwrittenPermissions(ServerChannelChangeOverwrittenPermissionsEvent event) {
-		if (event.getServer().getId() != bot.getServerId()) return;
-		if (!(event.getChannel() instanceof TextChannel)) return;
-
-		TextChannel channel = (TextChannel) event.getChannel();
+	public void onChannelPermissionChange(Channel channel) {
+		if (channel.getServer() == null || channel.getServer().getId() != bot.getServerId()) return;
+		if (!channel.getType().text) return;
 
 		if (isValidChannel(channel)) {
 			initChannel(channel);
@@ -382,21 +335,22 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 	}
 
 	@Override
-	public void onMessageCreate(MessageCreateEvent event) {
-		if (event.getMessageAuthor().isWebhook()) return;
+	public void onMessageCreate(Message message) {
+		if (message.isFromWebhook()) return;
 
-		Server server = event.getServer().orElse(null);
+		Server server = message.getChannel().getServer();
 		if (server == null) return;
 
-		ChannelMessageCache cache = channelCaches.get(event.getChannel());
+		Channel channel = message.getChannel();
+		ChannelMessageCache cache = channelCaches.get(channel);
 
 		if (cache == null) {
-			LOGGER.warn("Received message {} on unknown channel {}", event.getMessageId(), event.getChannel().getId());
+			LOGGER.warn("Received message {} on unknown channel {}", message.getId(), channel.getId());
 			cache = new ChannelMessageCache();
-			channelCaches.put(event.getChannel(), cache);
+			channelCaches.put(channel, cache);
 		}
 
-		CachedMessage msg = new CachedMessage(event.getMessage());
+		CachedMessage msg = new CachedMessage(message);
 
 		synchronized (cache) {
 			cache.add(msg);
@@ -408,36 +362,37 @@ ServerChannelChangeOverwrittenPermissionsListener, MessageEditListener {
 	}
 
 	@Override
-	public void onMessageEdit(MessageEditEvent event) {
-		ChannelMessageCache cache = channelCaches.get(event.getChannel());
+	public void onMessageEdit(Message message) {
+		ChannelMessageCache cache = channelCaches.get(message.getChannel());
 		if (cache == null) return;
 
 		Instant time = Instant.now();
 
 		synchronized (cache) {
-			cache.update(event.getMessageId(), event.getMessageContent(), time);
+			cache.update(message.getId(), message.getContent(), time);
 		}
 	}
 
 	@Override
-	public void onMessageDelete(MessageDeleteEvent event) {
-		Server server = event.getServer().orElse(null);
+	public void onMessageDelete(long messageId, Channel channel) {
+		Server server = channel.getServer();
 		if (server == null) return;
 
-		ChannelMessageCache cache = channelCaches.get(event.getChannel());
+		ChannelMessageCache cache = channelCaches.get(channel);
 		if (cache == null) return;
 
 		CachedMessage msg;
 
 		synchronized (cache) {
-			msg = cache.get(event.getMessageId());
+			msg = cache.get(messageId);
 		}
 
 		if (msg == null) {
-			Message message = event.getMessage().orElse(null);
+			/*Message message = event.getMessage().orElse(null);
 			if (message == null) return;
 
-			msg = new CachedMessage(message);
+			msg = new CachedMessage(message);*/
+			return;
 		}
 
 		msg.setDeleted();

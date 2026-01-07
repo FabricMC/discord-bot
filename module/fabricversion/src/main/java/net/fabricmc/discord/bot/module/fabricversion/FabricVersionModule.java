@@ -19,10 +19,10 @@ package net.fabricmc.discord.bot.module.fabricversion;
 import java.nio.file.Path;
 
 import org.apache.logging.log4j.Logger;
-import org.javacord.api.DiscordApi;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.Module;
+import net.fabricmc.discord.io.Discord;
 
 public final class FabricVersionModule implements Module {
 	@Override
@@ -31,7 +31,7 @@ public final class FabricVersionModule implements Module {
 	}
 
 	@Override
-	public void setup(DiscordBot bot, DiscordApi api, Logger logger, Path dataDir) {
+	public void setup(DiscordBot bot, Discord discord, Logger logger, Path dataDir) {
 		bot.registerCommand(new FabricVersionCommand());
 	}
 }

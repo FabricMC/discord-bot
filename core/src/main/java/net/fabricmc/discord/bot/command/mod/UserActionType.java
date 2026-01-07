@@ -23,157 +23,156 @@ import java.time.Duration;
 import java.util.List;
 
 import it.unimi.dsi.fastutil.longs.LongList;
-import org.javacord.api.entity.server.Server;
-import org.javacord.api.entity.user.User;
-import org.javacord.api.exception.DiscordException;
-import org.javacord.api.exception.NotFoundException;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.database.query.ActionQueries;
-import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.io.DiscordException;
+import net.fabricmc.discord.io.Member;
+import net.fabricmc.discord.io.NotFoundException;
+import net.fabricmc.discord.io.Server;
 
 public enum UserActionType implements ActionType {
 	BAN("ban", true, true, true, false) {
 		@Override
-		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException {
-			if (!NOP_MODE) DiscordUtil.join(server.banUser(target, Duration.ZERO, reason));
+		protected void activate(Server server, Member target, @Nullable String reason, DiscordBot bot) throws DiscordException {
+			if (!NOP_MODE) target.ban(Duration.ZERO, reason);
 		}
 
 		@Override
 		protected void deactivate(Server server, long targetDiscordUserId, @Nullable String reason, DiscordBot bot) throws DiscordException {
-			if (!NOP_MODE) DiscordUtil.join(server.unbanUser(targetDiscordUserId, reason));
+			if (!NOP_MODE) server.unban(targetDiscordUserId, reason);
 		}
 
 		@Override
 		protected boolean isActive(Server server, long targetDiscordUserId, DiscordBot bot) {
-			return server.getBans().thenApply(bans -> bans.stream().anyMatch(ban -> ban.getUser().getId() == targetDiscordUserId)).join();
+			return server.getBan(targetDiscordUserId) != null;
 		}
 	},
 	KICK("kick", false, false, true, false) {
 		@Override
-		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException {
-			if (!NOP_MODE) DiscordUtil.join(server.kickUser(target, reason));
+		protected void activate(Server server, Member target, @Nullable String reason, DiscordBot bot) throws DiscordException {
+			if (!NOP_MODE) target.kick(reason);
 		}
 	},
 	MUTE("mute", true, true, false, false) {
 		@Override
-		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException {
-			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.MUTE, reason, bot);
+		protected void activate(Server server, Member target, @Nullable String reason, DiscordBot bot) throws DiscordException {
+			if (!NOP_MODE) ActionUtil.addRole(target, ActionRole.MUTE, reason, bot);
 		}
 
 		@Override
 		protected void deactivate(Server server, long targetDiscordUserId, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (NOP_MODE) return;
 
-			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+			Member target = server.getMember(targetDiscordUserId);
 
-			if (target!= null) ActionUtil.removeRole(server, target, ActionRole.MUTE, reason, bot);
+			if (target!= null) ActionUtil.removeRole(target, ActionRole.MUTE, reason, bot);
 		}
 
 		@Override
 		protected boolean isActive(Server server, long targetDiscordUserId, DiscordBot bot) {
-			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+			Member target = server.getMember(targetDiscordUserId);
 
-			return target != null && ActionUtil.hasRole(server, target, ActionRole.MUTE, bot);
+			return target != null && ActionUtil.hasRole(target, ActionRole.MUTE, bot);
 		}
 	},
 	META_MUTE("metaMute", true) {
 		@Override
-		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException {
-			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.META_MUTE, reason, bot);
+		protected void activate(Server server, Member target, @Nullable String reason, DiscordBot bot) throws DiscordException {
+			if (!NOP_MODE) ActionUtil.addRole(target, ActionRole.META_MUTE, reason, bot);
 		}
 
 		@Override
 		protected void deactivate(Server server, long targetDiscordUserId, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (NOP_MODE) return;
 
-			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+			Member target = server.getMember(targetDiscordUserId);
 
-			if (target!= null) ActionUtil.removeRole(server, target, ActionRole.META_MUTE, reason, bot);
+			if (target!= null) ActionUtil.removeRole(target, ActionRole.META_MUTE, reason, bot);
 		}
 
 		@Override
 		protected boolean isActive(Server server, long targetDiscordUserId, DiscordBot bot) {
-			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+			Member target = server.getMember(targetDiscordUserId);
 
-			return target != null && ActionUtil.hasRole(server, target, ActionRole.META_MUTE, bot);
+			return target != null && ActionUtil.hasRole(target, ActionRole.META_MUTE, bot);
 		}
 	},
 	REACTION_MUTE("reactionMute", true) {
 		@Override
-		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException {
-			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.REACTION_MUTE, reason, bot);
+		protected void activate(Server server, Member target, @Nullable String reason, DiscordBot bot) throws DiscordException {
+			if (!NOP_MODE) ActionUtil.addRole(target, ActionRole.REACTION_MUTE, reason, bot);
 		}
 
 		@Override
 		protected void deactivate(Server server, long targetDiscordUserId, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (NOP_MODE) return;
 
-			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+			Member target = server.getMember(targetDiscordUserId);
 
-			if (target!= null) ActionUtil.removeRole(server, target, ActionRole.REACTION_MUTE, reason, bot);
+			if (target!= null) ActionUtil.removeRole(target, ActionRole.REACTION_MUTE, reason, bot);
 		}
 
 		@Override
 		protected boolean isActive(Server server, long targetDiscordUserId, DiscordBot bot) {
-			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+			Member target = server.getMember(targetDiscordUserId);
 
-			return target != null && ActionUtil.hasRole(server, target, ActionRole.REACTION_MUTE, bot);
+			return target != null && ActionUtil.hasRole(target, ActionRole.REACTION_MUTE, bot);
 		}
 	},
 	REQUESTS_MUTE("requestsMute", true) {
 		@Override
-		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException {
-			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.REQUESTS_MUTE, reason, bot);
+		protected void activate(Server server, Member target, @Nullable String reason, DiscordBot bot) throws DiscordException {
+			if (!NOP_MODE) ActionUtil.addRole(target, ActionRole.REQUESTS_MUTE, reason, bot);
 		}
 
 		@Override
 		protected void deactivate(Server server, long targetDiscordUserId, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (NOP_MODE) return;
 
-			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+			Member target = server.getMember(targetDiscordUserId);
 
-			if (target!= null) ActionUtil.removeRole(server, target, ActionRole.REQUESTS_MUTE, reason, bot);
+			if (target!= null) ActionUtil.removeRole(target, ActionRole.REQUESTS_MUTE, reason, bot);
 		}
 
 		@Override
 		protected boolean isActive(Server server, long targetDiscordUserId, DiscordBot bot) {
-			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+			Member target = server.getMember(targetDiscordUserId);
 
-			return target != null && ActionUtil.hasRole(server, target, ActionRole.REQUESTS_MUTE, bot);
+			return target != null && ActionUtil.hasRole(target, ActionRole.REQUESTS_MUTE, bot);
 		}
 	},
 	SUPPORT_MUTE("supportMute", true) {
 		@Override
-		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException {
-			if (!NOP_MODE) ActionUtil.addRole(server, target, ActionRole.SUPPORT_MUTE, reason, bot);
+		protected void activate(Server server, Member target, @Nullable String reason, DiscordBot bot) throws DiscordException {
+			if (!NOP_MODE) ActionUtil.addRole(target, ActionRole.SUPPORT_MUTE, reason, bot);
 		}
 
 		@Override
 		protected void deactivate(Server server, long targetDiscordUserId, @Nullable String reason, DiscordBot bot) throws DiscordException {
 			if (NOP_MODE) return;
 
-			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+			Member target = server.getMember(targetDiscordUserId);
 
-			if (target!= null) ActionUtil.removeRole(server, target, ActionRole.SUPPORT_MUTE, reason, bot);
+			if (target!= null) ActionUtil.removeRole(target, ActionRole.SUPPORT_MUTE, reason, bot);
 		}
 
 		@Override
 		protected boolean isActive(Server server, long targetDiscordUserId, DiscordBot bot) {
-			User target = server.getMemberById(targetDiscordUserId).orElse(null);
+			Member target = server.getMember(targetDiscordUserId);
 
-			return target != null && ActionUtil.hasRole(server, target, ActionRole.SUPPORT_MUTE, bot);
+			return target != null && ActionUtil.hasRole(target, ActionRole.SUPPORT_MUTE, bot);
 		}
 	},
 	NICK_LOCK("nickLock", true) {
 		@Override
-		protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) {
+		protected void activate(Server server, Member target, @Nullable String reason, DiscordBot bot) {
 			if (NOP_MODE) return;
 
 			try {
-				if (!ActionQueries.addNickLock(bot.getDatabase(), target.getId(), target.getDisplayName(server))) { // new nicklock gets applied by the caller
-					bot.getActionSyncHandler().applyNickLock(server, target);
+				if (!ActionQueries.addNickLock(bot.getDatabase(), target.getId(), target.getDisplayName())) { // new nicklock gets applied by the caller
+					bot.getActionSyncHandler().applyNickLock(target);
 				}
 			} catch (SQLException e) {
 				throw new RuntimeException(e);
@@ -297,16 +296,16 @@ public enum UserActionType implements ActionType {
 		int count = 0;
 
 		if (isDirect) {
-			User user = server.getMemberById(targetId).orElse(null);
+			Member user = server.getMember(targetId);
 
 			if (user != null) {
 				activate(server, user, reason, bot);
 				count++;
 			}
 		} else {
-			List<User> targets = bot.getUserHandler().getDiscordUsers((int) targetId, server);
+			List<Member> targets = bot.getUserHandler().getDiscordUsers((int) targetId, server);
 
-			for (User user : targets) {
+			for (Member user : targets) {
 				try {
 					activate(server, user, reason, bot);
 					count++;
@@ -319,7 +318,7 @@ public enum UserActionType implements ActionType {
 		return new ActivateResult(true, count, null);
 	}
 
-	protected void activate(Server server, User target, @Nullable String reason, DiscordBot bot) throws DiscordException { }
+	protected void activate(Server server, Member target, @Nullable String reason, DiscordBot bot) throws DiscordException { }
 
 	@Override
 	public final void deactivate(Server server, long targetId, Long resetData, @Nullable String reason, DiscordBot bot) throws DiscordException {
