@@ -20,7 +20,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import net.fabricmc.discord.bot.database.Database;
@@ -37,7 +37,7 @@ public final class UserConfigQueries {
 			ps.setInt(1, rawUserId);
 
 			try (ResultSet res = ps.executeQuery()) {
-				Map<String, String> ret = new HashMap<>();
+				Map<String, String> ret = new LinkedHashMap<>();
 
 				while (res.next()) {
 					ret.put(res.getString(1), res.getString(2));

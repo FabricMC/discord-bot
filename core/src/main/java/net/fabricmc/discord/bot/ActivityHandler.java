@@ -30,7 +30,7 @@ public final class ActivityHandler {
 	ActivityHandler(DiscordBot bot) {
 		this.bot = bot;
 
-		bot.registerConfigEntry(ACTIVITY, () -> "");
+		bot.registerConfigEntry(ACTIVITY,  "");
 
 		bot.getActiveHandler().registerReadyHandler(this::onReady);
 		bot.getActiveHandler().registerGoneHandler(this::onGone);

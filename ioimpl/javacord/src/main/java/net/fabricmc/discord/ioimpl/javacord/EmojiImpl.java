@@ -48,7 +48,10 @@ public class EmojiImpl implements Emoji {
 
 	@Override
 	public String getName() {
-		return wrapped.asUnicodeEmoji().orElse(wrapped.asCustomEmoji().orElseThrow().getName());
+		String ret = wrapped.asUnicodeEmoji().orElse(null);
+		if (ret == null) ret = wrapped.asCustomEmoji().orElseThrow().getName();
+
+		return ret;
 	}
 
 	@Override

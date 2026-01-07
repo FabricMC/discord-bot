@@ -35,7 +35,7 @@ public final class LogHandler {
 	LogHandler(DiscordBot bot) {
 		this.bot = bot;
 
-		bot.registerConfigEntry(LOG_CHANNEL, () -> -1L);
+		bot.registerConfigEntry(LOG_CHANNEL, -1L);
 		// TODO: subscribe to config changes
 
 		bot.getActiveHandler().registerReadyHandler(this::onReady);

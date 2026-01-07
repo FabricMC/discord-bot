@@ -26,6 +26,7 @@ import net.fabricmc.discord.bot.command.core.ConfigCommand;
 import net.fabricmc.discord.bot.command.core.GroupCommand;
 import net.fabricmc.discord.bot.command.core.HelpCommand;
 import net.fabricmc.discord.bot.command.core.PermissionCommand;
+import net.fabricmc.discord.bot.command.core.UserConfigCommand;
 import net.fabricmc.discord.bot.command.filter.FilterActionCommand;
 import net.fabricmc.discord.bot.command.filter.FilterCommand;
 import net.fabricmc.discord.bot.command.filter.FilterGroupCommand;
@@ -87,6 +88,7 @@ final class BuiltinModule implements Module, MessageCreateHandler {
 		bot.registerCommand(new HelpCommand());
 
 		bot.registerCommand(new ConfigCommand());
+		bot.registerCommand(new UserConfigCommand());
 		bot.registerCommand(new GroupCommand());
 		bot.registerCommand(new PermissionCommand());
 

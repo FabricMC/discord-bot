@@ -85,8 +85,8 @@ public final class TagModule implements Module, CommandStringHandler {
 	@Override
 	public void registerConfigEntries(DiscordBot bot) {
 		// 30 seconds default
-		bot.registerConfigEntry(GIT_PULL_DELAY, () -> 30);
-		bot.registerConfigEntry(GIT_REPO, () -> "https://github.com/FabricMC/community/");
+		bot.registerConfigEntry(GIT_PULL_DELAY, 30);
+		bot.registerConfigEntry(GIT_REPO, "https://github.com/FabricMC/community/");
 	}
 
 	@Override

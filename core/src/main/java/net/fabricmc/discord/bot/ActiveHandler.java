@@ -48,7 +48,7 @@ public final class ActiveHandler {
 
 	public ActiveHandler(DiscordBot bot) {
 		this.bot = bot;
-		bot.registerConfigEntry(LAST_ACTIVE, System::currentTimeMillis);
+		bot.registerConfigEntrySupplier(LAST_ACTIVE, System::currentTimeMillis);
 	}
 
 	void init() {

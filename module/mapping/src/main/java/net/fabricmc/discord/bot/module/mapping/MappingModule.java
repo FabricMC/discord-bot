@@ -57,9 +57,12 @@ public final class MappingModule implements Module {
 
 	@Override
 	public void registerConfigEntries(DiscordBot bot) {
-		bot.registerConfigEntry(DEFAULT_NAMESPACES, () -> defaultNamespaces);
-		bot.registerConfigEntry(PUBLIC_NAMESPACES, () -> publicNamespaces);
-		bot.registerConfigEntry(PRIVATE_NAMESPACE_BLOCKLIST, () -> List.of());
+		bot.registerConfigEntry(DEFAULT_NAMESPACES, defaultNamespaces);
+		bot.registerConfigEntry(PUBLIC_NAMESPACES, publicNamespaces);
+		bot.registerConfigEntry(PRIVATE_NAMESPACE_BLOCKLIST, List.of());
+
+		bot.registerUserConfigEntry(QUERY_NAMESPACES, defaultNamespaces);
+		bot.registerUserConfigEntry(DISPLAY_NAMESPACES, defaultNamespaces);
 	}
 
 	@Override

@@ -105,11 +105,13 @@ public final class McVersionModule implements Module {
 
 	@Override
 	public void registerConfigEntries(DiscordBot bot) {
-		bot.registerConfigEntry(ANNOUNCE_CHANNEL, () -> -1L);
-		bot.registerConfigEntry(UPDATE_CHANNEL, () -> -1L);
-		bot.registerConfigEntry(ANNOUNCED_RELEASE_VERSION, () -> "0");
-		bot.registerConfigEntry(ANNOUNCED_SNAPSHOT_VERSION, () -> "0");
-		bot.registerConfigEntry(ANNOUNCED_PENDING_VERSION, () -> "0");
+		bot.registerConfigEntry(ANNOUNCE_CHANNEL, -1L);
+		bot.registerConfigEntry(UPDATE_CHANNEL, -1L);
+		bot.registerConfigEntry(ANNOUNCED_RELEASE_VERSION, "0");
+		bot.registerConfigEntry(ANNOUNCED_SNAPSHOT_VERSION, "0");
+		bot.registerConfigEntry(ANNOUNCED_PENDING_VERSION, "0");
+
+		bot.registerUserConfigEntry(DEFAULT_VERSION, McVersionRepo.DEFAULT_VERSION);
 
 		newsFetcher.register(bot);
 	}

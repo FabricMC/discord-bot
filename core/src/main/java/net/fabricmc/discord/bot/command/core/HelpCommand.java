@@ -40,8 +40,8 @@ public final class HelpCommand extends Command {
 	private static final ConfigKey<String> HELP_CHANNEL_RESTRICTION_MESSAGE = new ConfigKey<>("helpChannelRestrictionMessage", ValueSerializers.STRING);
 
 	public static void registerConfigEntries(DiscordBot bot) {
-		bot.registerConfigEntry(HELP_CHANNEL_RESTRICTION, () -> Collections.emptyList());
-		bot.registerConfigEntry(HELP_CHANNEL_RESTRICTION_MESSAGE, () -> "The help command can only be used in <#%d> or DMs");
+		bot.registerConfigEntry(HELP_CHANNEL_RESTRICTION, Collections.emptyList());
+		bot.registerConfigEntry(HELP_CHANNEL_RESTRICTION_MESSAGE, "The help command can only be used in <#%d> or DMs");
 	}
 
 	private static final Map<String, String> shortHelpTexts = new HashMap<>();

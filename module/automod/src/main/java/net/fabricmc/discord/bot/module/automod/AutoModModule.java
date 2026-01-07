@@ -58,10 +58,10 @@ public final class AutoModModule implements Module, MessageCreateHandler {
 
 	@Override
 	public void registerConfigEntries(DiscordBot bot) {
-		bot.registerConfigEntry(REQUESTS_CHANNELS, () -> Collections.emptyList());
-		bot.registerConfigEntry(REQUESTS_ACTION_REASON, () -> "please use the appropriate channel");
-		bot.registerConfigEntry(SHOWCASE_CHANNELS, () -> Collections.emptyList());
-		bot.registerConfigEntry(SHOWCASE_ACTION_REASON, () -> "please use the appropriate channel");
+		bot.registerConfigEntry(REQUESTS_CHANNELS, Collections.emptyList());
+		bot.registerConfigEntry(REQUESTS_ACTION_REASON, "please use the appropriate channel");
+		bot.registerConfigEntry(SHOWCASE_CHANNELS, Collections.emptyList());
+		bot.registerConfigEntry(SHOWCASE_ACTION_REASON, "please use the appropriate channel");
 	}
 
 	@SuppressWarnings("unchecked")

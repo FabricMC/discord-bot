@@ -79,6 +79,8 @@ public final class DiscordBot {
 
 	private final Map<String, ConfigKey<?>> configEntryByKey = new ConcurrentHashMap<>();
 	private final Map<ConfigKey<?>, Supplier<?>> configEntryRegistry = new ConcurrentHashMap<>();
+	private final Map<String, ConfigKey<?>> userConfigEntryByKey = new ConcurrentHashMap<>();
+	private final Map<ConfigKey<?>, Supplier<?>> userConfigEntryRegistry = new ConcurrentHashMap<>();
 	private final Map<String, CommandRecord> commands = new ConcurrentHashMap<>();
 	private final List<CommandStringHandler> commandStringHandlers = new CopyOnWriteArrayList<>();
 	// COW for concurrent access
@@ -277,7 +279,11 @@ public final class DiscordBot {
 		return this.configEntryByKey.get(key);
 	}
 
-	public <V> void registerConfigEntry(ConfigKey<V> key, Supplier<V> defaultValue) {
+	public <V> void registerConfigEntry(ConfigKey<V> key, V defaultValue) {
+		registerConfigEntrySupplier(key, () -> defaultValue);
+	}
+
+	public <V> void registerConfigEntrySupplier(ConfigKey<V> key, Supplier<V> defaultValue) {
 		if (this.configEntryRegistry.putIfAbsent(key, defaultValue) != null) {
 			throw new IllegalArgumentException("Already registered config value for key %s".formatted(key));
 		}
@@ -340,6 +346,48 @@ public final class DiscordBot {
 	public Set<ConfigKey<?>> getConfigEntries() {
 		return this.configEntryRegistry.keySet();
 	}
+
+	@Nullable
+	public ConfigKey<?> getUserConfigKey(String key) {
+		return this.userConfigEntryByKey.get(key);
+	}
+
+	public <V> void registerUserConfigEntry(ConfigKey<V> key, V defaultValue) {
+		registerUserConfigEntrySupplier(key, () -> defaultValue);
+	}
+
+	public <V> void registerUserConfigEntrySupplier(ConfigKey<V> key, Supplier<V> defaultValue) {
+		if (this.userConfigEntryRegistry.putIfAbsent(key, defaultValue) != null) {
+			throw new IllegalArgumentException("Already registered user config value for key %s".formatted(key));
+		}
+
+		this.userConfigEntryByKey.put(key.name(), key);
+	}
+
+	public List<UserConfigEntry<?>> getUserConfigs(int userId) {
+		try {
+			Map<String, String> entryMap =  UserConfigQueries.getAll(database, userId);
+			List<UserConfigEntry<?>> ret = new ArrayList<>(entryMap.size());
+
+			for (Map.Entry<String, String> entry : entryMap.entrySet()) {
+				ret.add(createUserConfigEntry(entry.getKey(), entry.getValue()));
+			}
+
+			return ret;
+		} catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	private <V> UserConfigEntry<V> createUserConfigEntry(String rawKey, String rawValue) {
+		@SuppressWarnings("unchecked")
+		ConfigKey<V> key = (ConfigKey<V>) getUserConfigKey(rawKey);
+		V value = key != null && rawValue != null ? key.valueSerializer().deserialize(rawValue) : null;
+
+		return new UserConfigEntry<V>(rawKey, rawValue, key, value);
+	}
+
+	public record UserConfigEntry<V>(String rawKey, String rawValue, ConfigKey<V> key, V value) { }
 
 	public <V> @Nullable V getUserConfig(int userId, ConfigKey<V> key) {
 		try {

@@ -38,7 +38,7 @@ enum ActionRole {
 
 	static void registerConfig(DiscordBot bot) {
 		for (ActionRole role : values()) {
-			bot.registerConfigEntry(role.configKey, () -> -1L);
+			bot.registerConfigEntry(role.configKey, -1L);
 		}
 	}
 

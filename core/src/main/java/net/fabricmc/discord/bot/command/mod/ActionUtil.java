@@ -55,7 +55,7 @@ public final class ActionUtil {
 	private static final ConfigKey<String> APPEAL_MESSAGE = new ConfigKey<>("action.appealMessage", ValueSerializers.STRING);
 
 	public static void registerConfig(DiscordBot bot) {
-		bot.registerConfigEntry(APPEAL_MESSAGE, () -> "Please contact the moderation to appeal this action.");
+		bot.registerConfigEntry(APPEAL_MESSAGE, "Please contact the moderation to appeal this action.");
 		ActionRole.registerConfig(bot);
 	}
 

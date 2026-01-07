@@ -53,7 +53,7 @@ public final class JoinLogModule implements Module, MemberJoinHandler {
 
 	@Override
 	public void registerConfigEntries(DiscordBot bot) {
-		bot.registerConfigEntry(JOINLOG_CHANNEL, () -> -1L);
+		bot.registerConfigEntry(JOINLOG_CHANNEL, -1L);
 	}
 
 	@Override

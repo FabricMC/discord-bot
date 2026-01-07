@@ -203,14 +203,14 @@ public final class Paginator implements MessageReactionAddHandler {
 		Message ret = channel.send(this.getEmbed());
 
 		if (pages.size() > 1) {
-			this.message = message;
+			this.message = ret;
 
 			List<Emoji> emotes = new ArrayList<>(3);
 
 			// add control emotes
 			emotes.add(Emoji.fromUnicode(CommonEmotes.ARROW_BACKWARDS));
 
-			if (deleteOnFinish || DiscordUtil.canRemoveReactions(message.getChannel())) {
+			if (deleteOnFinish || DiscordUtil.canRemoveReactions(ret.getChannel())) {
 				emotes.add(Emoji.fromUnicode(CommonEmotes.X));
 			}
 
@@ -221,7 +221,7 @@ public final class Paginator implements MessageReactionAddHandler {
 					this::destroy,
 					Duration.ofSeconds(timeout));
 
-			message.addReactions(emotes);
+			ret.addReactions(emotes);
 		}
 
 		return ret;

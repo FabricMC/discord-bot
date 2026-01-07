@@ -75,7 +75,7 @@ public final class FilterHandler implements MessageCreateHandler, MessageEditHan
 		reloadFilters();
 		reloadFilterLists();
 
-		bot.registerConfigEntry(ALERT_CHANNEL, () -> -1L);
+		bot.registerConfigEntry(ALERT_CHANNEL, -1L);
 		// TODO: subscribe to config changes
 
 		bot.getActiveHandler().registerReadyHandler(this::onReady);
