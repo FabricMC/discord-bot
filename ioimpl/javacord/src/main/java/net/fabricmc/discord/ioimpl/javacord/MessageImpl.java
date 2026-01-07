@@ -32,8 +32,11 @@ import net.fabricmc.discord.io.MessageAttachment;
 import net.fabricmc.discord.io.MessageEmbed;
 import net.fabricmc.discord.io.Role;
 import net.fabricmc.discord.io.User;
+import net.fabricmc.discord.io.Wrapper;
 
 public class MessageImpl implements Message {
+	private static final Wrapper<org.javacord.api.entity.message.Message, MessageImpl> WRAPPER = new Wrapper<>();
+
 	private final org.javacord.api.entity.message.Message wrapped;
 	private final ChannelImpl channel;
 	private final UserImpl author;
@@ -244,7 +247,7 @@ public class MessageImpl implements Message {
 		if (message == null) return null;
 
 		// TODO: handle webhook user
-		return new MessageImpl(message, channel, UserImpl.wrap(message.getAuthor().asUser().orElse(null), channel.getDiscord()));
+		return WRAPPER.wrap(message, m -> new MessageImpl(m, channel, UserImpl.wrap(m.getAuthor().asUser().orElse(null), channel.getDiscord())));
 	}
 
 	org.javacord.api.entity.message.Message unwrap() {

@@ -17,8 +17,11 @@
 package net.fabricmc.discord.ioimpl.javacord;
 
 import net.fabricmc.discord.io.Role;
+import net.fabricmc.discord.io.Wrapper;
 
 public class RoleImpl implements Role {
+	private static final Wrapper<org.javacord.api.entity.permission.Role, RoleImpl> WRAPPER = new Wrapper<>();
+
 	private final ServerImpl server;
 	private final org.javacord.api.entity.permission.Role wrapped;
 
@@ -45,9 +48,7 @@ public class RoleImpl implements Role {
 	static RoleImpl wrap(org.javacord.api.entity.permission.Role role, DiscordImpl discord, ServerImpl server) {
 		if (role == null) return null;
 
-		if (server == null) server = ServerImpl.wrap(role.getServer(), discord);
-
-		return new RoleImpl(role, server);
+		return WRAPPER.wrap(role, r -> new RoleImpl(r, server != null ? server : ServerImpl.wrap(r.getServer(), discord)));
 	}
 
 	org.javacord.api.entity.permission.Role unwrap() {

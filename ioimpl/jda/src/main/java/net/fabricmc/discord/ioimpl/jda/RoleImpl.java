@@ -17,8 +17,11 @@
 package net.fabricmc.discord.ioimpl.jda;
 
 import net.fabricmc.discord.io.Role;
+import net.fabricmc.discord.io.Wrapper;
 
 public class RoleImpl implements Role {
+	private static final Wrapper<net.dv8tion.jda.api.entities.Role, RoleImpl> WRAPPER = new Wrapper<>();
+
 	private final net.dv8tion.jda.api.entities.Role wrapped;
 	private final ServerImpl server;
 
@@ -45,9 +48,7 @@ public class RoleImpl implements Role {
 	static RoleImpl wrap(net.dv8tion.jda.api.entities.Role role, DiscordImpl discord, ServerImpl server) {
 		if (role == null) return null;
 
-		if (server == null) server = ServerImpl.wrap(role.getGuild(), discord);
-
-		return new RoleImpl(role, server);
+		return WRAPPER.wrap(role, r -> new RoleImpl(r, server != null ? server : ServerImpl.wrap(r.getGuild(), discord)));
 	}
 
 	net.dv8tion.jda.api.entities.Role unwrap() {

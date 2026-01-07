@@ -23,8 +23,11 @@ import net.fabricmc.discord.io.Discord;
 import net.fabricmc.discord.io.DiscordImplUtil;
 import net.fabricmc.discord.io.Server;
 import net.fabricmc.discord.io.User;
+import net.fabricmc.discord.io.Wrapper;
 
 public class UserImpl implements User {
+	private static final Wrapper<net.dv8tion.jda.api.entities.User, UserImpl> WRAPPER = new Wrapper<>();
+
 	private final net.dv8tion.jda.api.entities.User wrapped;
 	private final DiscordImpl discord;
 
@@ -81,7 +84,7 @@ public class UserImpl implements User {
 	static UserImpl wrap(net.dv8tion.jda.api.entities.User user, DiscordImpl discord) {
 		if (user == null) return null;
 
-		return new UserImpl(user, discord);
+		return WRAPPER.wrap(user, u -> new UserImpl(u, discord));
 	}
 
 	net.dv8tion.jda.api.entities.User unwrap() {

@@ -72,6 +72,7 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 	private final List<MessageDeleteHandler> deleteHandlers = new CopyOnWriteArrayList<>();
 	private final Map<Channel, ChannelMessageCache> channelCaches = new ConcurrentHashMap<>();
 	private final Long2ObjectMap<CachedMessage> globalIndex = new Long2ObjectOpenHashMap<>();
+	private volatile float initProgressPct;
 
 	public MessageIndex(DiscordBot bot) {
 		this.bot = bot;
@@ -254,23 +255,35 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 	}
 
 	private void init(Server server, long lastActiveTime) {
+		initProgressPct = 0;
+
 		bot.getExecutor().execute(() -> {
 			try {
 				LongList invalidChannels = new LongArrayList();
+				List<? extends Channel> channels = DiscordUtil.getTextChannels(server);
+				int finished = 0;
 
-				for (Channel channel : DiscordUtil.getTextChannels(server)) {
+				for (Channel channel : channels) {
 					if (isValidChannel(channel)) {
 						initChannel(channel);
 					} else {
 						invalidChannels.add(channel.getId());
 					}
+
+					finished++;
+					initProgressPct = 100f * finished / channels.size();
 				}
 
 				if (!invalidChannels.isEmpty()) LOGGER.info("Skipping inaccessible channels {}", invalidChannels);
+				LOGGER.info("Message index initialized");
 			} catch (Throwable t) {
 				LOGGER.warn("Error initializing message index", t);
 			}
 		});
+	}
+
+	public float getInitProgressPct() {
+		return initProgressPct;
 	}
 
 	private void reset(Server server) {
@@ -345,7 +358,7 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 		ChannelMessageCache cache = channelCaches.get(channel);
 
 		if (cache == null) {
-			LOGGER.warn("Received message {} on unknown channel {}", message.getId(), channel.getId());
+			LOGGER.warn("Received message {} on unknown channel {} ({} {})", message.getId(), channel.getId(), channel.getType().name(), channel.getName());
 			cache = new ChannelMessageCache();
 			channelCaches.put(channel, cache);
 		}

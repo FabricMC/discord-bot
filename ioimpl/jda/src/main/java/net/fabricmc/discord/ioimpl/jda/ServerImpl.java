@@ -31,8 +31,11 @@ import net.dv8tion.jda.api.requests.ErrorResponse;
 import net.fabricmc.discord.io.DiscordImplUtil;
 import net.fabricmc.discord.io.Emoji;
 import net.fabricmc.discord.io.Server;
+import net.fabricmc.discord.io.Wrapper;
 
 public class ServerImpl implements Server {
+	private static final Wrapper<Guild, ServerImpl> WRAPPER = new Wrapper<>();
+
 	private final Guild wrapped;
 	private final DiscordImpl discord;
 	private volatile MemberImpl yourself;
@@ -172,7 +175,7 @@ public class ServerImpl implements Server {
 	static ServerImpl wrap(Guild server, DiscordImpl discord) {
 		if (server == null) return null;
 
-		return new ServerImpl(server, discord);
+		return WRAPPER.wrap(server, s -> new ServerImpl(s, discord));
 	}
 
 	Guild unwrap() {

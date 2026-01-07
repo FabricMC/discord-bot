@@ -25,6 +25,7 @@ import org.javacord.api.entity.channel.PrivateChannel;
 import org.javacord.api.entity.channel.RegularServerChannel;
 import org.javacord.api.entity.channel.ServerChannel;
 import org.javacord.api.entity.channel.ServerTextChannel;
+import org.javacord.api.entity.channel.ServerThreadChannel;
 import org.javacord.api.entity.channel.TextChannel;
 import org.javacord.api.entity.message.MessageBuilder;
 import org.javacord.api.entity.message.MessageSet;
@@ -37,8 +38,11 @@ import net.fabricmc.discord.io.MessageEmbed;
 import net.fabricmc.discord.io.Permission;
 import net.fabricmc.discord.io.Role;
 import net.fabricmc.discord.io.User;
+import net.fabricmc.discord.io.Wrapper;
 
 public class ChannelImpl implements Channel {
+	private static final Wrapper<org.javacord.api.entity.channel.Channel, ChannelImpl> WRAPPER = new Wrapper<>();
+
 	private final org.javacord.api.entity.channel.Channel wrapped;
 	private final DiscordImpl discord;
 	private final ServerImpl server;
@@ -88,37 +92,55 @@ public class ChannelImpl implements Channel {
 	@Override
 	public Set<Permission> getPermissions(User user) {
 		if (wrapped instanceof RegularServerChannel c) {
-			return Permission.fromMask(c.getEffectivePermissions(((UserImpl) user).unwrap()).getAllowedBitmask());
+			return getPermissions(c, user);
+		} else if (wrapped instanceof ServerThreadChannel c) {
+			return getPermissions(c.getParent(), user);
 		} else if (wrapped instanceof PrivateChannel) {
 			return Permission.DM;
 		} else {
-			throw new IllegalStateException("not a suitable channel type");
+			throw new IllegalStateException("not a suitable channel type: "+wrapped.getClass());
 		}
+	}
+
+	private static Set<Permission> getPermissions(RegularServerChannel  c, User user) {
+		return Permission.fromMask(c.getEffectivePermissions(((UserImpl) user).unwrap()).getAllowedBitmask());
 	}
 
 	@Override
 	public PermissionOverwriteData getPermissionOverwrites(Role role) {
 		if (wrapped instanceof RegularServerChannel c) {
-			Permissions res = c.getOverwrittenPermissions(((RoleImpl) role).unwrap());
-
-			return new PermissionOverwriteData(Permission.fromMask(res.getAllowedBitmask()), Permission.fromMask(res.getDeniedBitmask()));
+			return getPermissionOverwrites(c, role);
+		} else if (wrapped instanceof ServerThreadChannel c) {
+			return getPermissionOverwrites(c.getParent(), role);
 		} else {
-			throw new IllegalStateException("not a suitable channel type");
+			throw new IllegalStateException("not a suitable channel type: "+wrapped.getClass());
+		}
+	}
+
+	private static PermissionOverwriteData getPermissionOverwrites(RegularServerChannel c, Role role) {
+		Permissions res = c.getOverwrittenPermissions(((RoleImpl) role).unwrap());
+
+		return new PermissionOverwriteData(Permission.fromMask(res.getAllowedBitmask()), Permission.fromMask(res.getDeniedBitmask()));
+	}
+
+	@Override
+	public void setPermissionOverwrites(Role role, PermissionOverwriteData data, String reason) {
+		if (wrapped instanceof RegularServerChannel c) {
+			setPermissionOverwrites(c, role, data, reason);
+		} else if (wrapped instanceof ServerThreadChannel c) {
+			setPermissionOverwrites(c.getParent(), role, data, reason);
+		} else {
+			throw new IllegalStateException("not a suitable channel type: "+wrapped.getClass());
 		}
 	}
 
 	@SuppressWarnings("unchecked")
-	@Override
-	public void setPermissionOverwrites(Role role, PermissionOverwriteData data, String reason) {
-		if (wrapped instanceof RegularServerChannel c) {
-			c.createUpdater()
-			.addPermissionOverwrite(((RoleImpl) role).unwrap(), Permissions.fromBitmask(Permission.toMask(data.allowed()), Permission.toMask(data.denied())))
-			.setAuditLogReason(reason)
-			.update()
-			.join();
-		} else {
-			throw new IllegalStateException("not a suitable channel type");
-		}
+	private static void setPermissionOverwrites(RegularServerChannel c, Role role, PermissionOverwriteData data, String reason) {
+		c.createUpdater()
+		.addPermissionOverwrite(((RoleImpl) role).unwrap(), Permissions.fromBitmask(Permission.toMask(data.allowed()), Permission.toMask(data.denied())))
+		.setAuditLogReason(reason)
+		.update()
+		.join();
 	}
 
 	@Override
@@ -241,7 +263,7 @@ public class ChannelImpl implements Channel {
 
 		if (server == null) server = ServerImpl.wrap(channel.getServer(), null);
 
-		return new ChannelImpl(channel, discord, server, null);
+		return wrap(channel, discord, server, null);
 	}
 
 	static ChannelImpl wrap(PrivateChannel channel, DiscordImpl discord, UserImpl user) {
@@ -249,7 +271,11 @@ public class ChannelImpl implements Channel {
 
 		if (user == null) user = UserImpl.wrap(channel.getRecipient().orElse(null), discord);
 
-		return new ChannelImpl(channel, discord, null, user);
+		return wrap(channel, discord, null, user);
+	}
+
+	private static ChannelImpl wrap(org.javacord.api.entity.channel.Channel channel, DiscordImpl discord, ServerImpl server, UserImpl user) {
+		return WRAPPER.wrap(channel, c -> new ChannelImpl(c, discord, server, user));
 	}
 
 	static ChannelImpl wrap(org.javacord.api.entity.channel.Channel channel, ChannelImpl refChannel) {

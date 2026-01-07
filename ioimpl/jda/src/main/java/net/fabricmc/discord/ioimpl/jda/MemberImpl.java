@@ -31,8 +31,11 @@ import net.fabricmc.discord.io.DiscordImplUtil;
 import net.fabricmc.discord.io.Member;
 import net.fabricmc.discord.io.Permission;
 import net.fabricmc.discord.io.Role;
+import net.fabricmc.discord.io.Wrapper;
 
 public class MemberImpl implements Member {
+	private static final Wrapper<net.dv8tion.jda.api.entities.Member, MemberImpl> WRAPPER = new Wrapper<>();
+
 	private final net.dv8tion.jda.api.entities.Member wrapped;
 	private final UserImpl user;
 	private final ServerImpl server;
@@ -136,9 +139,7 @@ public class MemberImpl implements Member {
 	static MemberImpl wrap(net.dv8tion.jda.api.entities.Member member, UserImpl user, ServerImpl server) {
 		if (member == null) return null;
 
-		if (user == null) user = UserImpl.wrap(member.getUser(), server.getDiscord());
-
-		return new MemberImpl(member, user, server);
+		return WRAPPER.wrap(member, m -> new MemberImpl(m, user != null ? user : UserImpl.wrap(m.getUser(), server.getDiscord()), server));
 	}
 
 	net.dv8tion.jda.api.entities.Member unwrap() {

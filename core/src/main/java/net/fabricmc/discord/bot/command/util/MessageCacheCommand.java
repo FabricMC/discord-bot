@@ -167,6 +167,8 @@ public final class MessageCacheCommand extends Command {
 
 			StringBuilder sb = new StringBuilder();
 			int total = 0;
+			int threadsCount = 0;
+			int threadsTotal = 0;
 
 			for (Channel channel : channels) {
 				if (!channel.canSee(context.user()) || !channel.hasPermission(context.user(), Permission.READ_MESSAGE_HISTORY)) continue;
@@ -174,13 +176,21 @@ public final class MessageCacheCommand extends Command {
 				int size = messageIndex.getSize(channel);
 				if (size == 0) continue;
 
-				if (sb.length() > 0) sb.append('\n');
-				sb.append(String.format("<#%d>: %d", channel.getId(), size));
+				if (channel.getType().thread) {
+					threadsCount++;
+					threadsTotal += size;
+				} else {
+					if (sb.length() > 0) sb.append('\n');
+					sb.append(String.format("<#%d>: %d", channel.getId(), size));
+				}
+
 				total += size;
 			}
 
 			if (sb.length() > 0) sb.append('\n');
-			sb.append(String.format("Total: %d", total));
+			if (threadsCount > 0) sb.append(String.format("In %d threads: %d\n", threadsCount, threadsTotal));
+			sb.append(String.format("Total: %d\n", total));
+			sb.append(String.format("Init progress: %.1f%%", messageIndex.getInitProgressPct()));
 
 			context.channel().send(sb.toString());
 

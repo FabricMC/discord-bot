@@ -32,8 +32,11 @@ import org.javacord.api.exception.NotFoundException;
 import net.fabricmc.discord.io.DiscordImplUtil;
 import net.fabricmc.discord.io.Emoji;
 import net.fabricmc.discord.io.Server;
+import net.fabricmc.discord.io.Wrapper;
 
 public class ServerImpl implements Server {
+	private static final Wrapper<org.javacord.api.entity.server.Server, ServerImpl> WRAPPER = new Wrapper<>();
+
 	private final org.javacord.api.entity.server.Server wrapped;
 	private final DiscordImpl discord;
 	private volatile MemberImpl yourself;
@@ -186,7 +189,7 @@ public class ServerImpl implements Server {
 	static ServerImpl wrap(org.javacord.api.entity.server.Server server, DiscordImpl discord) {
 		if (server == null) return null;
 
-		return new ServerImpl(server, discord);
+		return WRAPPER.wrap(server, s -> new ServerImpl(s, discord));
 	}
 
 	org.javacord.api.entity.server.Server unwrap() {

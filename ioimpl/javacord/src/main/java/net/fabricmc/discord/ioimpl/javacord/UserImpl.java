@@ -22,8 +22,11 @@ import net.fabricmc.discord.io.Channel;
 import net.fabricmc.discord.io.DiscordImplUtil;
 import net.fabricmc.discord.io.Server;
 import net.fabricmc.discord.io.User;
+import net.fabricmc.discord.io.Wrapper;
 
 public class UserImpl implements User {
+	private static final Wrapper<org.javacord.api.entity.user.User, UserImpl> WRAPPER = new Wrapper<>();
+
 	private final org.javacord.api.entity.user.User wrapped;
 	private final DiscordImpl discord;
 
@@ -80,7 +83,7 @@ public class UserImpl implements User {
 	static UserImpl wrap(org.javacord.api.entity.user.User user, DiscordImpl discord) {
 		if (user == null) return null;
 
-		return new UserImpl(user, discord);
+		return WRAPPER.wrap(user, u -> new UserImpl(u, discord));
 	}
 
 	org.javacord.api.entity.user.User unwrap() {

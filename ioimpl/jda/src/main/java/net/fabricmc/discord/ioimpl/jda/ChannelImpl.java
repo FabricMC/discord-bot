@@ -36,8 +36,11 @@ import net.fabricmc.discord.io.MessageEmbed;
 import net.fabricmc.discord.io.Permission;
 import net.fabricmc.discord.io.Role;
 import net.fabricmc.discord.io.User;
+import net.fabricmc.discord.io.Wrapper;
 
 public class ChannelImpl implements Channel {
+	private static final Wrapper<net.dv8tion.jda.api.entities.channel.Channel, ChannelImpl> WRAPPER = new Wrapper<>();
+
 	private final net.dv8tion.jda.api.entities.channel.Channel wrapped;
 	private final DiscordImpl discord;
 	private final ServerImpl server;
@@ -226,7 +229,7 @@ public class ChannelImpl implements Channel {
 
 		if (server == null) server = ServerImpl.wrap(channel.getGuild(), null);
 
-		return new ChannelImpl(channel, discord, server, null);
+		return wrap(channel, discord, server, null);
 	}
 
 	static ChannelImpl wrap(PrivateChannel channel, DiscordImpl discord, UserImpl user) {
@@ -234,7 +237,11 @@ public class ChannelImpl implements Channel {
 
 		if (user == null) user = UserImpl.wrap(channel.retrieveUser().complete(), discord);
 
-		return new ChannelImpl(channel, discord, null, user);
+		return wrap(channel, discord, null, user);
+	}
+
+	private static ChannelImpl wrap(net.dv8tion.jda.api.entities.channel.Channel channel, DiscordImpl discord, ServerImpl server, UserImpl user) {
+		return WRAPPER.wrap(channel, c -> new ChannelImpl(c, discord, server, user));
 	}
 
 	static ChannelImpl wrap(net.dv8tion.jda.api.entities.channel.Channel channel, ChannelImpl refChannel) {
