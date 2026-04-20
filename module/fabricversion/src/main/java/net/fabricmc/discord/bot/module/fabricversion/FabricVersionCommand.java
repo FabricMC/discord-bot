@@ -119,7 +119,7 @@ public final class FabricVersionCommand extends Command {
 		sb.append("```\n");
 
 		if (data.yarnVersion != null) {
-			sb.append(String.format("**Mappings Migration** ([more info](https://fabricmc.net/wiki/tutorial:migratemappings))\n"
+			sb.append(String.format("**Mappings Migration** ([more info](https://docs.fabricmc.net/develop/migrating-mappings))\n"
 					+ "```"
 					+ "gradlew migrateMappings --mappings \"%s\""
 					+ "```\n",
