@@ -21,6 +21,7 @@ import static net.fabricmc.discord.ioimpl.javacord.DiscordProviderImpl.join;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Predicate;
 
 import org.javacord.api.entity.auditlog.AuditLogActionType;
@@ -42,6 +43,9 @@ public class ServerImpl implements Server {
 	private volatile MemberImpl yourself;
 
 	ServerImpl(org.javacord.api.entity.server.Server wrapped, DiscordImpl discord) {
+		Objects.requireNonNull(wrapped, "null wrapped");
+		Objects.requireNonNull(discord, "null discord");
+
 		this.wrapped = wrapped;
 		this.discord = discord;
 	}

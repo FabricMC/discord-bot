@@ -17,6 +17,7 @@
 package net.fabricmc.discord.ioimpl.jda;
 
 import java.util.Collection;
+import java.util.Objects;
 
 import net.fabricmc.discord.io.Channel;
 import net.fabricmc.discord.io.Discord;
@@ -32,6 +33,9 @@ public class UserImpl implements User {
 	private final DiscordImpl discord;
 
 	UserImpl(net.dv8tion.jda.api.entities.User wrapped, DiscordImpl discord) {
+		Objects.requireNonNull(wrapped, "null wrapped");
+		Objects.requireNonNull(discord, "null discord");
+
 		this.wrapped = wrapped;
 		this.discord = discord;
 	}

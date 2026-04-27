@@ -19,6 +19,7 @@ package net.fabricmc.discord.ioimpl.jda;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Predicate;
 
 import net.dv8tion.jda.api.audit.ActionType;
@@ -41,6 +42,9 @@ public class ServerImpl implements Server {
 	private volatile MemberImpl yourself;
 
 	ServerImpl(Guild wrapped, DiscordImpl discord) {
+		Objects.requireNonNull(wrapped, "null wrapped");
+		Objects.requireNonNull(discord, "null discord");
+
 		this.wrapped = wrapped;
 		this.discord = discord;
 	}

@@ -19,6 +19,7 @@ package net.fabricmc.discord.ioimpl.javacord;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 import org.javacord.api.entity.channel.PrivateChannel;
@@ -49,6 +50,10 @@ public class ChannelImpl implements Channel {
 	private final UserImpl user;
 
 	ChannelImpl(org.javacord.api.entity.channel.Channel wrapped, DiscordImpl discord, ServerImpl server, UserImpl user) {
+		Objects.requireNonNull(wrapped, "null wrapped");
+		Objects.requireNonNull(discord, "null discord");
+		if (server == null && user == null) throw new NullPointerException("both server and user are null");
+
 		this.wrapped = wrapped;
 		this.discord = discord;
 		this.server = server;

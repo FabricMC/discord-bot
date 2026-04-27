@@ -16,6 +16,8 @@
 
 package net.fabricmc.discord.ioimpl.jda;
 
+import java.util.Objects;
+
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Activity;
 
@@ -28,6 +30,9 @@ public class DiscordImpl implements Discord {
 	private volatile UserImpl yourself;
 
 	DiscordImpl(JDA wrapped, GlobalEventHolder globalEvents) {
+		Objects.requireNonNull(wrapped, "null wrapped");
+		Objects.requireNonNull(globalEvents, "null globalEvents");
+
 		this.wrapped = wrapped;
 		this.globalEvents = globalEvents;
 	}

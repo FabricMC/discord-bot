@@ -21,6 +21,7 @@ import static net.fabricmc.discord.ioimpl.javacord.DiscordProviderImpl.urlToStri
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 import org.javacord.api.entity.permission.PermissionType;
@@ -36,6 +37,9 @@ public class MemberImpl implements Member {
 	private final ServerImpl server;
 
 	MemberImpl(UserImpl user, ServerImpl server) {
+		Objects.requireNonNull(user, "null user");
+		Objects.requireNonNull(server, "null server");
+
 		this.user = user;
 		this.server = server;
 	}

@@ -16,6 +16,8 @@
 
 package net.fabricmc.discord.ioimpl.javacord;
 
+import java.util.Objects;
+
 import org.javacord.api.DiscordApi;
 
 import net.fabricmc.discord.io.Discord;
@@ -27,6 +29,9 @@ public class DiscordImpl implements Discord {
 	private volatile UserImpl yourself;
 
 	DiscordImpl(DiscordApi wrapped, GlobalEventHolder globalEvents) {
+		Objects.requireNonNull(wrapped, "null wrapped");
+		Objects.requireNonNull(globalEvents, "null globalEvents");
+
 		this.wrapped = wrapped;
 		this.globalEvents = globalEvents;
 	}

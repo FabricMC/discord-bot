@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import net.dv8tion.jda.api.entities.Message.MentionType;
 import net.dv8tion.jda.api.requests.RestAction;
@@ -45,6 +46,10 @@ public class MessageImpl implements Message {
 	private final UserImpl author;
 
 	MessageImpl(net.dv8tion.jda.api.entities.Message wrapped, ChannelImpl channel, UserImpl author) {
+		Objects.requireNonNull(wrapped, "null wrapped");
+		Objects.requireNonNull(channel, "null channel");
+		Objects.requireNonNull(author, "null author");
+
 		this.wrapped = wrapped;
 		this.channel = channel;
 		this.author = author;

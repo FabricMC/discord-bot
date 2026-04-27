@@ -19,6 +19,7 @@ package net.fabricmc.discord.ioimpl.javacord;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 import org.javacord.api.entity.message.MessageBuilder;
@@ -42,6 +43,10 @@ public class MessageImpl implements Message {
 	private final UserImpl author;
 
 	MessageImpl(org.javacord.api.entity.message.Message wrapped, ChannelImpl channel, UserImpl author) {
+		Objects.requireNonNull(wrapped, "null wrapped");
+		Objects.requireNonNull(channel, "null channel");
+		Objects.requireNonNull(author, "null author");
+
 		this.wrapped = wrapped;
 		this.channel = channel;
 		this.author = author;

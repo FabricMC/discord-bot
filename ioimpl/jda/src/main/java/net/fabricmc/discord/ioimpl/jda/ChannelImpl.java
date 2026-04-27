@@ -20,6 +20,7 @@ package net.fabricmc.discord.ioimpl.jda;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 import net.dv8tion.jda.api.entities.PermissionOverride;
@@ -47,6 +48,10 @@ public class ChannelImpl implements Channel {
 	private final UserImpl user;
 
 	ChannelImpl(net.dv8tion.jda.api.entities.channel.Channel wrapped, DiscordImpl discord, ServerImpl server, UserImpl user) {
+		Objects.requireNonNull(wrapped, "null wrapped");
+		Objects.requireNonNull(discord, "null discord");
+		if (server == null && user == null) throw new NullPointerException("both server and user are null");
+
 		this.wrapped = wrapped;
 		this.discord = discord;
 		this.server = server;

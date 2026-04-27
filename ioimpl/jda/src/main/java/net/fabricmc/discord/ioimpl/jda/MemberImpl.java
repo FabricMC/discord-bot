@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -41,6 +42,10 @@ public class MemberImpl implements Member {
 	private final ServerImpl server;
 
 	MemberImpl(net.dv8tion.jda.api.entities.Member wrapped, UserImpl user, ServerImpl server) {
+		Objects.requireNonNull(wrapped, "null wrapped");
+		Objects.requireNonNull(user, "null user");
+		Objects.requireNonNull(server, "null server");
+
 		this.wrapped = wrapped;
 		this.user = user;
 		this.server = server;
