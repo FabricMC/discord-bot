@@ -62,7 +62,7 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 	private static final int MESSAGE_LIMIT = 10000;
 
 	private static final String[] DISCORD_DOMAINS = { "discord.com", "discordapp.com" };
-	private static final Pattern MESSAGE_LINK_PATTERN = Pattern.compile(String.format("https://(?:%s)/channels/(@me|\\d+)/(\\d+)/(\\d+)",
+	private static final Pattern MESSAGE_LINK_PATTERN = Pattern.compile(String.format("https://(?:\\w+\\.)?(?:%s)/channels/(@me|\\d+)/(\\d+)/(\\d+)",
 			Arrays.stream(DISCORD_DOMAINS).map(Pattern::quote).collect(Collectors.joining("|"))));
 
 	private static final Logger LOGGER = LogManager.getLogger(MessageIndex.class);
