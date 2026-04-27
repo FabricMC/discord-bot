@@ -48,7 +48,7 @@ public class MessageImpl implements Message {
 	MessageImpl(net.dv8tion.jda.api.entities.Message wrapped, ChannelImpl channel, UserImpl author) {
 		Objects.requireNonNull(wrapped, "null wrapped");
 		Objects.requireNonNull(channel, "null channel");
-		Objects.requireNonNull(author, "null author");
+		//Objects.requireNonNull(author, "null author"); null for webhook atm?
 
 		this.wrapped = wrapped;
 		this.channel = channel;
