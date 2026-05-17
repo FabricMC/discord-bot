@@ -71,7 +71,7 @@ final class LauncherNewsFetcher {
 		fetchLatest();
 		Version latest = latestRelease.date.isAfter(latestSnapshot.date) ? latestRelease : latestSnapshot;
 
-		if (latest.date.isAfter(lastAnnounceTime) && !McVersionModule.isOldVersion(latest.name) && announce(latest)) {
+		if (latest.date.isAfter(lastAnnounceTime) && announce(latest)) {
 			lastAnnounceTime = latest.date;
 		}
 	}

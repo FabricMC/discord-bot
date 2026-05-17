@@ -52,7 +52,6 @@ import net.fabricmc.discord.io.Server;
  * <ol>
  * <li>grab latest MC version from the launcher metadata API
  * <li>require that the version is not the same as in the bot DB
- * <li>require that Fabric Meta's intermediary records don't already list the version, indicating a bogus detection
  * <li>require that the version hasn't been announced by the bot's current process
  * <li>announce the version to the configured channel
  * <li>publish that announcement if possible
@@ -68,9 +67,6 @@ public final class McVersionModule implements Module {
 	static final String KIND_RELEASE = "release";
 	static final String KIND_SNAPSHOT = "snapshot";
 	static final String KIND_PENDING = "pending";
-
-	private static final String FABRIC_VERSION_HOST = "meta.fabricmc.net";
-	private static final String FABRIC_VERSION_PATH = "/v2/versions/intermediary/%s";
 
 	private static final Logger LOGGER = LogManager.getLogger(McVersionModule.class);
 
@@ -220,7 +216,6 @@ public final class McVersionModule implements Module {
 
 		if (latestVersion == null // no version specified
 				|| latestVersion.equals(oldVersion = bot.getConfigEntry(announcedVersionKey)) // same as last announced
-				|| isOldVersion(latestVersion) // already known to Fabric, mcmeta glitch
 				|| announcedVersions.contains(latestVersion)) { // already posted by this instance
 			return;
 		}
@@ -242,23 +237,6 @@ public final class McVersionModule implements Module {
 
 		announcedVersions.add(latestVersion);
 		bot.setConfigEntry(announcedVersionKey, latestVersion);
-	}
-
-	static boolean isOldVersion(String version) throws IOException, URISyntaxException, InterruptedException {
-		if (version.indexOf('/') >= 0)  throw new IllegalArgumentException("invalid mc version: "+version);
-
-		HttpResponse<InputStream> response = HttpUtil.makeRequest(HttpUtil.toUri(FABRIC_VERSION_HOST, FABRIC_VERSION_PATH.formatted(version)));
-
-		if (response.statusCode() != 200) {
-			LOGGER.warn("MC version verification request against Fabric Meta failed: {}", response.statusCode());
-			response.body().close();
-			return false;
-		}
-
-		try (JsonReader reader = new JsonReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
-			reader.beginArray();
-			return reader.hasNext();
-		}
 	}
 
 	boolean sendAnnouncement(Channel channel, String msg) {

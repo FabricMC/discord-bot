@@ -156,7 +156,7 @@ final class NewsFetcher {
 				&& !announcedNews.contains(path)) {
 			NewVersionUtil.Version version = NewVersionUtil.Version.get(matcher);
 
-			if (!hasAnnouncedSnapshot(version) && !McVersionModule.isOldVersion(version.toString())) {
+			if (!hasAnnouncedSnapshot(version)) {
 				LOGGER.info("Announcing MC-News {} (regular, version {})", path, version.toString());
 
 				if (!mcVersionModule.sendAnnouncement(mcVersionModule.getUpdateChannel(), "https://"+HOST+path)) {
