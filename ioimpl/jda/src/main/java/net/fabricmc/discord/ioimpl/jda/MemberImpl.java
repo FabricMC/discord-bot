@@ -113,7 +113,9 @@ public class MemberImpl implements Member {
 
 	@Override
 	public Set<Permission> getPermissions(Channel channel) {
-		if (channel instanceof GuildChannel c) {
+		net.dv8tion.jda.api.entities.channel.Channel jdaChannel = ((ChannelImpl) channel).unwrap();
+
+		if (jdaChannel instanceof GuildChannel c) {
 			return translatePermissions(wrapped.getPermissions(c));
 		} else {
 			return channel.getPermissions(user);
