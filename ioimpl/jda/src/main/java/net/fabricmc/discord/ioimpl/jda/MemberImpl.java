@@ -139,8 +139,8 @@ public class MemberImpl implements Member {
 	}
 
 	@Override
-	public void ban(Duration messageDeleteionTimeframe, String reason) {
-		wrapped.ban(Math.max(Integer.MAX_VALUE, (int) messageDeleteionTimeframe.getSeconds()), TimeUnit.SECONDS).reason(reason).complete();
+	public void ban(Duration messageDeleteionTimeframe, String reason) { // JDA enforces max 7 days
+		wrapped.ban(Math.min(Integer.MAX_VALUE, (int) messageDeleteionTimeframe.getSeconds()), TimeUnit.SECONDS).reason(reason).complete();
 	}
 
 	static MemberImpl wrap(net.dv8tion.jda.api.entities.Member member, UserImpl user, ServerImpl server) {
