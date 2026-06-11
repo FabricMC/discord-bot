@@ -39,7 +39,7 @@ allprojects {
 		// Logging
 		implementation("org.slf4j:slf4j-api:${slf4jVersion}")
 		implementation("org.apache.logging.log4j:log4j-core:${log4jVersion}")
-		implementation("org.apache.logging.log4j:log4j-slf4j-impl:${log4jVersion}")
+		implementation("org.apache.logging.log4j:log4j-slf4j2-impl:${log4jVersion}")
 
 
 		// tag parser artifact does not need a full db
