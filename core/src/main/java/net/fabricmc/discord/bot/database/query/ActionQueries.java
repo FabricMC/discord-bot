@@ -216,22 +216,26 @@ public final class ActionQueries {
 			psMsg.executeUpdate();
 
 			for (CachedMessageAttachment attachment : message.getAttachments()) {
+				int size = attachment.getApproximateSize();
+				byte[] data;
+
+				if (size <= maxSize) {
+					try {
+						data = attachment.getData(false);
+						if (data != null) size = data.length;
+					} catch (IOException | InterruptedException | URISyntaxException e) {
+						e.printStackTrace();
+						data = null;
+					}
+				} else {
+					data = null;
+				}
+
 				psAtt.setLong(1, attachment.getId());
 				psAtt.setLong(2, message.getId());
 				psAtt.setString(3, attachment.getUrl());
 				psAtt.setString(4, attachment.getFileName());
-				psAtt.setLong(5, attachment.getSize());
-
-				byte[] data = null;
-
-				if (attachment.getSize() <= maxSize) {
-					try {
-						data = attachment.getData(false);
-					} catch (IOException | InterruptedException | URISyntaxException e) {
-						e.printStackTrace();
-					}
-				}
-
+				psAtt.setLong(5, size);
 				psAtt.setBytes(6, data);
 				psAtt.executeUpdate();
 			}

@@ -25,6 +25,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import net.dv8tion.jda.api.entities.ISnowflake;
 import net.dv8tion.jda.api.entities.channel.middleman.GuildChannel;
 
 import net.fabricmc.discord.io.Channel;
@@ -35,7 +36,7 @@ import net.fabricmc.discord.io.Role;
 import net.fabricmc.discord.io.Wrapper;
 
 public class MemberImpl implements Member {
-	private static final Wrapper<net.dv8tion.jda.api.entities.Member, MemberImpl> WRAPPER = new Wrapper<>();
+	private static final Wrapper<net.dv8tion.jda.api.entities.Member, MemberImpl> WRAPPER = new Wrapper<>(ISnowflake::getIdLong);
 
 	private final net.dv8tion.jda.api.entities.Member wrapped;
 	private final UserImpl user;
@@ -141,6 +142,11 @@ public class MemberImpl implements Member {
 	@Override
 	public void ban(Duration messageDeleteionTimeframe, String reason) { // JDA enforces max 7 days
 		wrapped.ban(Math.min(Integer.MAX_VALUE, (int) messageDeleteionTimeframe.getSeconds()), TimeUnit.SECONDS).reason(reason).complete();
+	}
+
+	@Override
+	public String toString() {
+		return wrapped.toString();
 	}
 
 	static MemberImpl wrap(net.dv8tion.jda.api.entities.Member member, UserImpl user, ServerImpl server) {

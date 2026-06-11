@@ -92,7 +92,7 @@ public final class MessageCacheCommand extends Command {
 			}
 
 			if (messages.isEmpty()) {
-				context.channel().send(String.format("No messages for %s", targetDesc));
+				context.send(String.format("No messages for %s", targetDesc));
 			} else {
 				messages.sort(Comparator.comparing(CachedMessage::getCreationTime));
 
@@ -127,7 +127,7 @@ public final class MessageCacheCommand extends Command {
 					builder.page(sb);
 				}
 
-				builder.buildAndSend(context.channel());
+				builder.buildAndSend(context);
 			}
 
 			return true;
@@ -140,12 +140,12 @@ public final class MessageCacheCommand extends Command {
 			for (CachedMessageAttachment attachment : message.getAttachments()) {
 				attachmentsSuffix.append(String.format("\n`%d`: %.1f kB, [link](%s)%s",
 						attachment.getId(),
-						attachment.getSize() * 1e-3,
+						attachment.getApproximateSize() * 1e-3,
 						attachment.getUrl(),
 						(attachment.hasDataCached() ? ", cached" : "")));
 			}
 
-			context.channel().send(new MessageEmbed.Builder()
+			context.send(new MessageEmbed.Builder()
 					.title("Message %d details".formatted(message.getId()))
 					.description(String.format("**User %d:** %s\n**Channel:** <#%d>\n**Creation:** %s\n**Status:** %s\n**Content:**%s\n**Attachments:** %d%s",
 							context.bot().getUserHandler().getUserId(message.getAuthorDiscordId()),
@@ -192,7 +192,7 @@ public final class MessageCacheCommand extends Command {
 			sb.append(String.format("Total: %d\n", total));
 			sb.append(String.format("Init progress: %.1f%%", messageIndex.getInitProgressPct()));
 
-			context.channel().send(sb.toString());
+			context.send(sb.toString());
 
 			return true;
 		}

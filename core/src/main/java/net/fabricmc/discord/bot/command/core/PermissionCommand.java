@@ -44,21 +44,21 @@ public final class PermissionCommand extends Command {
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
 		switch (arguments.get("unnamed_0")) {
 		case "list":
-			context.channel().send("Entries: "+String.join(", ", UserQueries.getDirectGroupPermissions(context.bot().getDatabase(), arguments.get("group"))));
+			context.send("Entries: "+String.join(", ", UserQueries.getDirectGroupPermissions(context.bot().getDatabase(), arguments.get("group"))));
 			return true;
 		case "add":
 			if (!UserQueries.addGroupPermission(context.bot().getDatabase(), arguments.get("group"), arguments.get("permission"))) {
 				throw new CommandException("The entry already exists");
 			}
 
-			context.channel().send("Entry added");
+			context.send("Entry added");
 			return true;
 		case "remove":
 			if (!UserQueries.removeGroupPermission(context.bot().getDatabase(), arguments.get("group"), arguments.get("permission"))) {
 				throw new CommandException("No such entry");
 			}
 
-			context.channel().send("Entry removed");
+			context.send("Entry removed");
 			return true;
 		default:
 			throw new IllegalStateException();

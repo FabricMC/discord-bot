@@ -16,11 +16,13 @@
 
 package net.fabricmc.discord.ioimpl.jda;
 
+import net.dv8tion.jda.api.entities.ISnowflake;
+
 import net.fabricmc.discord.io.Role;
 import net.fabricmc.discord.io.Wrapper;
 
 public class RoleImpl implements Role {
-	private static final Wrapper<net.dv8tion.jda.api.entities.Role, RoleImpl> WRAPPER = new Wrapper<>();
+	private static final Wrapper<net.dv8tion.jda.api.entities.Role, RoleImpl> WRAPPER = new Wrapper<>(ISnowflake::getIdLong);
 
 	private final net.dv8tion.jda.api.entities.Role wrapped;
 	private final ServerImpl server;
@@ -43,6 +45,11 @@ public class RoleImpl implements Role {
 	@Override
 	public boolean isEveryone() {
 		return wrapped.isPublicRole();
+	}
+
+	@Override
+	public String toString() {
+		return wrapped.toString();
 	}
 
 	static RoleImpl wrap(net.dv8tion.jda.api.entities.Role role, DiscordImpl discord, ServerImpl server) {

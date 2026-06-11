@@ -63,7 +63,7 @@ public final class HelpCommand extends Command {
 			List<Long> reqChannels = context.bot().getConfigEntry(HELP_CHANNEL_RESTRICTION);
 
 			if (!reqChannels.isEmpty() && !reqChannels.contains(context.channel().getId())) {
-				context.channel().send(context.bot().getConfigEntry(HELP_CHANNEL_RESTRICTION_MESSAGE).formatted(reqChannels.get(0)));
+				context.send(context.bot().getConfigEntry(HELP_CHANNEL_RESTRICTION_MESSAGE).formatted(reqChannels.get(0)));
 				return true;
 			}
 		}
@@ -108,7 +108,7 @@ public final class HelpCommand extends Command {
 				builder.page(currentPage);
 			}
 
-			builder.buildAndSend(context.channel());
+			builder.buildAndSend(context);
 		} else {
 			Command cmd = context.bot().getCommand(arguments.get("command"));
 
@@ -141,7 +141,7 @@ public final class HelpCommand extends Command {
 				sb.append(longHelp);
 			}
 
-			context.channel().send(sb.toString());
+			context.send(sb.toString());
 		}
 
 		return true;

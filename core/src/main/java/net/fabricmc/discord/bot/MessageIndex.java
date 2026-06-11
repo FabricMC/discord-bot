@@ -16,19 +16,17 @@
 
 package net.fabricmc.discord.bot;
 
+import java.lang.ref.WeakReference;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import it.unimi.dsi.fastutil.longs.Long2IntMap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
@@ -43,6 +41,7 @@ import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.bot.util.DiscordUtil.ParsedMessageLink;
 import net.fabricmc.discord.io.Channel;
 import net.fabricmc.discord.io.DiscordException;
 import net.fabricmc.discord.io.GlobalEventHolder;
@@ -61,16 +60,14 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 	private static final int INIT_LIMIT = 1000;
 	private static final int MESSAGE_LIMIT = 10000;
 
-	private static final String[] DISCORD_DOMAINS = { "discord.com", "discordapp.com" };
-	private static final Pattern MESSAGE_LINK_PATTERN = Pattern.compile(String.format("https://(?:\\w+\\.)?(?:%s)/channels/(@me|\\d+)/(\\d+)/(\\d+)",
-			Arrays.stream(DISCORD_DOMAINS).map(Pattern::quote).collect(Collectors.joining("|"))));
-
 	private static final Logger LOGGER = LogManager.getLogger(MessageIndex.class);
 
 	private final DiscordBot bot;
 	private final List<MessageCreateHandler> createHandlers = new CopyOnWriteArrayList<>();
 	private final List<MessageDeleteHandler> deleteHandlers = new CopyOnWriteArrayList<>();
-	private final Map<Channel, ChannelMessageCache> channelCaches = new ConcurrentHashMap<>();
+	// channel id -> cache
+	private final Long2ObjectMap<ChannelMessageCache> channelCaches = new Long2ObjectOpenHashMap<>();
+	// message id -> message
 	private final Long2ObjectMap<CachedMessage> globalIndex = new Long2ObjectOpenHashMap<>();
 	private volatile float initProgressPct;
 
@@ -78,7 +75,7 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 		this.bot = bot;
 
 		bot.getActiveHandler().registerReadyHandler(this::init);
-		bot.getActiveHandler().registerGoneHandler(this::reset);
+		//bot.getActiveHandler().registerGoneHandler(this::reset); don't re-init everything on disconnect..
 	}
 
 	public void registerCreateHandler(MessageCreateHandler handler) {
@@ -102,7 +99,7 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 	}
 
 	public @Nullable CachedMessage get(Channel channel, long id) {
-		ChannelMessageCache cache = channelCaches.get(channel);
+		ChannelMessageCache cache = getCache(channel, false);
 		if (cache == null) return null;
 
 		synchronized (cache) {
@@ -181,16 +178,14 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 	}
 
 	public @Nullable CachedMessage get(String desc, @Nullable Server server) throws DiscordException {
-		Matcher matcher = MESSAGE_LINK_PATTERN.matcher(desc);
+		ParsedMessageLink linkRes = DiscordUtil.parseMessageLink(desc);
 
-		if (matcher.matches()) {
-			String guild = matcher.group(1);
-
-			if (!guild.equals("@me") && server != null && server.getId() == Long.parseUnsignedLong(guild)) {
-				Channel channel = server.getTextChannel(Long.parseUnsignedLong(matcher.group(2)));
+		if (linkRes != null) {
+			if (!linkRes.channel().isMe() && server != null && server.getId() == linkRes.channel().channelId()) {
+				Channel channel = server.getTextChannel(linkRes.channel().channelId());
 				if (channel == null) return null;
 
-				long msgId = Long.parseUnsignedLong(matcher.group(3));
+				long msgId = linkRes.messageId();
 				CachedMessage msg = get(channel, msgId);
 
 				if (msg == null) {
@@ -200,7 +195,7 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 
 				return msg;
 			} else {
-				desc = matcher.group(3);
+				return get(linkRes.messageId());
 			}
 		}
 
@@ -224,7 +219,7 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 	public void accept(Channel channel, Visitor visitor, boolean includeDeleted) {
 		Objects.requireNonNull(channel, "null channel");
 
-		ChannelMessageCache cache = channelCaches.get(channel);
+		ChannelMessageCache cache = getCache(channel, false);
 		if (cache == null) return;
 
 		synchronized (cache) {
@@ -232,12 +227,53 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 		}
 	}
 
+	private ChannelMessageCache getCache(Channel channel, boolean create) {
+		Objects.requireNonNull(channel, "null channel");
+
+		long id = channel.getId();
+
+		synchronized (channelCaches) {
+			ChannelMessageCache ret = channelCaches.get(id);
+
+			if (ret == null && create) {
+				ret = new ChannelMessageCache(channel);
+				channelCaches.put(id, ret);
+			}
+
+			return ret;
+		}
+	}
+
+	private void removeCache(Channel channel) {
+		Objects.requireNonNull(channel, "null channel");
+
+		long id = channel.getId();
+		ChannelMessageCache cache;
+
+		synchronized (channelCaches) {
+			cache = channelCaches.remove(id);
+		}
+
+		if (cache != null) {
+			cache.clear();
+		}
+	}
+
 	public Collection<Channel> getCachedChannels() {
-		return channelCaches.keySet();
+		synchronized (channelCaches) {
+			List<Channel> ret = new ArrayList<>(channelCaches.size());
+
+			for (ChannelMessageCache cache : channelCaches.values()) {
+				Channel channel = cache.getChannel();
+				if (channel != null) ret.add(channel);
+			}
+
+			return ret;
+		}
 	}
 
 	public int getSize(Channel channel) {
-		ChannelMessageCache cache = channelCaches.get(channel);
+		ChannelMessageCache cache = getCache(channel, false);
 		if (cache == null) return 0;
 
 		synchronized (cache) {
@@ -259,23 +295,50 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 
 		bot.getExecutor().execute(() -> {
 			try {
+				long startTime = System.nanoTime();
+
 				LongList invalidChannels = new LongArrayList();
+				Set<Channel> extraChannels = new HashSet<>(getCachedChannels());
 				List<? extends Channel> channels = DiscordUtil.getTextChannels(server);
 				int finished = 0;
+				long lastTime = startTime;
 
 				for (Channel channel : channels) {
 					if (isValidChannel(channel)) {
 						initChannel(channel);
+						extraChannels.remove(channel);
 					} else {
 						invalidChannels.add(channel.getId());
 					}
 
 					finished++;
 					initProgressPct = 100f * finished / channels.size();
+					long time = System.nanoTime();
+
+					if (time - lastTime >= 30_000_000_000L) { // 30s elapsed
+						LOGGER.info("Message index init status {} / {} ({}%), {}s elapsed",
+								finished, channels.size(),
+								String.format("%.2f", initProgressPct),
+								Math.round((time - startTime) * 1e-9));
+						lastTime = time;
+					}
+				}
+
+				if (!extraChannels.isEmpty())  {
+					LOGGER.info("Removing now absent channels: {}", extraChannels);
+
+					for (Channel channel : extraChannels) {
+						removeCache(channel);
+					}
 				}
 
 				if (!invalidChannels.isEmpty()) LOGGER.info("Skipping inaccessible channels {}", invalidChannels);
-				LOGGER.info("Message index initialized");
+
+				long endTime = System.nanoTime();
+
+				LOGGER.info("Message index initialized for {} channels in {} ms",
+						channels.size(),
+						String.format("%.2f", (endTime - startTime) * 1e-6));
 			} catch (Throwable t) {
 				LOGGER.warn("Error initializing message index", t);
 			}
@@ -291,7 +354,9 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 			globalIndex.clear();
 		}
 
-		channelCaches.clear();
+		synchronized (channelCaches) {
+			channelCaches.clear();
+		}
 	}
 
 	private boolean isValidChannel(Channel channel) {
@@ -301,12 +366,25 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 	}
 
 	private void initChannel(Channel channel) {
-		ChannelMessageCache cache = channelCaches.computeIfAbsent(channel, ignore -> new ChannelMessageCache());
+		ChannelMessageCache cache = getCache(channel, true);
 
 		synchronized (cache) {
-			for (Message message : channel.getMessages(Math.min(INIT_LIMIT, MESSAGE_LIMIT))) {
+			cache.updateChannel(channel);
+
+			List<? extends Message> messages;
+			CachedMessage lastMessage;
+
+			if (!cache.initialized || (lastMessage = cache.getLast()) == null) { // first init
+				messages = channel.getMessages(Math.min(INIT_LIMIT, MESSAGE_LIMIT), true);
+			} else { // re-init (after disconnect etc)
+				messages = channel.getMessagesBetween(lastMessage.getId(), -1, MESSAGE_LIMIT);
+			}
+
+			for (Message message : messages) {
 				cache.add(new CachedMessage(message));
 			}
+
+			cache.initialized = true;
 		}
 	}
 
@@ -324,11 +402,7 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 		if (channel.getServer() == null || channel.getServer().getId() != bot.getServerId()) return;
 		if (!channel.getType().text) return;
 
-		ChannelMessageCache prev = channelCaches.remove(channel);
-
-		if (prev != null) {
-			prev.clear();
-		}
+		removeCache(channel);
 	}
 
 	@Override
@@ -339,28 +413,24 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 		if (isValidChannel(channel)) {
 			initChannel(channel);
 		} else {
-			ChannelMessageCache prev = channelCaches.remove(channel);
-
-			if (prev != null) {
-				prev.clear();
-			}
+			removeCache(channel);
 		}
 	}
 
 	@Override
 	public void onMessageCreate(Message message) {
+		LOGGER.debug("Received message {} on channel {}", message.getId(), message.getChannel().getId());
 		if (message.isFromWebhook()) return;
 
 		Server server = message.getChannel().getServer();
 		if (server == null) return;
 
 		Channel channel = message.getChannel();
-		ChannelMessageCache cache = channelCaches.get(channel);
+		ChannelMessageCache cache = getCache(channel, false);
 
 		if (cache == null) {
 			LOGGER.warn("Received message {} on unknown channel {} ({} {})", message.getId(), channel.getId(), channel.getType().name(), channel.getName());
-			cache = new ChannelMessageCache();
-			channelCaches.put(channel, cache);
+			cache = getCache(channel, true);
 		}
 
 		CachedMessage msg = new CachedMessage(message);
@@ -376,7 +446,7 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 
 	@Override
 	public void onMessageEdit(Message message) {
-		ChannelMessageCache cache = channelCaches.get(message.getChannel());
+		ChannelMessageCache cache = getCache(message.getChannel(), false);
 		if (cache == null) return;
 
 		Instant time = Instant.now();
@@ -391,7 +461,7 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 		Server server = channel.getServer();
 		if (server == null) return;
 
-		ChannelMessageCache cache = channelCaches.get(channel);
+		ChannelMessageCache cache = getCache(channel, false);
 		if (cache == null) return;
 
 		CachedMessage msg;
@@ -416,12 +486,27 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 	}
 
 	private final class ChannelMessageCache {
+		private WeakReference<Channel> channelRef;
 		final CachedMessage[] messages = new CachedMessage[MESSAGE_LIMIT];
 		private int writeIdx;
 		final Long2IntMap index = new Long2IntOpenHashMap();
+		boolean initialized;
 
-		public ChannelMessageCache() {
+		public ChannelMessageCache(Channel channel) {
+			channelRef = new WeakReference<>(channel);
 			index.defaultReturnValue(-1);
+		}
+
+		Channel getChannel() {
+			return channelRef.get();
+		}
+
+		void updateChannel(Channel channel) {
+			Channel prev = channelRef.get();
+
+			if (prev != channel) {
+				channelRef = new WeakReference<Channel>(channel);
+			}
 		}
 
 		CachedMessage get(long id) {
@@ -429,6 +514,10 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 			if (pos < 0) return null;
 
 			return messages[pos];
+		}
+
+		CachedMessage getLast() {
+			return messages[dec(writeIdx)];
 		}
 
 		boolean add(CachedMessage message) {

@@ -16,11 +16,13 @@
 
 package net.fabricmc.discord.ioimpl.javacord;
 
+import org.javacord.api.entity.DiscordEntity;
+
 import net.fabricmc.discord.io.Role;
 import net.fabricmc.discord.io.Wrapper;
 
 public class RoleImpl implements Role {
-	private static final Wrapper<org.javacord.api.entity.permission.Role, RoleImpl> WRAPPER = new Wrapper<>();
+	private static final Wrapper<org.javacord.api.entity.permission.Role, RoleImpl> WRAPPER = new Wrapper<>(DiscordEntity::getId);
 
 	private final ServerImpl server;
 	private final org.javacord.api.entity.permission.Role wrapped;
@@ -43,6 +45,11 @@ public class RoleImpl implements Role {
 	@Override
 	public boolean isEveryone() {
 		return wrapped.isEveryoneRole();
+	}
+
+	@Override
+	public String toString() {
+		return wrapped.toString();
 	}
 
 	static RoleImpl wrap(org.javacord.api.entity.permission.Role role, DiscordImpl discord, ServerImpl server) {

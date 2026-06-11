@@ -129,6 +129,11 @@ public class MemberImpl implements Member {
 		server.unwrap().banUser(user.unwrap(), messageDeleteionTimeframe, reason).join();
 	}
 
+	@Override
+	public String toString() {
+		return String.format("%s:%s", server, user);
+	}
+
 	static MemberImpl wrap(org.javacord.api.entity.user.User user, ServerImpl server) {
 		if (user == null) return null;
 

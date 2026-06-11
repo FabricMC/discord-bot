@@ -123,7 +123,7 @@ public final class YarnFieldCommand extends Command {
 			sb.setLength(0);
 		}
 
-		builder.buildAndSend(context.channel());
+		builder.buildAndSend(context);
 
 		return true;
 	}

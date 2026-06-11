@@ -14,17 +14,23 @@
  * limitations under the License.
  */
 
-package net.fabricmc.discord.io;
+package net.fabricmc.discord.bot.command;
 
-import java.util.Collection;
+import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.io.Discord;
+import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.MessageEmbed;
 
-public interface Discord {
-	GlobalEventHolder getGlobalEvents();
+public interface MessageTarget {
+	Discord getDiscord();
 
-	Server getServer(long id);
-	Collection<? extends Server> getServers();
-	User getUser(long id, boolean fetch);
-	User getYourself();
+	Message send(String text);
 
-	void setActivity(String activity);
+	default Message sendMentionless(String text) {
+		return DiscordUtil.sendMentionlessMessage(this, text);
+	}
+
+	Message send(MessageEmbed embed);
+
+	Message send(Message message);
 }

@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
@@ -123,14 +124,14 @@ public final class FabricVersionCommand extends Command {
 					+ "```"
 					+ "gradlew migrateMappings --mappings \"%s\""
 					+ "```\n",
-				data.yarnVersion));
+					data.yarnVersion));
 		}
 
 		sb.append("Note that the Fabric API version is usually only correct for the latest minor MC release "
 				+ "(e.g. 1.16.5 or 1.15.2) due to implementation limitations. "
 				+ "Check [Modrinth](https://modrinth.com/mod/fabric-api/versions) for a more precise listing.");
 
-		context.channel().send(new MessageEmbed.Builder()
+		context.send(new MessageEmbed.Builder()
 				.title("%s Fabric versions".formatted(data.mcVersion))
 				.description(sb.toString())
 				.timeNow()
@@ -200,10 +201,10 @@ public final class FabricVersionCommand extends Command {
 						String key = reader.nextName();
 
 						switch (key) {
-							case "version" -> {
-								yarnVersion = reader.nextString();
-							}
-							default -> reader.skipValue();
+						case "version" -> {
+							yarnVersion = reader.nextString();
+						}
+						default -> reader.skipValue();
 						}
 					}
 

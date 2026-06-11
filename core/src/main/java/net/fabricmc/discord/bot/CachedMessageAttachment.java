@@ -21,6 +21,7 @@ import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpResponse;
+import java.util.Arrays;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -32,7 +33,8 @@ public final class CachedMessageAttachment {
 		this.id = attachment.getId();
 		this.url = attachment.getUrl().toString();
 		this.fileName = attachment.getFileName();
-		this.size = attachment.getSize();
+		this.approximateSize = attachment.getSize(); // discord sometimes reports the wrong size
+		this.size = -1;
 	}
 
 	public long getId() {
@@ -47,8 +49,24 @@ public final class CachedMessageAttachment {
 		return fileName;
 	}
 
-	public int getSize() {
-		return size;
+	public int getApproximateSize() {
+		int ret = size;
+
+		return ret >= 0 ? ret : approximateSize; // use most precise size immediately available
+	}
+
+	public int getSize(boolean cacheContent) {
+		int ret = size;
+		if (ret >= 0) return ret;
+
+		try {
+			byte[] data = getData(cacheContent);
+			if (data != null) return data.length;
+		} catch (IOException | InterruptedException | URISyntaxException e) {
+			e.printStackTrace();
+		}
+
+		return approximateSize;
 	}
 
 	public boolean hasDataCached() {
@@ -67,6 +85,10 @@ public final class CachedMessageAttachment {
 		}
 
 		try (InputStream is = response.body()) {
+			int size = this.size;
+			boolean sizeIsApproximate = size < 0;
+			if (sizeIsApproximate) size = approximateSize;
+
 			ret = new byte[size];
 			int offset = 0;
 			int len;
@@ -76,22 +98,45 @@ public final class CachedMessageAttachment {
 
 				if (offset == ret.length) {
 					int test = is.read();
-					if (test != -1) throw new IOException("content size exceeds recorded size");
-					break;
+
+					if (test != -1) {
+						if (SIZE_TOLERANCE == 0
+								|| !sizeIsApproximate
+								|| ret.length >= size + SIZE_TOLERANCE) {
+							throw new IOException(String.format("content size (%d+) exceeds recorded size (%d)", offset + 1 + is.available(), size));
+						}
+
+						ret = Arrays.copyOf(ret, ret.length + SIZE_TOLERANCE);
+						ret[offset++] = (byte) test;
+					} else {
+						break;
+					}
 				}
 			}
 
-			if (offset < ret.length) throw new IOException("content size below recorded size");
+			if (offset < ret.length) {
+				if (ret.length < size - SIZE_TOLERANCE) {
+					throw new IOException(String.format("content size (%d) below recorded size (%d)", offset, size));
+				}
+
+				ret = Arrays.copyOf(ret, offset);
+			}
 
 			if (cache) data = ret;
+			this.size = ret.length;
 
 			return ret;
+		} catch (IOException e) {
+			throw new IOException("error fetching "+url, e);
 		}
 	}
+
+	private static final int SIZE_TOLERANCE = 128;
 
 	private final long id;
 	private final String url;
 	private final String fileName;
-	private final int size;
+	private final int approximateSize;
+	private volatile int size;
 	private volatile byte[] data;
 }

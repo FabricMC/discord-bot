@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import net.dv8tion.jda.api.entities.ISnowflake;
 import net.dv8tion.jda.api.entities.PermissionOverride;
 import net.dv8tion.jda.api.entities.channel.attribute.ISlowmodeChannel;
 import net.dv8tion.jda.api.entities.channel.concrete.PrivateChannel;
@@ -40,7 +41,7 @@ import net.fabricmc.discord.io.User;
 import net.fabricmc.discord.io.Wrapper;
 
 public class ChannelImpl implements Channel {
-	private static final Wrapper<net.dv8tion.jda.api.entities.channel.Channel, ChannelImpl> WRAPPER = new Wrapper<>();
+	private static final Wrapper<net.dv8tion.jda.api.entities.channel.Channel, ChannelImpl> WRAPPER = new Wrapper<>(ISnowflake::getIdLong);
 
 	private final net.dv8tion.jda.api.entities.channel.Channel wrapped;
 	private final DiscordImpl discord;
@@ -125,18 +126,18 @@ public class ChannelImpl implements Channel {
 	@Override
 	public Message getMessage(long id) {
 		if (wrapped instanceof MessageChannel channel) {
-			return MessageImpl.wrap(channel.retrieveMessageById(id).complete(), this);
+			return MessageImpl.wrap(channel.retrieveMessageById(id).complete(), discord, this);
 		} else {
 			return null;
 		}
 	}
 
 	@Override
-	public List<MessageImpl> getMessages(int limit) {
+	public List<MessageImpl> getMessages(int limit, boolean oldToNew) {
 		if (wrapped instanceof MessageChannel channel) {
 			List<net.dv8tion.jda.api.entities.Message> res = channel.getIterableHistory().cache(false).takeAsync(limit).join();
 
-			return DiscordImplUtil.wrap(res, r -> MessageImpl.wrap(r, this));
+			return DiscordImplUtil.wrap(res, r -> MessageImpl.wrap(r, discord, this), oldToNew);
 		} else {
 			return Collections.emptyList();
 		}
@@ -149,12 +150,13 @@ public class ChannelImpl implements Channel {
 			List<Message> ret = new ArrayList<>();
 
 			retrieveLoop: while (limit > 0) {
-				List<net.dv8tion.jda.api.entities.Message> res = channel.getHistoryAfter(firstId, Math.min(100, limit)).complete().getRetrievedHistory();
+				int curLimit = Math.min(100, limit);
+				List<net.dv8tion.jda.api.entities.Message> res = DiscordProviderImpl.fetchWithRetry(() -> channel.getHistoryAfter(firstId, curLimit), 20, 3).getRetrievedHistory();
 
 				for (net.dv8tion.jda.api.entities.Message msg : res) {
 					if (msg.getIdLong() >= lastId) break retrieveLoop;
 
-					ret.add(MessageImpl.wrap(msg, this));
+					ret.add(MessageImpl.wrap(msg, discord, this));
 				}
 
 				limit -= res.size();
@@ -170,7 +172,7 @@ public class ChannelImpl implements Channel {
 	public MessageImpl send(String message) {
 		if (!(wrapped instanceof MessageChannel c)) throw new IllegalArgumentException("not a message channel");
 
-		return MessageImpl.wrap(c.sendMessage(message).complete(), this);
+		return MessageImpl.wrap(c.sendMessage(message).complete(), discord, this);
 	}
 
 	@Override
@@ -179,7 +181,7 @@ public class ChannelImpl implements Channel {
 
 		net.dv8tion.jda.api.entities.MessageEmbed embed = MessageEmbedImpl.toBuilder(message).build();
 
-		return MessageImpl.wrap(c.sendMessageEmbeds(embed).complete(), this);
+		return MessageImpl.wrap(c.sendMessageEmbeds(embed).complete(), discord, this);
 	}
 
 	@Override
@@ -188,7 +190,7 @@ public class ChannelImpl implements Channel {
 
 		MessageCreateData msg = MessageImpl.toCreateData(message);
 
-		return MessageImpl.wrap(c.sendMessage(msg).complete(), this);
+		return MessageImpl.wrap(c.sendMessage(msg).complete(), discord, this);
 	}
 
 	@Override
@@ -217,6 +219,11 @@ public class ChannelImpl implements Channel {
 		if (!(wrapped instanceof ISlowmodeChannel c)) throw new IllegalArgumentException("not a slowmode capable channel");
 
 		c.getManager().setSlowmode(delaySec).reason(reason).complete();
+	}
+
+	@Override
+	public String toString() {
+		return wrapped.toString();
 	}
 
 	static ChannelImpl wrap(net.dv8tion.jda.api.entities.channel.Channel channel, DiscordImpl discord) {

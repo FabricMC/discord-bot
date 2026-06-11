@@ -31,6 +31,7 @@ import net.fabricmc.discord.bot.CachedMessageAttachment;
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.bot.UserHandler;
 import net.fabricmc.discord.bot.command.CommandException;
+import net.fabricmc.discord.bot.command.MessageTarget;
 import net.fabricmc.discord.bot.command.mod.ActionType.ActivateResult;
 import net.fabricmc.discord.bot.command.mod.ActionType.Kind;
 import net.fabricmc.discord.bot.config.ConfigKey;
@@ -95,7 +96,7 @@ public final class ActionUtil {
 	public static void applyUserAction(ActionType type, long data, int targetUserId, @Nullable String duration, String reason,
 			@Nullable CachedMessage targetMessage, UserMessageAction targetMessageAction,
 			boolean notifyTarget, String privateReason,
-			DiscordBot bot, Server server, @Nullable Channel actingChannel, User actor, int actorUserId) throws Exception {
+			DiscordBot bot, Server server, @Nullable MessageTarget actingChannel, User actor, int actorUserId) throws Exception {
 		boolean validTargetMessageAction = targetMessageAction != UserMessageAction.NONE
 				&& (targetMessage != null || !targetMessageAction.needsContext);
 		String extraBodyDesc;
@@ -180,7 +181,7 @@ public final class ActionUtil {
 	private static int applyAction(ActionType type, long data, long targetId, @Nullable String duration, @Nullable String reason,
 			CachedMessage targetMessageContext,
 			@Nullable String extraBodyDesc, boolean notifyTarget, @Nullable String privateReason,
-			DiscordBot bot, Server server, Channel actingChannel, @Nullable User actor, int actorUserId) throws Exception {
+			DiscordBot bot, Server server, MessageTarget actingChannel, @Nullable User actor, int actorUserId) throws Exception {
 		// check for conflict
 
 		int prevId = -1;
@@ -289,7 +290,7 @@ public final class ActionUtil {
 
 	static void suspendAction(ActionType type, long targetId, @Nullable String reason,
 			boolean notifyTarget, @Nullable String privateReason,
-			DiscordBot bot, Server server, @Nullable Channel actingChannel, @Nullable User actor, int actorUserId) throws Exception {
+			DiscordBot bot, Server server, @Nullable MessageTarget actingChannel, @Nullable User actor, int actorUserId) throws Exception {
 		if (!type.hasDuration()) throw new RuntimeException("Actions without a duration can't be suspended");
 
 		// determine action to suspend
@@ -359,7 +360,7 @@ public final class ActionUtil {
 			long targetId,
 			long creation, long expiration, @Nullable String reason,
 			int actionId, CachedMessage targetMessageContext,
-			DiscordBot bot, Server server, @Nullable Channel actingChannel, @Nullable User actor,
+			DiscordBot bot, Server server, @Nullable MessageTarget actingChannel, @Nullable User actor,
 			boolean notifyTarget, boolean alreadyNotified, @Nullable String privateReason) {
 		// log to original channel
 
@@ -415,7 +416,7 @@ public final class ActionUtil {
 					for (CachedMessageAttachment attachment : targetMessageContext.getAttachments()) {
 						attachmentsSuffix.append(String.format("\n`%d`: %.1f kB, [link](%s)",
 								attachment.getId(),
-								attachment.getSize() * 1e-3,
+								attachment.getApproximateSize() * 1e-3,
 								attachment.getUrl()));
 					}
 				}

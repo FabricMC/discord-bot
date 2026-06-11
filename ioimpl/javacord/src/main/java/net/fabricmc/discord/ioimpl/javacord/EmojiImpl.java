@@ -61,6 +61,11 @@ public class EmojiImpl implements Emoji {
 		return res != null && res.isAnimated();
 	}
 
+	@Override
+	public String toString() {
+		return wrapped.toString();
+	}
+
 	static EmojiImpl wrap(org.javacord.api.entity.emoji.Emoji emoji, DiscordImpl discord) {
 		if (emoji == null) return null;
 

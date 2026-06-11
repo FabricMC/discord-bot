@@ -16,9 +16,8 @@
 
 package net.fabricmc.discord.io;
 
-public interface Role {
+public interface Role extends Entity {
 	Server getServer();
-	long getId();
 	boolean isEveryone();
 
 	default String getMentionTag() {

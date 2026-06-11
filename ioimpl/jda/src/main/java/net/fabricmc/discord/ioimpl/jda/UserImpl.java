@@ -19,6 +19,8 @@ package net.fabricmc.discord.ioimpl.jda;
 import java.util.Collection;
 import java.util.Objects;
 
+import net.dv8tion.jda.api.entities.ISnowflake;
+
 import net.fabricmc.discord.io.Channel;
 import net.fabricmc.discord.io.Discord;
 import net.fabricmc.discord.io.DiscordImplUtil;
@@ -27,7 +29,7 @@ import net.fabricmc.discord.io.User;
 import net.fabricmc.discord.io.Wrapper;
 
 public class UserImpl implements User {
-	private static final Wrapper<net.dv8tion.jda.api.entities.User, UserImpl> WRAPPER = new Wrapper<>();
+	private static final Wrapper<net.dv8tion.jda.api.entities.User, UserImpl> WRAPPER = new Wrapper<>(ISnowflake::getIdLong);
 
 	private final net.dv8tion.jda.api.entities.User wrapped;
 	private final DiscordImpl discord;
@@ -83,6 +85,11 @@ public class UserImpl implements User {
 	@Override
 	public Channel dm() {
 		return ChannelImpl.wrap(wrapped.openPrivateChannel().complete(), discord, this);
+	}
+
+	@Override
+	public String toString() {
+		return wrapped.toString();
 	}
 
 	static UserImpl wrap(net.dv8tion.jda.api.entities.User user, DiscordImpl discord) {

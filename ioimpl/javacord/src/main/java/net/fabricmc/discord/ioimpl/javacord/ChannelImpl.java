@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+import org.javacord.api.entity.DiscordEntity;
 import org.javacord.api.entity.channel.PrivateChannel;
 import org.javacord.api.entity.channel.RegularServerChannel;
 import org.javacord.api.entity.channel.ServerChannel;
@@ -42,7 +43,7 @@ import net.fabricmc.discord.io.User;
 import net.fabricmc.discord.io.Wrapper;
 
 public class ChannelImpl implements Channel {
-	private static final Wrapper<org.javacord.api.entity.channel.Channel, ChannelImpl> WRAPPER = new Wrapper<>();
+	private static final Wrapper<org.javacord.api.entity.channel.Channel, ChannelImpl> WRAPPER = new Wrapper<>(DiscordEntity::getId);
 
 	private final org.javacord.api.entity.channel.Channel wrapped;
 	private final DiscordImpl discord;
@@ -151,21 +152,23 @@ public class ChannelImpl implements Channel {
 	@Override
 	public Message getMessage(long id) {
 		if (wrapped instanceof TextChannel channel) {
-			return MessageImpl.wrap(channel.getMessageById(id).join(), this);
+			return MessageImpl.wrap(channel.getMessageById(id).join(), discord, this);
 		} else {
 			return null;
 		}
 	}
 
 	@Override
-	public List<MessageImpl> getMessages(int limit) {
+	public List<MessageImpl> getMessages(int limit, boolean oldToNew) {
 		if (wrapped instanceof TextChannel channel) {
 			MessageSet res = channel.getMessages(limit).join();
 			List<MessageImpl> ret = new ArrayList<>(res.size());
 
 			for (org.javacord.api.entity.message.Message msg : res) {
-				ret.add(MessageImpl.wrap(msg, this));
+				ret.add(MessageImpl.wrap(msg, discord, this));
 			}
+
+			if (oldToNew) Collections.reverse(ret);
 
 			return ret;
 		} else {
@@ -185,7 +188,7 @@ public class ChannelImpl implements Channel {
 				for (org.javacord.api.entity.message.Message msg : res) {
 					if (msg.getId() >= lastId) break retrieveLoop;
 
-					ret.add(MessageImpl.wrap(msg, this));
+					ret.add(MessageImpl.wrap(msg, discord, this));
 				}
 
 				limit -= res.size();
@@ -201,7 +204,7 @@ public class ChannelImpl implements Channel {
 	public MessageImpl send(String message) {
 		if (!(wrapped instanceof TextChannel c)) throw new IllegalArgumentException("not a text channel");
 
-		return MessageImpl.wrap(c.sendMessage(message).join(), this);
+		return MessageImpl.wrap(c.sendMessage(message).join(), discord, this);
 	}
 
 	@Override
@@ -210,7 +213,7 @@ public class ChannelImpl implements Channel {
 
 		EmbedBuilder embed = MessageEmbedImpl.toBuilder(message);
 
-		return MessageImpl.wrap(c.sendMessage(embed).join(), this);
+		return MessageImpl.wrap(c.sendMessage(embed).join(), discord, this);
 	}
 
 	@Override
@@ -219,7 +222,7 @@ public class ChannelImpl implements Channel {
 
 		MessageBuilder msg = MessageImpl.toBuilder(message);
 
-		return MessageImpl.wrap(msg.send(c).join(), this);
+		return MessageImpl.wrap(msg.send(c).join(), discord, this);
 	}
 
 	@Override
@@ -251,6 +254,11 @@ public class ChannelImpl implements Channel {
 		.setSlowmodeDelayInSeconds(delaySec)
 		.setAuditLogReason(reason)
 		.update().join();
+	}
+
+	@Override
+	public String toString() {
+		return wrapped.toString();
 	}
 
 	static ChannelImpl wrap(org.javacord.api.entity.channel.Channel channel, DiscordImpl discord) {

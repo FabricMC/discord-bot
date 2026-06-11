@@ -53,9 +53,15 @@ public class DiscordImplUtil {
 	}
 
 	public static <I, O> List<O> wrap(List<I> items, Function<I, O> wrapper) {
+		return wrap(items, wrapper, false);
+	}
+
+	public static <I, O> List<O> wrap(List<I> items, Function<I, O> wrapper, boolean reverse) {
 		return new AbstractList<O>() {
 			@Override
 			public O get(int index) {
+				if (reverse) index = items.size() - index - 1;
+
 				return wrapper.apply(items.get(index));
 			}
 

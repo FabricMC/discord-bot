@@ -19,6 +19,8 @@ package net.fabricmc.discord.ioimpl.javacord;
 import java.util.Collection;
 import java.util.Objects;
 
+import org.javacord.api.entity.DiscordEntity;
+
 import net.fabricmc.discord.io.Channel;
 import net.fabricmc.discord.io.DiscordImplUtil;
 import net.fabricmc.discord.io.Server;
@@ -26,7 +28,7 @@ import net.fabricmc.discord.io.User;
 import net.fabricmc.discord.io.Wrapper;
 
 public class UserImpl implements User {
-	private static final Wrapper<org.javacord.api.entity.user.User, UserImpl> WRAPPER = new Wrapper<>();
+	private static final Wrapper<org.javacord.api.entity.user.User, UserImpl> WRAPPER = new Wrapper<>(DiscordEntity::getId);
 
 	private final org.javacord.api.entity.user.User wrapped;
 	private final DiscordImpl discord;
@@ -82,6 +84,11 @@ public class UserImpl implements User {
 	@Override
 	public Channel dm() {
 		return ChannelImpl.wrap(wrapped.openPrivateChannel().join(), discord, this);
+	}
+
+	@Override
+	public String toString() {
+		return wrapped.toString();
 	}
 
 	static UserImpl wrap(org.javacord.api.entity.user.User user, DiscordImpl discord) {

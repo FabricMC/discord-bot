@@ -61,7 +61,7 @@ public final class FilterListCommand extends Command {
 			List<FilterListEntry> filterLists = new ArrayList<>(FilterQueries.getFilterLists(context.bot().getDatabase()));
 
 			if (filterLists.isEmpty()) {
-				context.channel().send("No filter lists");
+				context.send("No filter lists");
 			} else {
 				filterLists.sort(Comparator.comparing(FilterListEntry::group).thenComparing(FilterListEntry::type).thenComparing(FilterListEntry::url));
 
@@ -89,7 +89,7 @@ public final class FilterListCommand extends Command {
 					builder.page(sb);
 				}
 
-				builder.buildAndSend(context.channel());
+				builder.buildAndSend(context);
 			}
 
 			return true;
@@ -99,7 +99,7 @@ public final class FilterListCommand extends Command {
 			if (id < 0) throw new CommandException("Filter list addition failed, invalid group or url already added");
 
 			context.bot().getFilterHandler().reloadFilterLists();
-			context.channel().send("Filter list %d added".formatted(id));
+			context.send("Filter list %d added".formatted(id));
 
 			return true;
 		}
@@ -108,7 +108,7 @@ public final class FilterListCommand extends Command {
 				throw new CommandException("Filter list removal failed, unknown id");
 			}
 
-			context.channel().send("Filter list removed");
+			context.send("Filter list removed");
 
 			return true;
 		case "listexceptions":
@@ -117,7 +117,7 @@ public final class FilterListCommand extends Command {
 			List<FilterListExceptionEntry> exceptions = new ArrayList<>(FilterQueries.getFilterListExceptions(context.bot().getDatabase(), listId));
 
 			if (exceptions.isEmpty()) {
-				context.channel().send("No filter list exceptions");
+				context.send("No filter list exceptions");
 			} else {
 				exceptions.sort(Comparator.comparing(FilterListExceptionEntry::pattern));
 
@@ -144,7 +144,7 @@ public final class FilterListCommand extends Command {
 					builder.page(sb);
 				}
 
-				builder.buildAndSend(context.channel());
+				builder.buildAndSend(context);
 			}
 
 			return true;
@@ -161,7 +161,7 @@ public final class FilterListCommand extends Command {
 			if (id < 0) throw new CommandException("Filter list exception addition failed, invalid list id or exception already added");
 
 			context.bot().getFilterHandler().reloadFilters();
-			context.channel().send("Filter list exception %d added to list %d".formatted(id, listId));
+			context.send("Filter list exception %d added to list %d".formatted(id, listId));
 
 			return true;
 		}
@@ -172,7 +172,7 @@ public final class FilterListCommand extends Command {
 			}
 
 			context.bot().getFilterHandler().reloadFilterLists();
-			context.channel().send("Filter list exception removed");
+			context.send("Filter list exception removed");
 
 			return true;
 		case "listglobalexceptions":
@@ -180,7 +180,7 @@ public final class FilterListCommand extends Command {
 			List<GlobalFilterListExceptionEntry> exceptions = new ArrayList<>(FilterQueries.getGlobalFilterListExceptions(context.bot().getDatabase()));
 
 			if (exceptions.isEmpty()) {
-				context.channel().send("No global filter list exceptions");
+				context.send("No global filter list exceptions");
 			} else {
 				exceptions.sort(Comparator.comparing(GlobalFilterListExceptionEntry::type).thenComparing(GlobalFilterListExceptionEntry::pattern));
 
@@ -208,7 +208,7 @@ public final class FilterListCommand extends Command {
 					builder.page(sb);
 				}
 
-				builder.buildAndSend(context.channel());
+				builder.buildAndSend(context);
 			}
 
 			return true;
@@ -228,7 +228,7 @@ public final class FilterListCommand extends Command {
 			if (id < 0) throw new CommandException("Filter list global exception addition failed, invalid list id or exception already added");
 
 			context.bot().getFilterHandler().reloadFilters();
-			context.channel().send("Global filter list exception %d added".formatted(id));
+			context.send("Global filter list exception %d added".formatted(id));
 
 			return true;
 		}
@@ -239,7 +239,7 @@ public final class FilterListCommand extends Command {
 			}
 
 			context.bot().getFilterHandler().reloadFilterLists();
-			context.channel().send("Global filter list exception removed");
+			context.send("Global filter list exception removed");
 
 			return true;
 		}

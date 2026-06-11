@@ -57,6 +57,11 @@ public class MessageAttachmentImpl implements MessageAttachment {
 		return wrapped.asByteArray().join();
 	}
 
+	@Override
+	public String toString() {
+		return wrapped.toString();
+	}
+
 	static MessageAttachmentImpl wrap(org.javacord.api.entity.message.MessageAttachment attachment) {
 		if (attachment == null) return null;
 

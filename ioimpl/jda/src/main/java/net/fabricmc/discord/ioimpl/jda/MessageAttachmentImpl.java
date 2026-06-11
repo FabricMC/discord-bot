@@ -65,6 +65,11 @@ public class MessageAttachmentImpl implements MessageAttachment {
 		}
 	}
 
+	@Override
+	public String toString() {
+		return wrapped.toString();
+	}
+
 	static MessageAttachmentImpl wrap(Message.Attachment attachment) {
 		if (attachment == null) return null;
 

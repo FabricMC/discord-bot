@@ -64,7 +64,7 @@ public final class DeleteCommand extends Command {
 					!arguments.containsKey("silent"), null,
 					context.bot(), context.server(), context.channel(), context.user(), context.userId());
 		} else {
-			context.channel().send("Message deleted");
+			context.send("Message deleted");
 		}
 
 		return true;

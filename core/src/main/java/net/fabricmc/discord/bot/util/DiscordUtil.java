@@ -18,16 +18,47 @@ package net.fabricmc.discord.bot.util;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
+import net.fabricmc.discord.bot.command.MessageTarget;
 import net.fabricmc.discord.io.Channel;
 import net.fabricmc.discord.io.Message;
 import net.fabricmc.discord.io.Permission;
 import net.fabricmc.discord.io.Server;
 
 public final class DiscordUtil {
+	private static final String[] DISCORD_DOMAINS = { "discord.com", "discordapp.com" };
+	private static final Pattern CHANNEL_LINK_PATTERN = Pattern.compile(String.format("https://(?:\\w+\\.)?(?:%s)/channels/(@me|\\d+)/(\\d+)",
+			Arrays.stream(DISCORD_DOMAINS).map(Pattern::quote).collect(Collectors.joining("|"))));
+	private static final Pattern MESSAGE_LINK_PATTERN = Pattern.compile(CHANNEL_LINK_PATTERN.pattern().concat("/(\\d+)"));
+
+	public record ParsedChannelLink(long serverId, boolean isMe, long channelId) { }
+	public record ParsedMessageLink(ParsedChannelLink channel, long messageId) { }
+
+	public static ParsedChannelLink parseChannelLink(String link) {
+		Matcher matcher = CHANNEL_LINK_PATTERN.matcher(link);
+
+		return matcher.matches() ? fillChannelLink(matcher) : null;
+	}
+
+	public static ParsedMessageLink parseMessageLink(String link) {
+		Matcher matcher = MESSAGE_LINK_PATTERN.matcher(link);
+
+		return matcher.matches() ? new ParsedMessageLink(fillChannelLink(matcher), Long.parseUnsignedLong(matcher.group(3))) : null;
+	}
+
+	private static ParsedChannelLink fillChannelLink(Matcher matcher) {
+		boolean isMe = matcher.group(1).equals("@me");
+		long serverId = !isMe ? Long.parseUnsignedLong(matcher.group(1)) : -1;
+
+		return new ParsedChannelLink(serverId, isMe, Long.parseUnsignedLong(matcher.group(2)));
+	}
+
 	public static Instant getCreationTime(long entityId) {
 		return Instant.ofEpochMilli((entityId >>> 22) + 1420070400000L);
 	}
@@ -47,7 +78,7 @@ public final class DiscordUtil {
 		channels.sort(Comparator.nullsLast(Comparator.comparing(Channel::getName)));
 	}
 
-	public static Message sendMentionlessMessage(Channel target, CharSequence message) {
+	public static Message sendMentionlessMessage(MessageTarget target, CharSequence message) {
 		return target.send(new Message.Builder().content(message.toString()).noAllowedMentions().build());
 	}
 

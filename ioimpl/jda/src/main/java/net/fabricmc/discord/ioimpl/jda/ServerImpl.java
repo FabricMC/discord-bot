@@ -24,6 +24,7 @@ import java.util.function.Predicate;
 
 import net.dv8tion.jda.api.audit.ActionType;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.ISnowflake;
 import net.dv8tion.jda.api.entities.UserSnowflake;
 import net.dv8tion.jda.api.entities.channel.middleman.GuildChannel;
 import net.dv8tion.jda.api.exceptions.ErrorResponseException;
@@ -35,7 +36,7 @@ import net.fabricmc.discord.io.Server;
 import net.fabricmc.discord.io.Wrapper;
 
 public class ServerImpl implements Server {
-	private static final Wrapper<Guild, ServerImpl> WRAPPER = new Wrapper<>();
+	private static final Wrapper<Guild, ServerImpl> WRAPPER = new Wrapper<>(ISnowflake::getIdLong);
 
 	private final Guild wrapped;
 	private final DiscordImpl discord;
@@ -174,6 +175,11 @@ public class ServerImpl implements Server {
 	@Override
 	public boolean hasAllMembersInCache() {
 		return wrapped.isLoaded();
+	}
+
+	@Override
+	public String toString() {
+		return wrapped.toString();
 	}
 
 	static ServerImpl wrap(Guild server, DiscordImpl discord) {

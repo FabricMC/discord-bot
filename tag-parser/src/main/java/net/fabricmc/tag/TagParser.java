@@ -83,7 +83,7 @@ public final class TagParser {
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
 				if (file.getFileName().toString().endsWith(".ytag")) {
-					logger.info("Loading tag {}", file);
+					logger.debug("Loading tag {}", file);
 
 					final String rawFileName = file.getFileName().toString();
 					final int extensionStart = rawFileName.lastIndexOf(".");

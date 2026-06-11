@@ -23,10 +23,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public interface Member {
+public interface Member extends Entity {
 	Server getServer();
 	User getUser();
 
+	@Override
 	default long getId() {
 		return getUser().getId();
 	}

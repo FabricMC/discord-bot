@@ -67,7 +67,7 @@ public final class NoteCommand extends Command {
 					.time(creationTime);
 
 			if (context.channel() != logChannel) {
-				context.channel().send(msgBuilder.build());
+				context.send(msgBuilder.build());
 			}
 
 			if (logChannel != null) {
@@ -84,7 +84,7 @@ public final class NoteCommand extends Command {
 			Collection<NoteEntry> notes = NoteQueries.getAll(context.bot().getDatabase(), targetUserId);
 
 			if (notes.isEmpty()) {
-				context.channel().send(String.format("No notes for user %d", targetUserId));
+				context.send(String.format("No notes for user %d", targetUserId));
 			} else {
 				StringBuilder sb = new StringBuilder(String.format("Notes for user %d:", targetUserId));
 
@@ -103,7 +103,7 @@ public final class NoteCommand extends Command {
 							content));
 				}
 
-				context.channel().send(sb.toString());
+				context.send(sb.toString());
 			}
 
 			return true;
@@ -131,14 +131,14 @@ public final class NoteCommand extends Command {
 				throw new CommandException("Unknown note");
 			}
 
-			context.channel().send("Note updated");
+			context.send("Note updated");
 			return true;
 		case "remove":
 			if (!NoteQueries.remove(context.bot().getDatabase(), Integer.parseInt(arguments.get("id")))) {
 				throw new CommandException("Unknown note");
 			}
 
-			context.channel().send("Note removed");
+			context.send("Note removed");
 			return true;
 		}
 

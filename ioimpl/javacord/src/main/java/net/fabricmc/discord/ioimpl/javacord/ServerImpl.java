@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Predicate;
 
+import org.javacord.api.entity.DiscordEntity;
 import org.javacord.api.entity.auditlog.AuditLogActionType;
 import org.javacord.api.entity.auditlog.AuditLogEntryTarget;
 import org.javacord.api.entity.channel.ServerChannel;
@@ -36,7 +37,7 @@ import net.fabricmc.discord.io.Server;
 import net.fabricmc.discord.io.Wrapper;
 
 public class ServerImpl implements Server {
-	private static final Wrapper<org.javacord.api.entity.server.Server, ServerImpl> WRAPPER = new Wrapper<>();
+	private static final Wrapper<org.javacord.api.entity.server.Server, ServerImpl> WRAPPER = new Wrapper<>(DiscordEntity::getId);
 
 	private final org.javacord.api.entity.server.Server wrapped;
 	private final DiscordImpl discord;
@@ -188,6 +189,11 @@ public class ServerImpl implements Server {
 	@Override
 	public boolean hasAllMembersInCache() {
 		return wrapped.hasAllMembersInCache();
+	}
+
+	@Override
+	public String toString() {
+		return wrapped.toString();
 	}
 
 	static ServerImpl wrap(org.javacord.api.entity.server.Server server, DiscordImpl discord) {

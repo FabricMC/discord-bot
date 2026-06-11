@@ -58,7 +58,7 @@ public final class ActionCommand extends Command {
 			Collection<ActionEntry> actions = ActionQueries.getActions(context.bot().getDatabase(), ActionType.Kind.USER, userId);
 
 			if (actions.isEmpty()) {
-				context.channel().send(String.format("No actions for user %d", userId));
+				context.send(String.format("No actions for user %d", userId));
 			} else {
 				Paginator.Builder builder = new Paginator.Builder(context.user()).title("User %d Actions".formatted(userId));
 				StringBuilder sb = new StringBuilder();
@@ -108,7 +108,7 @@ public final class ActionCommand extends Command {
 					builder.page(sb);
 				}
 
-				builder.buildAndSend(context.channel());
+				builder.buildAndSend(context);
 			}
 
 			return true;
@@ -191,7 +191,7 @@ public final class ActionCommand extends Command {
 			if (!ActionQueries.setReason(context.bot().getDatabase(), Integer.parseInt(arguments.get("id")), arguments.get("reason"))) {
 				throw new CommandException("Unknown action");
 			} else {
-				context.channel().send("Action reason updated");
+				context.send("Action reason updated");
 			}
 
 			return true;

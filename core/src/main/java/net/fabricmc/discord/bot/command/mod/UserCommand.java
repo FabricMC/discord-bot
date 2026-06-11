@@ -145,7 +145,7 @@ public final class UserCommand extends Command {
 					.time(Instant.ofEpochMilli(currentTime));
 			if (firstThumbnail != null) msgBuilder.thumbnail(firstThumbnail);
 
-			context.channel().send(msgBuilder.build());
+			context.send(msgBuilder.build());
 		} else {
 			Paginator.Builder builder = new Paginator.Builder(context.user()).title(title);
 			builder.page(new Page.Builder(firstPageSb).thumbnail(firstThumbnail).build());
@@ -158,7 +158,7 @@ public final class UserCommand extends Command {
 						.build());
 			}
 
-			builder.buildAndSend(context.channel());
+			builder.buildAndSend(context);
 		}
 
 		return true;

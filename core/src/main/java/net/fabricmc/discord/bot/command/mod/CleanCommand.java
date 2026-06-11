@@ -77,7 +77,7 @@ public final class CleanCommand extends Command {
 				pendingActions.put(id, actions);
 				context.bot().getScheduledExecutor().schedule(() -> pendingActions.remove(id), 5, TimeUnit.MINUTES);
 
-				DiscordUtil.sendMentionlessMessage(context.channel(), String.format("You are about to delete %d messages by %s, use `%s%s confirm %d` to continue",
+				context.sendMentionless(String.format("You are about to delete %d messages by %s, use `%s%s confirm %d` to continue",
 						count,
 						context.bot().getUserHandler().formatDiscordUser(targetDiscordUserId, context.server()),
 						context.bot().getCommandPrefix(),
@@ -90,7 +90,7 @@ public final class CleanCommand extends Command {
 
 			applyActions(actions, null);
 
-			context.channel().send("Messages deleted");
+			context.send("Messages deleted");
 		}
 
 		return true;

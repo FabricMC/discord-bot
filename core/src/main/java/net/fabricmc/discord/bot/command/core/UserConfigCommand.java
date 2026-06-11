@@ -78,7 +78,7 @@ public final class UserConfigCommand extends Command {
 			builder.page(currentPage);
 		}
 
-		builder.buildAndSend(context.channel());
+		builder.buildAndSend(context);
 
 		return true;
 	}
@@ -89,7 +89,7 @@ public final class UserConfigCommand extends Command {
 		@Nullable final ConfigKey<Object> configKey = (ConfigKey<Object>) context.bot().getUserConfigKey(key);
 
 		if (configKey == null) {
-			context.channel().send("%s\nInvalid user config entry key `%s`".formatted(context.user().getNickMentionTag(), key));
+			context.send("%s\nInvalid user config entry key `%s`".formatted(context.user().getNickMentionTag(), key));
 			return false;
 		}
 
@@ -100,16 +100,16 @@ public final class UserConfigCommand extends Command {
 			deserializedValue = configKey.valueSerializer().deserialize(value);
 		} catch (IllegalArgumentException e) {
 			// FIXME: Big-ass exceptions could exceed message limit?
-			context.channel().send("Failed to set `%s` to `%s`:\n`%s`".formatted(key, value, e));
+			context.send("Failed to set `%s` to `%s`:\n`%s`".formatted(key, value, e));
 			return false;
 		}
 
 		if (!context.bot().setUserConfig(targetUserId, configKey, deserializedValue)) {
-			context.channel().send("%s\nInvalid value: cannot set user config entry %s to %s".formatted(context.user().getNickMentionTag(), key, value));
+			context.send("%s\nInvalid value: cannot set user config entry %s to %s".formatted(context.user().getNickMentionTag(), key, value));
 			return false;
 		}
 
-		context.channel().send("Set user config entry `%s` to `%s` for %d".formatted(key, value, targetUserId));
+		context.send("Set user config entry `%s` to `%s` for %d".formatted(key, value, targetUserId));
 
 		return true;
 	}
@@ -120,13 +120,13 @@ public final class UserConfigCommand extends Command {
 		@Nullable final ConfigKey<Object> configKey = (ConfigKey<Object>) context.bot().getUserConfigKey(key);
 
 		if (configKey == null) {
-			context.channel().send("%s: Invalid user config entry key %s".formatted(context.user().getNickMentionTag(), key));
+			context.send("%s: Invalid user config entry key %s".formatted(context.user().getNickMentionTag(), key));
 			return false;
 		}
 
 		final Object configEntry = context.bot().getUserConfig(targetUserId, configKey);
 		final String value = configKey.valueSerializer().serialize(configEntry);
-		context.channel().send("User config entry `%s` is `%s`  for %d".formatted(key, value, targetUserId));
+		context.send("User config entry `%s` is `%s`  for %d".formatted(key, value, targetUserId));
 
 		return true;
 	}

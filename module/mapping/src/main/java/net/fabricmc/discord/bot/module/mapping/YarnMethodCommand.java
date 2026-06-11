@@ -123,7 +123,7 @@ public final class YarnMethodCommand extends Command {
 			sb.setLength(0);
 		}
 
-		builder.buildAndSend(context.channel());
+		builder.buildAndSend(context);
 
 		return true;
 	}

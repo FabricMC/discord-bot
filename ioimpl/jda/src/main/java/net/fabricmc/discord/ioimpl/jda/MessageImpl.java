@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import net.dv8tion.jda.api.entities.ISnowflake;
 import net.dv8tion.jda.api.entities.Message.MentionType;
 import net.dv8tion.jda.api.requests.RestAction;
 import net.dv8tion.jda.api.utils.FileUpload;
@@ -39,20 +40,27 @@ import net.fabricmc.discord.io.User;
 import net.fabricmc.discord.io.Wrapper;
 
 public class MessageImpl implements Message {
-	private static final Wrapper<net.dv8tion.jda.api.entities.Message, MessageImpl> WRAPPER = new Wrapper<>();
+	private static final Wrapper<net.dv8tion.jda.api.entities.Message, MessageImpl> WRAPPER = new Wrapper<>(ISnowflake::getIdLong);
 
 	private final net.dv8tion.jda.api.entities.Message wrapped;
+	private final DiscordImpl discord;
 	private final ChannelImpl channel;
 	private final UserImpl author;
 
-	MessageImpl(net.dv8tion.jda.api.entities.Message wrapped, ChannelImpl channel, UserImpl author) {
+	MessageImpl(net.dv8tion.jda.api.entities.Message wrapped, DiscordImpl discord, ChannelImpl channel, UserImpl author) {
 		Objects.requireNonNull(wrapped, "null wrapped");
-		Objects.requireNonNull(channel, "null channel");
+		Objects.requireNonNull(discord, "null discord");
 		//Objects.requireNonNull(author, "null author"); null for webhook atm?
 
 		this.wrapped = wrapped;
+		this.discord = discord;
 		this.channel = channel;
 		this.author = author;
+	}
+
+	@Override
+	public DiscordImpl getDiscord() {
+		return discord;
 	}
 
 	@Override
@@ -93,10 +101,8 @@ public class MessageImpl implements Message {
 	}
 
 	@Override
-	public Message getReferencedMessage() {
-		net.dv8tion.jda.api.entities.Message res = wrapped.getReferencedMessage();
-
-		return res != null ? wrap(res, ChannelImpl.wrap(res.getChannel(), this.channel)) : null;
+	public MessageReferenceImpl getReference() {
+		return MessageReferenceImpl.wrap(wrapped.getMessageReference(), discord);
 	}
 
 	@Override
@@ -121,12 +127,12 @@ public class MessageImpl implements Message {
 
 	@Override
 	public List<UserImpl> getMentionedUsers() {
-		return DiscordImplUtil.wrap(wrapped.getMentions().getUsers(), r -> UserImpl.wrap(r, channel.getDiscord()));
+		return DiscordImplUtil.wrap(wrapped.getMentions().getUsers(), r -> UserImpl.wrap(r, discord));
 	}
 
 	@Override
 	public List<RoleImpl> getMentionedRoles() {
-		return DiscordImplUtil.wrap(wrapped.getMentions().getRoles(), r -> RoleImpl.wrap(r, channel.getDiscord(), null));
+		return DiscordImplUtil.wrap(wrapped.getMentions().getRoles(), r -> RoleImpl.wrap(r, discord, null));
 	}
 
 	@Override
@@ -162,19 +168,24 @@ public class MessageImpl implements Message {
 
 	@Override
 	public Message edit(String content) {
-		return MessageImpl.wrap(wrapped.editMessage(content).complete(), channel);
+		return MessageImpl.wrap(wrapped.editMessage(content).complete(), discord, channel);
 	}
 
 	@Override
 	public Message edit(MessageEmbed embed) {
-		return MessageImpl.wrap(wrapped.editMessageEmbeds(MessageEmbedImpl.toBuilder(embed).build()).complete(), channel);
+		return MessageImpl.wrap(wrapped.editMessageEmbeds(MessageEmbedImpl.toBuilder(embed).build()).complete(), discord, channel);
 	}
 
-	static MessageImpl wrap(net.dv8tion.jda.api.entities.Message message, ChannelImpl channel) {
+	@Override
+	public String toString() {
+		return wrapped.toString();
+	}
+
+	static MessageImpl wrap(net.dv8tion.jda.api.entities.Message message, DiscordImpl discord, ChannelImpl channel) {
 		if (message == null) return null;
 
 		// TODO: handle webhook user
-		return WRAPPER.wrap(message, m -> new MessageImpl(m, channel, UserImpl.wrap(m.getAuthor(), channel.getDiscord())));
+		return WRAPPER.wrap(message, m -> new MessageImpl(m, discord, channel, UserImpl.wrap(m.getAuthor(), discord)));
 	}
 
 	net.dv8tion.jda.api.entities.Message unwrap() {

@@ -152,7 +152,7 @@ public final class DbCommand extends Command {
 			}
 
 			pageSb.append("```");
-			context.channel().send(pageSb.toString());
+			context.send(pageSb.toString());
 			pageSb.setLength(0);
 		}
 

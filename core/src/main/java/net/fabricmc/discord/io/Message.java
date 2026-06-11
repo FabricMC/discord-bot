@@ -23,9 +23,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
-public interface Message {
-	Channel getChannel();
-	long getId();
+import org.jetbrains.annotations.Nullable;
+
+public interface Message extends Entity {
+	Discord getDiscord();
+	@Nullable Channel getChannel();
 	Type getType();
 
 	public enum Type {
@@ -99,11 +101,19 @@ public interface Message {
 		}
 	}
 
-	User getAuthor();
+	@Nullable User getAuthor();
 	boolean isFromWebhook();
 	String getContent();
 	Instant getLastEditTime();
-	Message getReferencedMessage();
+
+	MessageReference getReference();
+
+	default Message getReferencedMessage() {
+		MessageReference ref = getReference();
+
+		return ref != null ? ref.getMessage(true) : null;
+	}
+
 	List<? extends MessageAttachment> getAttachments();
 	List<? extends MessageEmbed> getEmbeds();
 	List<? extends User> getMentionedUsers();
@@ -206,6 +216,11 @@ public interface Message {
 		}
 
 		@Override
+		public Discord getDiscord() {
+			throw new UnsupportedOperationException();
+		}
+
+		@Override
 		public Channel getChannel() {
 			throw new UnsupportedOperationException();
 		}
@@ -241,7 +256,7 @@ public interface Message {
 		}
 
 		@Override
-		public Message getReferencedMessage() {
+		public MessageReference getReference() {
 			return null;
 		}
 

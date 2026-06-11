@@ -26,6 +26,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
+import net.fabricmc.discord.bot.command.MessageTarget;
 import net.fabricmc.discord.bot.util.CommonEmotes;
 import net.fabricmc.discord.bot.util.DiscordUtil;
 import net.fabricmc.discord.io.Channel;
@@ -62,8 +63,9 @@ public final class Paginator implements MessageReactionAddHandler {
 	 * The message the paginator is bound to.
 	 */
 	@Nullable
-	private volatile Message message;
-	private volatile TemporaryRegistration tempEventReg;
+	private Message message;
+	private MessageTarget target;
+	private TemporaryRegistration tempEventReg;
 
 	/**
 	 * Creates a new paginator.
@@ -95,21 +97,21 @@ public final class Paginator implements MessageReactionAddHandler {
 	/**
 	 * @return the paginator's current page
 	 */
-	public int getCurrentPage() {
+	private int getCurrentPage() {
 		return this.currentPage;
 	}
 
 	/**
 	 * @return the amount of pages the paginator has
 	 */
-	public int getPageCount() {
+	private int getPageCount() {
 		return pages.size();
 	}
 
 	/**
 	 * @return the snowflake which may be used to refer to the user who is allow to interface with this paginator.
 	 */
-	public long getOwnerSnowflake() {
+	private long getOwnerSnowflake() {
 		return this.owner;
 	}
 
@@ -119,9 +121,8 @@ public final class Paginator implements MessageReactionAddHandler {
 	 * @param channel the text channel to display the paginator in
 	 * @return a future letting us know when the message is displayed
 	 */
-	public Message send(Channel channel) {
+	public synchronized Message send(MessageTarget channel) {
 		Objects.requireNonNull(channel, "Channel cannot be null");
-		if (!channel.getType().text) throw new IllegalArgumentException("channel is not a text channel");
 
 		return send0(channel);
 	}
@@ -131,9 +132,7 @@ public final class Paginator implements MessageReactionAddHandler {
 	 *
 	 * @return a future letting us know whether the page was successfully changed. If false the page was not changed.
 	 */
-	public boolean nextPage(boolean repost) {
-		Message message = this.message;
-
+	private boolean nextPage(boolean repost) {
 		if (message != null && pages.size() > 1) {
 			currentPage = (currentPage + 1) % pages.size();
 
@@ -148,9 +147,7 @@ public final class Paginator implements MessageReactionAddHandler {
 	 *
 	 * @return a future letting us know whether the page was successfully changed. If false the page was not changed.
 	 */
-	public boolean previousPage(boolean repost) {
-		Message message = this.message;
-
+	private boolean previousPage(boolean repost) {
 		if (message != null && pages.size() > 1) {
 			currentPage = (currentPage + pages.size() - 1) % pages.size();
 
@@ -161,12 +158,11 @@ public final class Paginator implements MessageReactionAddHandler {
 	}
 
 	private boolean update(boolean repost) {
-		Message message = this.message;
 		if (message == null) return false;
 
 		if (repost) {
 			message.delete("page update");
-			send0(message.getChannel());
+			send0(target);
 		} else {
 			message.edit(getEmbed());
 		}
@@ -181,29 +177,28 @@ public final class Paginator implements MessageReactionAddHandler {
 	 *
 	 * @return a future letting us know when the paginator has been destroyed
 	 */
-	public void destroy() {
-		Message message = this.message;
+	private void destroy() {
+		if (message == null) return;
 
-		if (message != null) {
-			TemporaryRegistration tempEventReg = this.tempEventReg;
-			if (tempEventReg != null) tempEventReg.cancel();
+		TemporaryRegistration tempEventReg = this.tempEventReg;
+		if (tempEventReg != null) tempEventReg.cancel();
 
-			if (deleteOnFinish) {
-				message.delete("paginator destroyed");
-			} else if (DiscordUtil.canRemoveReactions(message.getChannel())) {
-				message.removeAllReactions();
-			}
-
-			this.message = null;
+		if (deleteOnFinish) {
+			message.delete("paginator destroyed");
+		} else if (DiscordUtil.canRemoveReactions(message.getChannel())) {
+			message.removeAllReactions();
 		}
+
+		this.message = null;
 	}
 
-	private Message send0(Channel channel) {
+	private Message send0(MessageTarget target) {
 		// Send the message to create the paginator on first page
-		Message ret = channel.send(this.getEmbed());
+		Message ret = target.send(this.getEmbed());
 
 		if (pages.size() > 1) {
 			this.message = ret;
+			this.target = target;
 
 			List<Emoji> emotes = new ArrayList<>(3);
 
@@ -216,7 +211,7 @@ public final class Paginator implements MessageReactionAddHandler {
 
 			emotes.add(Emoji.fromUnicode(CommonEmotes.ARROW_FORWARDS));
 
-			tempEventReg = channel.getDiscord().getGlobalEvents().registerTemporary(MessageReactionAddHandler.class,
+			tempEventReg = target.getDiscord().getGlobalEvents().registerTemporary(MessageReactionAddHandler.class,
 					this,
 					this::destroy,
 					Duration.ofSeconds(timeout));
@@ -228,8 +223,8 @@ public final class Paginator implements MessageReactionAddHandler {
 	}
 
 	@Override
-	public void onMessageReactionAdd(long messageId, Emoji emoji, long userId, Channel channel) {
-		Message message = this.message;
+	public synchronized void onMessageReactionAdd(long messageId, Emoji emoji, long userId, Channel channel) {
+		Message message = this.message; // need local copy as previous/nextPage() might alter it
 		if (message == null || messageId != message.getId()) return;
 
 		// Let ourselves add the emojis for controls without removal
@@ -362,7 +357,7 @@ public final class Paginator implements MessageReactionAddHandler {
 			return new Paginator(logger, title, footer, pages, timeout, ownerId, deleteOnFinish);
 		}
 
-		public void buildAndSend(Channel channel) throws DiscordException {
+		public void buildAndSend(MessageTarget channel) throws DiscordException {
 			build().send(channel);
 		}
 	}

@@ -138,6 +138,11 @@ public class MessageEmbedImpl implements MessageEmbed {
 		return res != null ? res.toInstant() : null;
 	}
 
+	@Override
+	public String toString() {
+		return wrapped.toString();
+	}
+
 	static MessageEmbedImpl wrap(net.dv8tion.jda.api.entities.MessageEmbed embed) {
 		if (embed == null) return null;
 

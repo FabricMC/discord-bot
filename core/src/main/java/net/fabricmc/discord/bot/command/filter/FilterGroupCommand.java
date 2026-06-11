@@ -48,7 +48,7 @@ public final class FilterGroupCommand extends Command {
 			Collection<FilterGroupEntry> groups = FilterQueries.getGroups(context.bot().getDatabase());
 
 			if (groups.isEmpty()) {
-				context.channel().send("No groups");
+				context.send("No groups");
 			} else {
 				StringBuilder sb = new StringBuilder("Groups:");
 
@@ -57,7 +57,7 @@ public final class FilterGroupCommand extends Command {
 							group.id(), group.name(), group.description(), group.action()));
 				}
 
-				context.channel().send(sb.toString());
+				context.send(sb.toString());
 			}
 
 			return true;
@@ -67,7 +67,7 @@ public final class FilterGroupCommand extends Command {
 				throw new CommandException("Filter group addition failed, conflicting name or unknown action");
 			}
 
-			context.channel().send("Filter group added");
+			context.send("Filter group added");
 
 			return true;
 		case "remove":
@@ -75,7 +75,7 @@ public final class FilterGroupCommand extends Command {
 				throw new CommandException("Filter group removal failed, unknown name");
 			}
 
-			context.channel().send("Filter group removed");
+			context.send("Filter group removed");
 
 			return true;
 		case "setaction":
@@ -83,7 +83,7 @@ public final class FilterGroupCommand extends Command {
 				throw new CommandException("Filter group action update failed, unknown name or unknown action");
 			}
 
-			context.channel().send("Filter group action updated");
+			context.send("Filter group action updated");
 
 			return true;
 		case "setdescription":
@@ -91,7 +91,7 @@ public final class FilterGroupCommand extends Command {
 				throw new CommandException("Group description update failed, unknown name");
 			}
 
-			context.channel().send("Filter group description updated");
+			context.send("Filter group description updated");
 
 			return true;
 		}

@@ -23,6 +23,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -32,6 +33,7 @@ import org.jetbrains.annotations.Nullable;
 import net.fabricmc.discord.bot.CachedMessage;
 import net.fabricmc.discord.bot.config.ConfigKey;
 import net.fabricmc.discord.bot.util.DiscordUtil;
+import net.fabricmc.discord.bot.util.DiscordUtil.ParsedChannelLink;
 import net.fabricmc.discord.bot.util.HttpUtil;
 import net.fabricmc.discord.io.Channel;
 import net.fabricmc.discord.io.DiscordException;
@@ -88,7 +90,7 @@ public abstract class Command {
 	public static int getUserId(CommandContext context, String user) throws CommandException {
 		Objects.requireNonNull(user, "null user");
 
-		int ret = context.bot().getUserHandler().getUserId(user, context.server(), true);
+		int ret = context.bot().getUserHandler().getUserId(user, context.discord(), context.server(), true);
 		if (ret < 0) throw new CommandException("Unknown or ambiguous user");
 
 		return ret;
@@ -97,7 +99,7 @@ public abstract class Command {
 	public static long getDiscordUserId(CommandContext context, String user) throws CommandException {
 		Objects.requireNonNull(user, "null user");
 
-		long ret = context.bot().getUserHandler().getDiscordUserId(user, context.server(), true);
+		long ret = context.bot().getUserHandler().getDiscordUserId(user, context.discord(), context.server(), true);
 		if (ret < 0) throw new CommandException("Unknown or ambiguous user");
 
 		return ret;
@@ -106,7 +108,7 @@ public abstract class Command {
 	public static List<Long> getDiscordUserIds(CommandContext context, String user) throws CommandException {
 		Objects.requireNonNull(user, "null user");
 
-		List<Long> ret = context.bot().getUserHandler().getDiscordUserIds(user, context.server());
+		List<Long> ret = context.bot().getUserHandler().getDiscordUserIds(user, context.discord(), context.server());
 		if (ret.isEmpty()) throw new CommandException("Unknown or ambiguous user");
 
 		return ret;
@@ -115,7 +117,41 @@ public abstract class Command {
 	public static Channel getChannel(CommandContext context, String channel) throws CommandException {
 		Objects.requireNonNull(channel, "null channel");
 
-		Channel ret = getChannelUnchecked(context, channel);
+		// https://discord.com/channels/<serverId>/<channelId>
+		ParsedChannelLink linkRes = DiscordUtil.parseChannelLink(channel);
+		Channel ret;
+
+		if (linkRes != null) {
+			if (linkRes.isMe()) throw new CommandException("DM channel is unsupported");
+
+			Server server = context.server() != null && context.server().getId() == linkRes.serverId() ? context.server() : context.discord().getServer(linkRes.serverId());
+			if (server == null) throw new CommandException("Unknown server");
+
+			ret = server.getChannel(linkRes.channelId());
+		} else if (context.server() != null) {
+			ret = getChannelUnchecked(context.server(), channel);
+		} else {
+			Collection<? extends Server> servers = context.discord().getServers();
+			if (servers.isEmpty()) throw new CommandException("No server context (DM?)");
+
+			ret = null;
+
+			for (Server server : context.discord().getServers()) {
+				Channel res = getChannelUnchecked(server, channel);
+				if (res == null) continue;
+
+				if (ret != null) { // ambiguous
+					ret = null;
+					break;
+				} else {
+					ret = res;
+				}
+			}
+		}
+
+		if (ret == null) {
+			throw new CommandException("Unknown or ambiguous channel");
+		}
 
 		if (!ret.canYouSee()
 				|| ret.getType().text && !ret.haveYouPermission(Permission.READ_MESSAGE_HISTORY)
@@ -126,10 +162,7 @@ public abstract class Command {
 		return ret;
 	}
 
-	private static Channel getChannelUnchecked(CommandContext context, String channel) throws CommandException {
-		Server server = context.server();
-		if (server == null) throw new CommandException("No server context (DM?)");
-
+	private static Channel getChannelUnchecked(Server server, String channel) throws CommandException {
 		if (channel.startsWith("#")) {
 			String name = channel.substring(1);
 
@@ -156,7 +189,7 @@ public abstract class Command {
 
 		List<? extends Channel> matches = server.getChannelsByName(channel);
 		if (matches.isEmpty()) matches = server.getChannelsByNameIgnoreCase(channel);
-		if (matches.size() != 1) throw new CommandException("Unknown or ambiguous channel");
+		if (matches.size() != 1) return null;
 
 		return matches.get(0);
 	}
@@ -191,7 +224,7 @@ public abstract class Command {
 			userId = context.bot().getUserHandler().getUserId(msg.getAuthorDiscordId());
 			if (userId < 0) throw new CommandException("Message from unknown user");
 		} else {
-			userId = context.bot().getUserHandler().getUserId(userOrMessage, context.server(), true);
+			userId = context.bot().getUserHandler().getUserId(userOrMessage, context.discord(), context.server(), true);
 			if (userId < 0) throw new CommandException("Unknown or ambiguous user/message");
 		}
 

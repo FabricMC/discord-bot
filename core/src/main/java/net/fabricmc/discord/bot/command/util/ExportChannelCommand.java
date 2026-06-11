@@ -66,7 +66,7 @@ public final class ExportChannelCommand extends Command {
 		Channel channel = getTextChannel(context, arguments.get("channel"));
 		boolean markBoundaries = Boolean.parseBoolean(arguments.getOrDefault("markBoundaries", "false"));
 
-		List<? extends Message> messages = channel.getMessages(MSG_COUNT_LIMIT);
+		List<? extends Message> messages = channel.getMessages(MSG_COUNT_LIMIT, true);
 		if (messages.isEmpty()) throw new CommandException("empty channel");
 
 		boolean embedData = arguments.containsKey("embedData");
@@ -108,7 +108,7 @@ public final class ExportChannelCommand extends Command {
 
 					if (cause != null) {
 						cause.printStackTrace();
-						context.channel().send(String.format("Error fetching data from %s: %s",
+						context.send(String.format("Error fetching data from %s: %s",
 								FormatUtil.escape(attachment.getUrl().toString(), OutputType.INLINE_CODE, true),
 								FormatUtil.escapePlain(attachment.getUrl().toString())));
 					} else {
@@ -142,7 +142,7 @@ public final class ExportChannelCommand extends Command {
 	}
 
 	static void uploadExport(CommandContext context, CharSequence data) throws DiscordException {
-		Message msg = context.channel().send(new Message.Builder()
+		Message msg = context.send(new Message.Builder()
 				.attachment(new MessageAttachment.Builder().data(data.toString().getBytes(StandardCharsets.UTF_8)).name("contents.txt").build())
 				.build());
 

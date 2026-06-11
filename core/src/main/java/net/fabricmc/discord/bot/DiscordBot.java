@@ -53,6 +53,7 @@ import net.fabricmc.discord.bot.command.Command;
 import net.fabricmc.discord.bot.command.CommandContext;
 import net.fabricmc.discord.bot.command.CommandException;
 import net.fabricmc.discord.bot.command.CommandParser;
+import net.fabricmc.discord.bot.command.CommandReplyTracker;
 import net.fabricmc.discord.bot.command.UsageParser;
 import net.fabricmc.discord.bot.command.mod.ActionUtil;
 import net.fabricmc.discord.bot.config.ConfigKey;
@@ -95,6 +96,7 @@ public final class DiscordBot {
 	private final MessageIndex messageIndex;
 	private final ActionSyncHandler actionSyncHandler;
 	private final FilterHandler filterHandler;
+	private final CommandReplyTracker commandReplyTracker;
 	/**
 	 * A list of all enabled modules.
 	 */
@@ -117,6 +119,7 @@ public final class DiscordBot {
 		this.messageIndex = new MessageIndex(this);
 		this.actionSyncHandler = new ActionSyncHandler(this);
 		this.filterHandler = new FilterHandler(this);
+		this.commandReplyTracker = new CommandReplyTracker(this);
 
 		ActionUtil.registerConfig(this);
 		setupModules();
@@ -171,6 +174,10 @@ public final class DiscordBot {
 
 	public FilterHandler getFilterHandler() {
 		return filterHandler;
+	}
+
+	public CommandReplyTracker getCommandReplyTracker() {
+		return commandReplyTracker;
 	}
 
 	public @Nullable Module getModule(String name) {
@@ -248,6 +255,7 @@ public final class DiscordBot {
 
 		CommandRecord cmdEntry = new CommandRecord(node, command);
 		String name = command.name().toLowerCase(Locale.ENGLISH);
+		if (!isValidCommandName(name)) throw new IllegalArgumentException("invalid command name: "+name);
 
 		if (commands.putIfAbsent(name, cmdEntry) != null) {
 			throw new IllegalArgumentException("Cannot register command with name %s more than once".formatted(name));
@@ -255,6 +263,7 @@ public final class DiscordBot {
 
 		for (String alias : command.aliases()) {
 			alias = alias.toLowerCase(Locale.ENGLISH);
+			if (!isValidCommandName(alias)) throw new IllegalArgumentException("invalid command alias: "+alias);
 
 			if (commands.putIfAbsent(alias, cmdEntry) != null) {
 				throw new IllegalArgumentException("Cannot register command with name %s / alias %s more than once".formatted(name, alias));
@@ -541,6 +550,15 @@ public final class DiscordBot {
 		this.configValues = configValues;
 	}
 
+
+	private static boolean isValidCommandName(String name) {
+		if (name.isEmpty()) return false;
+
+		char c = name.charAt(0);
+
+		return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z';
+	}
+
 	void tryHandleCommand(CommandContext context) {
 		// Don't dispatch commands if the bot is the sender
 		if (context.user().isYourself()) {
@@ -548,10 +566,7 @@ public final class DiscordBot {
 		}
 
 		final String content = context.content();
-
-		if (!content.startsWith(this.getCommandPrefix())) {
-			return;
-		}
+		assert content.startsWith(this.getCommandPrefix());
 
 		try {
 			final int nameEnd = content.indexOf(" ");
@@ -567,13 +582,17 @@ public final class DiscordBot {
 			}
 
 			name = name.toLowerCase(Locale.ENGLISH);
-			final CommandRecord commandRecord = this.commands.get(name);
+			boolean validName = isValidCommandName(name);
+			CommandRecord commandRecord;
 
-			if (commandRecord == null && invokeCommandStringHandler(context, content, name, rawArguments)) {
-				return; // handled by command string handler
-			} else if (commandRecord == null
+			if (!validName
+					|| (commandRecord = commands.get(name)) == null
 					|| !checkAccess(context.user(), context.server(), commandRecord.command())) {
-				context.channel().send("%s: Unknown command".formatted(context.user().getNickMentionTag()));
+				if (!invokeCommandStringHandler(context, content, name, rawArguments) // not handled by command string handler (receives everything starting with the prefix, even of otherwise invalid)
+						&& validName) { // but potentially a proper command (suitable name)
+					context.send("%s: Unknown command".formatted(context.user().getNickMentionTag()));
+				}
+
 				return;
 			}
 
@@ -590,16 +609,16 @@ public final class DiscordBot {
 					reason = "Missing or invalid parameters, usage: `%s`".formatted(usage);
 				}
 
-				context.channel().send("%s: Invalid command syntax: %s".formatted(context.user().getNickMentionTag(), reason));
+				context.send("%s: Invalid command syntax: %s".formatted(context.user().getNickMentionTag(), reason));
 				return;
 			}
 
 			commandRecord.command().run(context, arguments);
 		} catch (CommandException e) {
-			context.channel().send(e.getMessage());
+			context.send(e.getMessage());
 		} catch (Throwable t) {
 			LOGGER.warn("Error executing command "+content, t);
-			context.channel().send("Error executing command: "+t);
+			context.send("Error executing command: "+t);
 		}
 	}
 

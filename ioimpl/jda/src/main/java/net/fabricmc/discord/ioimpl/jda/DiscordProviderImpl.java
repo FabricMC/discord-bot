@@ -16,10 +16,16 @@
 
 package net.fabricmc.discord.ioimpl.jda;
 
+import java.net.SocketTimeoutException;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
@@ -29,7 +35,6 @@ import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.Channel;
 import net.dv8tion.jda.api.entities.emoji.Emoji;
-import net.dv8tion.jda.api.events.GenericEvent;
 import net.dv8tion.jda.api.events.channel.ChannelCreateEvent;
 import net.dv8tion.jda.api.events.channel.ChannelDeleteEvent;
 import net.dv8tion.jda.api.events.guild.GuildAvailableEvent;
@@ -49,6 +54,7 @@ import net.dv8tion.jda.api.events.session.SessionState;
 import net.dv8tion.jda.api.events.user.update.UserUpdateNameEvent;
 import net.dv8tion.jda.api.hooks.EventListener;
 import net.dv8tion.jda.api.requests.GatewayIntent;
+import net.dv8tion.jda.api.requests.RestAction;
 
 import net.fabricmc.discord.io.Discord;
 import net.fabricmc.discord.io.DiscordBuilder.DiscordConfig;
@@ -85,14 +91,17 @@ public class DiscordProviderImpl implements DiscordProvider {
 			builder = JDABuilder.createLight(config.accessToken, intents);
 		}
 
+		EventAdapter eventAdapter = new EventAdapter();
+		builder.addEventListeners(eventAdapter);
+
 		// early event registrations to ensure nothing will be missed
-		processEventRegistrations(globalEventHolder, wrapper, listener -> builder.addEventListeners(listener));
+		processEventRegistrations(globalEventHolder, wrapper, eventAdapter);
 
 		JDA discord = builder.build();
 		DiscordImpl ret = new DiscordImpl(discord, globalEventHolder);
 		wrapper.init(ret);
 
-		globalEventHolder.setUpdateHandler(() -> processEventRegistrations(globalEventHolder, wrapper, listener -> discord.addEventListener(listener)));
+		globalEventHolder.setUpdateHandler(() -> processEventRegistrations(globalEventHolder, wrapper, eventAdapter));
 
 		return ret;
 	}
@@ -102,40 +111,67 @@ public class DiscordProviderImpl implements DiscordProvider {
 		void addListener(EventListener listener);
 	}
 
-	private static void processEventRegistrations(GlobalEventHolder holder, Wrapper wrapper, ListenerAdder adder) {
+	private static void processEventRegistrations(GlobalEventHolder holder, Wrapper wrapper, EventAdapter adapter) {
 		// server
 
 		for (ServerReadyHandler handler : holder.removeHandlers(ServerReadyHandler.class)) {
-			adder.addListener(event -> {
-				if (event instanceof GuildReadyEvent e) {
-					handler.onReady(wrapper.wrap(e.getGuild()));
-				} else if (event instanceof GuildAvailableEvent e) {
-					handler.onReady(wrapper.wrap(e.getGuild()));
+			// JDA doesn't have a convenient inverse of GuildReadyEvent, track ready/available vs unavailable/disconnect/shutdown to emulate it
+			final Set<Guild> seenGuilds = new HashSet<>();
+
+			adapter.register(GuildReadyEvent.class, e -> {
+				System.out.printf("GuildReadyEvent %s -> onReady%n", e.getGuild().getName());
+				seenGuilds.add(e.getGuild());
+				handler.onReady(wrapper.wrap(e.getGuild()));
+			});
+
+			adapter.register(GuildAvailableEvent.class, e -> {
+				System.out.printf("GuildAvailableEvent %s -> onReady%n", e.getGuild().getName());
+				//seenGuilds.add(e.getGuild());
+				handler.onReady(wrapper.wrap(e.getGuild()));
+			});
+
+			adapter.register(GenericSessionEvent.class, e -> {
+				if (e.getState() == SessionState.RESUMED) {
+					System.out.printf("GenericSessionEvent %s -> onReady (%d)%n", e.getState().name(), seenGuilds.size());
+
+					for (Guild guild : seenGuilds) {
+						handler.onReady(wrapper.wrap(guild));
+					}
 				}
 			});
 		}
 
 		for (ServerGoneHandler handler : holder.removeHandlers(ServerGoneHandler.class)) {
-			adder.addListener(new EventListener() {
-				// JDA doesn't have a convenient inverse of GuildReadyEvent, track ready/available vs unavailable/disconnect/shutdown to emulate it
-				private final Set<Guild> readyGuilds = new HashSet<>();
+			// JDA doesn't have a convenient inverse of GuildReadyEvent, track ready/available vs unavailable/disconnect/shutdown to emulate it
+			final Set<Guild> readyGuilds = new HashSet<>();
 
-				@Override
-				public void onEvent(GenericEvent event) {
-					if (event instanceof GuildReadyEvent e) {
-						readyGuilds.add(e.getGuild());
-					} else if (event instanceof GuildAvailableEvent e) {
-						readyGuilds.add(e.getGuild());
-					} else if (event instanceof GuildUnavailableEvent e
-							&& readyGuilds.remove(e.getGuild())) {
-						handler.onGone(wrapper.wrap(e.getGuild()));
-					} else if (event instanceof GenericSessionEvent e
-							&& (e.getState() == SessionState.DISCONNECTED || e.getState() == SessionState.SHUTDOWN)) {
-						for (Iterator<Guild> it = readyGuilds.iterator(); it.hasNext(); ) {
-							handler.onGone(wrapper.wrap(it.next()));
-							it.remove();
-						}
+			adapter.register(GuildReadyEvent.class, e -> {
+				readyGuilds.add(e.getGuild());
+			});
+
+			adapter.register(GuildAvailableEvent.class, e -> {
+				readyGuilds.add(e.getGuild());
+			});
+
+			adapter.register(GuildUnavailableEvent.class, e -> {
+				if (readyGuilds.remove(e.getGuild())) {
+					System.out.printf("GuildUnavailableEvent %s -> onGone%n", e.getGuild().getName());
+					handler.onGone(wrapper.wrap(e.getGuild()));
+				} else {
+					System.out.printf("GuildUnavailableEvent %s%n", e.getGuild().getName());
+				}
+			});
+
+			adapter.register(GenericSessionEvent.class, e -> {
+				if (e.getState() == SessionState.DISCONNECTED || e.getState() == SessionState.SHUTDOWN) {
+					System.out.printf("GenericSessionEvent %s -> onGone (%d)%n", e.getState().name(), readyGuilds.size());
+
+					for (Iterator<Guild> it = readyGuilds.iterator(); it.hasNext(); ) {
+						handler.onGone(wrapper.wrap(it.next()));
+						if (e.getState() != SessionState.DISCONNECTED) it.remove();
 					}
+				} else {
+					System.out.printf("GenericSessionEvent %s%n", e.getState().name());
 				}
 			});
 		}
@@ -143,83 +179,57 @@ public class DiscordProviderImpl implements DiscordProvider {
 		// channel
 
 		for (ChannelCreateHandler handler : holder.removeHandlers(ChannelCreateHandler.class)) {
-			adder.addListener(event -> {
-				if (event instanceof ChannelCreateEvent e) handler.onChannelCreate(wrapper.wrap(e.getChannel()));
-			});
+			adapter.register(ChannelCreateEvent.class, e -> handler.onChannelCreate(wrapper.wrap(e.getChannel())));
 		}
 
 		for (ChannelDeleteHandler handler : holder.removeHandlers(ChannelDeleteHandler.class)) {
-			adder.addListener(event -> {
-				if (event instanceof ChannelDeleteEvent e) handler.onChannelDelete(wrapper.wrap(e.getChannel()));
-			});
+			adapter.register(ChannelDeleteEvent.class, e -> handler.onChannelDelete(wrapper.wrap(e.getChannel())));
 		}
 
 		for (ChannelPermissionChangeHandler handler : holder.removeHandlers(ChannelPermissionChangeHandler.class)) {
-			adder.addListener(event -> {
-				if (event instanceof GenericPermissionOverrideEvent e) handler.onChannelPermissionChange(wrapper.wrap(e.getChannel()));
-			});
+			adapter.register(GenericPermissionOverrideEvent.class, e -> handler.onChannelPermissionChange(wrapper.wrap(e.getChannel())));
 		}
 
 		// member
 
 		for (MemberJoinHandler handler : holder.removeHandlers(MemberJoinHandler.class)) {
-			adder.addListener(event -> {
-				if (event instanceof GuildMemberJoinEvent e) handler.onMemberJoin(wrapper.wrap(e.getMember()));
-			});
+			adapter.register(GuildMemberJoinEvent.class, e -> handler.onMemberJoin(wrapper.wrap(e.getMember())));
 		}
 
 		for (MemberLeaveHandler handler : holder.removeHandlers(MemberLeaveHandler.class)) {
-			adder.addListener(event -> {
-				if (event instanceof GuildMemberRemoveEvent e) handler.onMemberLeave(wrapper.wrap(e.getMember()));
-			});
+			adapter.register(GuildMemberRemoveEvent.class, e -> handler.onMemberLeave(wrapper.wrap(e.getMember())));
 		}
 
 		for (MemberNicknameChangeHandler handler : holder.removeHandlers(MemberNicknameChangeHandler.class)) {
-			adder.addListener(event -> {
-				if (event instanceof GuildMemberUpdateNicknameEvent e) handler.onMemberNicknameChange(wrapper.wrap(e.getMember()), e.getOldNickname(), e.getNewNickname());
-			});
+			adapter.register(GuildMemberUpdateNicknameEvent.class, e -> handler.onMemberNicknameChange(wrapper.wrap(e.getMember()), e.getOldNickname(), e.getNewNickname()));
 		}
 
 		for (MemberBanHandler handler : holder.removeHandlers(MemberBanHandler.class)) {
-			adder.addListener(event -> {
-				if (event instanceof GuildBanEvent e) handler.onMemberBan(wrapper.wrap(e.getUser()), wrapper.wrap(e.getGuild()));
-			});
+			adapter.register(GuildBanEvent.class, e -> handler.onMemberBan(wrapper.wrap(e.getUser()), wrapper.wrap(e.getGuild())));
 		}
 
 		// message
 
 		for (MessageCreateHandler handler : holder.removeHandlers(MessageCreateHandler.class)) {
-			adder.addListener(event -> {
-				if (event instanceof MessageReceivedEvent e) handler.onMessageCreate(wrapper.wrap(e.getMessage()));
-			});
+			adapter.register(MessageReceivedEvent.class, e -> handler.onMessageCreate(wrapper.wrap(e.getMessage())));
 		}
 
 		for (MessageDeleteHandler handler : holder.removeHandlers(MessageDeleteHandler.class)) {
-			adder.addListener(event -> {
-				if (event instanceof MessageDeleteEvent e) handler.onMessageDelete(e.getMessageIdLong(), wrapper.wrap(e.getChannel()));
-			});
+			adapter.register(MessageDeleteEvent.class, e -> handler.onMessageDelete(e.getMessageIdLong(), wrapper.wrap(e.getChannel())));
 		}
 
 		for (MessageEditHandler handler : holder.removeHandlers(MessageEditHandler.class)) {
-			adder.addListener(event -> {
-				if (event instanceof MessageUpdateEvent e) handler.onMessageEdit(wrapper.wrap(e.getMessage()));
-			});
+			adapter.register(MessageUpdateEvent.class, e -> handler.onMessageEdit(wrapper.wrap(e.getMessage())));
 		}
 
 		for (MessageReactionAddHandler handler : holder.removeHandlers(MessageReactionAddHandler.class)) {
-			adder.addListener(event -> {
-				if (event instanceof MessageReactionAddEvent e) {
-					handler.onMessageReactionAdd(e.getMessageIdLong(), wrapper.wrap(e.getEmoji()), e.getUserIdLong(), wrapper.wrap(e.getChannel()));
-				}
-			});
+			adapter.register(MessageReactionAddEvent.class, e -> handler.onMessageReactionAdd(e.getMessageIdLong(), wrapper.wrap(e.getEmoji()), e.getUserIdLong(), wrapper.wrap(e.getChannel())));
 		}
 
 		// user
 
 		for (UserNameChangeHandler handler : holder.removeHandlers(UserNameChangeHandler.class)) {
-			adder.addListener(event -> {
-				if (event instanceof UserUpdateNameEvent e) handler.onUserNameChange(wrapper.wrap(e.getUser()), e.getOldName(), e.getNewName());
-			});
+			adapter.register(UserUpdateNameEvent.class, e -> handler.onUserNameChange(wrapper.wrap(e.getUser()), e.getOldName(), e.getNewName()));
 		}
 
 		// leftovers
@@ -251,7 +261,7 @@ public class DiscordProviderImpl implements DiscordProvider {
 		}
 
 		MessageImpl wrap(Message message) {
-			return MessageImpl.wrap(message, wrap(message.getChannel()));
+			return MessageImpl.wrap(message, discord, wrap(message.getChannel()));
 		}
 
 		EmojiImpl wrap(Emoji emoji) {
@@ -261,5 +271,50 @@ public class DiscordProviderImpl implements DiscordProvider {
 		UserImpl wrap(User user) {
 			return UserImpl.wrap(user, discord);
 		}
+	}
+
+	@Override
+	public String toString() {
+		return "JDA";
+	}
+
+	static <T> T fetchWithRetry(Supplier<RestAction<T>> actionSupplier, int timeoutSec, int maxAttempts) {
+		int attempt = 0;
+
+		attemptLoop: for (;;) {
+			try {
+				RestAction<T> action = actionSupplier.get();
+				if (timeoutSec > 0) action = action.timeout(timeoutSec, TimeUnit.SECONDS);
+
+				Future<T> res = action.submit();
+
+				return timeoutSec > 0 ? res.get(timeoutSec + 5, TimeUnit.SECONDS) : res.get(); // use future timeout if the rest action timeout is unreliable
+			} catch (ExecutionException | TimeoutException e) {
+				if (++attempt < maxAttempts && isTimeout(e)) {
+					continue attemptLoop;
+				}
+
+				Throwable exc = e;
+				if (exc instanceof ExecutionException) exc = exc.getCause();
+
+				if (exc instanceof RuntimeException rte) {
+					throw rte;
+				} else {
+					throw new RuntimeException(e);
+				}
+			} catch (InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+		}
+	}
+
+	private static boolean isTimeout(Throwable exc) {
+		for (int i = 0; exc != null && i < 5; i++) { // search max 5 deep
+			if (exc instanceof TimeoutException || exc instanceof SocketTimeoutException) return true;
+
+			exc = exc.getCause();
+		}
+
+		return false;
 	}
 }

@@ -55,7 +55,7 @@ public final class MappingStatusCommand extends Command {
 	public boolean run(CommandContext context, Map<String, String> arguments) throws Exception {
 		if (!arguments.containsKey("unnamed_0") && !arguments.containsKey("mcVersion")) {
 			Collection<String> versions = repo.getLoadedVersions();
-			context.channel().send("Loaded %d versions: %s".formatted(versions.size(), versions.stream().sorted().collect(Collectors.joining(", "))));
+			context.send("Loaded %d versions: %s".formatted(versions.size(), versions.stream().sorted().collect(Collectors.joining(", "))));
 		} else {
 			String mcVersion = arguments.get("mcVersion");
 			if (mcVersion == null) mcVersion = arguments.get("unnamed_0");
@@ -63,7 +63,7 @@ public final class MappingStatusCommand extends Command {
 			MappingData data = MappingCommandUtil.getMappingData(repo, mcVersion);
 			MappingTree tree = data.mappingTree;
 
-			context.channel().send(new MessageEmbed.Builder()
+			context.send(new MessageEmbed.Builder()
 					.title("%s data".formatted(mcVersion))
 					.description(String.format("**Namespaces:** %s, %s\n"
 							+ "**Classes:** %d\n"

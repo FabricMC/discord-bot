@@ -36,21 +36,23 @@ allprojects {
 	dependencies {
 		compileOnly("org.jetbrains:annotations:20.1.0")
 
+		// Logging
+		implementation("org.slf4j:slf4j-api:${slf4jVersion}")
+		implementation("org.apache.logging.log4j:log4j-core:${log4jVersion}")
+		implementation("org.apache.logging.log4j:log4j-slf4j-impl:${log4jVersion}")
+
+
 		// tag parser artifact does not need a full db
 		if (project != rootProject.project(":tag-parser")) {
 			// Database
-			implementation("com.zaxxer:HikariCP:3.4.5")
-			implementation("org.xerial:sqlite-jdbc:3.36.0.3")
+			implementation("com.zaxxer:HikariCP:7.0.2")
+			implementation("org.xerial:sqlite-jdbc:3.53.2.0")
 		}
 
-		// Logging
-		implementation("org.apache.logging.log4j:log4j-core:2.17.2")
-		implementation("org.apache.logging.log4j:log4j-slf4j-impl:2.17.2")
-
 		// Json Serialization
-		implementation("com.google.code.gson:gson:2.8.6")
+		implementation("com.google.code.gson:gson:2.14.0")
 
-		implementation("it.unimi.dsi:fastutil-core:8.5.4");
+		implementation("it.unimi.dsi:fastutil-core:8.5.18");
 
 		// TODO: Do we want this so we can :irritater: instead of raw id for custom emotes?
 		//  https://github.com/vdurmont/emoji-java

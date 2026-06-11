@@ -25,8 +25,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
-public interface MessageAttachment {
-	long getId();
+public interface MessageAttachment extends Entity {
 	String getUrl();
 	String getFileName();
 	String getDescription();
@@ -107,7 +106,7 @@ public interface MessageAttachment {
 
 		BuiltMessageAttachment(InputStream is, byte[] data, String fileName, String description) {
 			this.is = is;
-			this.data = null;
+			this.data = data;
 			this.fileName = fileName;
 			this.description = description;
 		}

@@ -19,11 +19,13 @@ package net.fabricmc.discord.io;
 import java.util.List;
 import java.util.Set;
 
-public interface Channel {
+import net.fabricmc.discord.bot.command.MessageTarget;
+
+public interface Channel extends Entity, MessageTarget {
+	@Override
 	Discord getDiscord();
 	Server getServer();
 	User getUser();
-	long getId();
 	Type getType();
 
 	enum Type {
@@ -90,10 +92,13 @@ public interface Channel {
 	record PermissionOverwriteData(Set<Permission> allowed, Set<Permission> denied) { }
 
 	Message getMessage(long id);
-	List<? extends Message> getMessages(int limit);
+	List<? extends Message> getMessages(int limit, boolean oldToNew);
 	List<? extends Message> getMessagesBetween(long firstId, long lastId, int limit);
+	@Override
 	Message send(String message);
+	@Override
 	Message send(MessageEmbed message);
+	@Override
 	Message send(Message message);
 	void deleteMessage(long id, String reason);
 	void deleteMessages(long[] messageIds, String reason);

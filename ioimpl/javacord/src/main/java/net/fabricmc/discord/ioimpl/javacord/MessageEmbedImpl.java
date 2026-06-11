@@ -132,6 +132,11 @@ public class MessageEmbedImpl implements MessageEmbed {
 		return wrapped.getTimestamp().orElse(null);
 	}
 
+	@Override
+	public String toString() {
+		return wrapped.toString();
+	}
+
 	static MessageEmbedImpl wrap(Embed embed) {
 		if (embed == null) return null;
 

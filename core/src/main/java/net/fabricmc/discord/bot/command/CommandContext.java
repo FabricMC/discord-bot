@@ -20,7 +20,9 @@ import org.jetbrains.annotations.Nullable;
 
 import net.fabricmc.discord.bot.DiscordBot;
 import net.fabricmc.discord.io.Channel;
+import net.fabricmc.discord.io.Discord;
 import net.fabricmc.discord.io.Message;
+import net.fabricmc.discord.io.MessageEmbed;
 import net.fabricmc.discord.io.Server;
 import net.fabricmc.discord.io.User;
 
@@ -28,15 +30,41 @@ import net.fabricmc.discord.io.User;
  * An object which represents the context in which a command is being executed.
  */
 public record CommandContext(
-		CommandResponder responder,
 		DiscordBot bot,
+		Discord discord,
 		@Nullable Server server,
 		Channel channel,
 		Message message,
 		User user,
 		int userId,
-		String content) {
+		String content) implements MessageTarget {
 	public boolean isPrivateMessage() {
 		return server == null;
+	}
+
+	@Override
+	public Discord getDiscord() {
+		return discord;
+	}
+
+	@Override
+	public Message send(String text) {
+		return recordMessage(channel.send(text));
+	}
+
+	@Override
+	public Message send(MessageEmbed embed) {
+		return recordMessage(channel.send(embed));
+	}
+
+	@Override
+	public Message send(Message message) {
+		return recordMessage(channel.send(message));
+	}
+
+	private Message recordMessage(Message message) {
+		bot.getCommandReplyTracker().add(this.message.getId(), message.getId());
+
+		return message;
 	}
 }

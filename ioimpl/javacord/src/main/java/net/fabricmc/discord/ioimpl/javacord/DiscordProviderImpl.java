@@ -258,7 +258,7 @@ public class DiscordProviderImpl implements DiscordProvider {
 		}
 
 		MessageImpl wrap(Message message) {
-			return MessageImpl.wrap(message, wrap(message.getChannel()));
+			return MessageImpl.wrap(message, discord, wrap(message.getChannel()));
 		}
 
 		EmojiImpl wrap(Emoji emoji) {
@@ -268,6 +268,11 @@ public class DiscordProviderImpl implements DiscordProvider {
 		UserImpl wrap(User user) {
 			return UserImpl.wrap(user, discord);
 		}
+	}
+
+	@Override
+	public String toString() {
+		return "Javacord";
 	}
 
 	static <T> T join(CompletableFuture<T> future) throws DiscordException {

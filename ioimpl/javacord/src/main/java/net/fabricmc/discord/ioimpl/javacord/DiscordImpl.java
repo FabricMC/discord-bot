@@ -16,12 +16,15 @@
 
 package net.fabricmc.discord.ioimpl.javacord;
 
+import java.util.Collection;
 import java.util.Objects;
 
 import org.javacord.api.DiscordApi;
 
 import net.fabricmc.discord.io.Discord;
+import net.fabricmc.discord.io.DiscordImplUtil;
 import net.fabricmc.discord.io.GlobalEventHolder;
+import net.fabricmc.discord.io.Server;
 
 public class DiscordImpl implements Discord {
 	private final DiscordApi wrapped;
@@ -47,6 +50,11 @@ public class DiscordImpl implements Discord {
 	}
 
 	@Override
+	public Collection<? extends Server> getServers() {
+		return DiscordImplUtil.wrap(wrapped.getServers(), s -> ServerImpl.wrap(s, this));
+	}
+
+	@Override
 	public UserImpl getUser(long id, boolean fetch) {
 		return UserImpl.wrap(fetch ? wrapped.getUserById(id).join() : wrapped.getCachedUserById(id).orElse(null), this);
 	}
@@ -66,6 +74,11 @@ public class DiscordImpl implements Discord {
 	@Override
 	public void setActivity(String activity) {
 		wrapped.updateActivity(activity);
+	}
+
+	@Override
+	public String toString() {
+		return wrapped.toString();
 	}
 
 	DiscordApi unwrap() {

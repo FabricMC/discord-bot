@@ -21,7 +21,6 @@ import java.nio.file.Path;
 import org.apache.logging.log4j.Logger;
 
 import net.fabricmc.discord.bot.command.CommandContext;
-import net.fabricmc.discord.bot.command.CommandResponder;
 import net.fabricmc.discord.bot.command.core.ConfigCommand;
 import net.fabricmc.discord.bot.command.core.GroupCommand;
 import net.fabricmc.discord.bot.command.core.HelpCommand;
@@ -49,8 +48,11 @@ import net.fabricmc.discord.bot.command.util.ExportChannelCommand;
 import net.fabricmc.discord.bot.command.util.ExportMessageCommand;
 import net.fabricmc.discord.bot.command.util.ImportChannelCommand;
 import net.fabricmc.discord.bot.command.util.MessageCacheCommand;
+import net.fabricmc.discord.io.Channel;
 import net.fabricmc.discord.io.Discord;
+import net.fabricmc.discord.io.DiscordException;
 import net.fabricmc.discord.io.GlobalEventHolder.MessageCreateHandler;
+import net.fabricmc.discord.io.GlobalEventHolder.MessageDeleteHandler;
 import net.fabricmc.discord.io.Message;
 import net.fabricmc.discord.io.User;
 
@@ -61,7 +63,7 @@ import net.fabricmc.discord.io.User;
  *
  * <p>The builtin module handles the dispatch of commands.
  */
-final class BuiltinModule implements Module, MessageCreateHandler {
+final class BuiltinModule implements Module, MessageCreateHandler, MessageDeleteHandler {
 	private DiscordBot bot;
 	private Discord discord;
 
@@ -129,6 +131,7 @@ final class BuiltinModule implements Module, MessageCreateHandler {
 		bot.registerCommand(new MessageCacheCommand());
 
 		discord.getGlobalEvents().registerMessageCreate(this);
+		discord.getGlobalEvents().registerMessageDelete(this);
 	}
 
 	@Override
@@ -138,7 +141,8 @@ final class BuiltinModule implements Module, MessageCreateHandler {
 		String content = message.getContent();
 		String prefix = bot.getCommandPrefix();
 
-		if (content.length() <= prefix.length() || !content.startsWith(prefix)) {
+		if (content.length() <= prefix.length()
+				|| !content.startsWith(prefix)) {
 			return;
 		}
 
@@ -147,8 +151,8 @@ final class BuiltinModule implements Module, MessageCreateHandler {
 
 		// We intentionally don't pass the event since we may want to support editing the original message to execute the command again such as if an error was made in syntax
 		final CommandContext context = new CommandContext(
-				new CommandResponder(message),
 				this.bot,
+				message.getDiscord(),
 				message.getChannel().getServer(),
 				message.getChannel(),
 				message,
@@ -157,5 +161,26 @@ final class BuiltinModule implements Module, MessageCreateHandler {
 				content);
 
 		this.bot.tryHandleCommand(context);
+	}
+
+	@Override
+	public void onMessageDelete(long messageId, Channel channel) {
+		CachedMessage msg = bot.getMessageIndex().get(messageId);
+		if (msg == null) return;
+
+		long authorUserId = msg.getAuthorDiscordId();
+		if (authorUserId < 0 || authorUserId == bot.getUserHandler().getBotDiscordUserId()) return;
+
+		for (long replyMsgId : bot.getCommandReplyTracker().remove(msg.getId())) {
+			CachedMessage replyMsg = bot.getMessageIndex().get(replyMsgId);
+			if (replyMsg == null) continue;
+			assert replyMsg.getAuthorDiscordId() == bot.getUserHandler().getBotDiscordUserId();
+
+			try {
+				replyMsg.delete(channel.getServer(), "command deleted");
+			} catch (DiscordException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 }

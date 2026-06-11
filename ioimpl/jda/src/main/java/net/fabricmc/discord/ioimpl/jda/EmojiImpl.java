@@ -60,6 +60,11 @@ public class EmojiImpl implements Emoji {
 		return wrapped instanceof CustomEmoji e ? e.isAnimated() : false;
 	}
 
+	@Override
+	public String toString() {
+		return wrapped.toString();
+	}
+
 	static EmojiImpl wrap(net.dv8tion.jda.api.entities.emoji.Emoji emoji, DiscordImpl discord) {
 		if (emoji == null) return null;
 

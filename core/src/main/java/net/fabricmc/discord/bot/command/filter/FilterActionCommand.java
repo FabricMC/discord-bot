@@ -51,7 +51,7 @@ public final class FilterActionCommand extends Command {
 			Collection<FilterActionEntry> actions = FilterQueries.getActions(context.bot().getDatabase());
 
 			if (actions.isEmpty()) {
-				context.channel().send("No actions");
+				context.send("No actions");
 			} else {
 				StringBuilder sb = new StringBuilder("Actions:");
 
@@ -62,7 +62,7 @@ public final class FilterActionCommand extends Command {
 							(action.actionData() != null ? FormatUtil.escape(action.actionData(), OutputType.INLINE_CODE, true) : "")));
 				}
 
-				context.channel().send(sb.toString());
+				context.send(sb.toString());
 			}
 
 			return true;
@@ -72,7 +72,7 @@ public final class FilterActionCommand extends Command {
 				throw new CommandException("Filter action addition failed, conflicting name");
 			}
 
-			context.channel().send("Filter action added");
+			context.send("Filter action added");
 
 			return true;
 		}
@@ -81,7 +81,7 @@ public final class FilterActionCommand extends Command {
 				throw new CommandException("Filter action removal failed, unknown name");
 			}
 
-			context.channel().send("Filter action removed");
+			context.send("Filter action removed");
 
 			return true;
 		case "setaction":
@@ -89,7 +89,7 @@ public final class FilterActionCommand extends Command {
 				throw new CommandException("Filter action action update failed, unknown name");
 			}
 
-			context.channel().send("Filter action action updated");
+			context.send("Filter action action updated");
 
 			return true;
 		case "setdescription":
@@ -97,7 +97,7 @@ public final class FilterActionCommand extends Command {
 				throw new CommandException("Action description update failed, unknown name");
 			}
 
-			context.channel().send("Filter action description updated");
+			context.send("Filter action description updated");
 
 			return true;
 		}

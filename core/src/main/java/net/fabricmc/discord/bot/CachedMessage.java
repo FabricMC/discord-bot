@@ -27,6 +27,7 @@ import net.fabricmc.discord.io.Channel;
 import net.fabricmc.discord.io.DiscordException;
 import net.fabricmc.discord.io.Message;
 import net.fabricmc.discord.io.MessageAttachment;
+import net.fabricmc.discord.io.MessageReference;
 import net.fabricmc.discord.io.Role;
 import net.fabricmc.discord.io.Server;
 import net.fabricmc.discord.io.User;
@@ -41,6 +42,8 @@ public final class CachedMessage {
 		this.authorId = message.isFromWebhook() ? -1 : author.getId();
 
 		this.content = message.getContent();
+		MessageReference ref = message.getReference();
+		this.reference = ref != null ? new CachedMessageReference(ref.getType(), ref.getChannelId(), ref.getMessageId()) : null;
 		this.attachments = serializeAttachments(message.getAttachments());
 		this.userMentions = serializeMentions(message.getMentionedUsers(), User::getId);
 		this.roleMentions = serializeMentions(message.getMentionedRoles(), Role::getId);
@@ -54,6 +57,7 @@ public final class CachedMessage {
 		this.channelId = prev.channelId;
 		this.authorId = prev.authorId;
 		this.content = newContent.equals(prev.content) ? prev.content : newContent;
+		this.reference = prev.reference;
 		this.attachments = prev.attachments;
 		this.userMentions = prev.userMentions;
 		this.roleMentions = prev.roleMentions;
@@ -115,6 +119,10 @@ public final class CachedMessage {
 		return content;
 	}
 
+	public CachedMessageReference getReference() {
+		return reference;
+	}
+
 	public CachedMessageAttachment[] getAttachments() {
 		return attachments;
 	}
@@ -161,6 +169,8 @@ public final class CachedMessage {
 		return Long.compareUnsigned(id >>> 22, o.id >>> 22);
 	}
 
+	public record CachedMessageReference(MessageReference.Type type, long channelId, long  messageId) { }
+
 	private static final CachedMessageAttachment[] emptyAttachments = new CachedMessageAttachment[0];
 	private static final long[] emptyMentions = new long[0];
 
@@ -169,6 +179,7 @@ public final class CachedMessage {
 	private final long channelId;
 	private final long authorId;
 	private final String content;
+	private final CachedMessageReference reference;
 	private final CachedMessageAttachment[] attachments;
 	private final long[] userMentions;
 	private final long[] roleMentions;

@@ -72,7 +72,7 @@ public final class ConfigCommand extends Command {
 			builder.page(currentPage);
 		}
 
-		builder.buildAndSend(context.channel());
+		builder.buildAndSend(context);
 
 		return true;
 	}
@@ -83,7 +83,7 @@ public final class ConfigCommand extends Command {
 		@Nullable final ConfigKey<Object> configKey = (ConfigKey<Object>) context.bot().getConfigKey(key);
 
 		if (configKey == null) {
-			context.channel().send("%s\nInvalid config entry key `%s`".formatted(context.user().getNickMentionTag(), key));
+			context.send("%s\nInvalid config entry key `%s`".formatted(context.user().getNickMentionTag(), key));
 			return false;
 		}
 
@@ -94,16 +94,16 @@ public final class ConfigCommand extends Command {
 			deserializedValue = configKey.valueSerializer().deserialize(value);
 		} catch (IllegalArgumentException e) {
 			// FIXME: Big-ass exceptions could exceed message limit?
-			context.channel().send("Failed to set `%s` to `%s`:\n`%s`".formatted(key, value, e));
+			context.send("Failed to set `%s` to `%s`:\n`%s`".formatted(key, value, e));
 			return false;
 		}
 
 		if (!context.bot().setConfigEntry(configKey, deserializedValue)) {
-			context.channel().send("%s\nInvalid value: cannot set config entry %s to %s".formatted(context.user().getNickMentionTag(), key, value));
+			context.send("%s\nInvalid value: cannot set config entry %s to %s".formatted(context.user().getNickMentionTag(), key, value));
 			return false;
 		}
 
-		context.channel().send("Set config entry `%s` to `%s`".formatted(key, value));
+		context.send("Set config entry `%s` to `%s`".formatted(key, value));
 
 		return true;
 	}
@@ -114,13 +114,13 @@ public final class ConfigCommand extends Command {
 		@Nullable final ConfigKey<Object> configKey = (ConfigKey<Object>) context.bot().getConfigKey(key);
 
 		if (configKey == null) {
-			context.channel().send("%s: Invalid config entry key %s".formatted(context.user().getNickMentionTag(), key));
+			context.send("%s: Invalid config entry key %s".formatted(context.user().getNickMentionTag(), key));
 			return false;
 		}
 
 		final Object configEntry = context.bot().getConfigEntry(configKey);
 		final String value = configKey.valueSerializer().serialize(configEntry);
-		context.channel().send("Config entry `%s` is `%s`".formatted(key, value));
+		context.send("Config entry `%s` is `%s`".formatted(key, value));
 
 		return true;
 	}

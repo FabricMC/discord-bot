@@ -98,7 +98,7 @@ public final class DeleteRangeCommand extends Command {
 				pendingActions.put(id, new ActionEntry(messages, arguments.get("reason")));
 				context.bot().getScheduledExecutor().schedule(() -> pendingActions.remove(id), 5, TimeUnit.MINUTES);
 
-				context.channel().send(String.format("You are about to delete %d messages by %s from <#%d>, use `%s%s confirm %d` to continue",
+				context.send(String.format("You are about to delete %d messages by %s from <#%d>, use `%s%s confirm %d` to continue",
 						messages.size(),
 						String.join(", ", users),
 						channel.getId(),
@@ -114,7 +114,7 @@ public final class DeleteRangeCommand extends Command {
 				m.delete(entry.reason);
 			}
 
-			context.channel().send("Messages deleted");
+			context.send("Messages deleted");
 		}
 
 		return true;

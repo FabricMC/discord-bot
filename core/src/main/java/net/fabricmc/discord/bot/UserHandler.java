@@ -30,6 +30,7 @@ import net.fabricmc.discord.bot.database.query.UserQueries;
 import net.fabricmc.discord.bot.database.query.UserQueries.DiscordUserData;
 import net.fabricmc.discord.bot.database.query.UserQueries.SessionDiscordUserData;
 import net.fabricmc.discord.bot.database.query.UserQueries.UserData;
+import net.fabricmc.discord.io.Discord;
 import net.fabricmc.discord.io.GlobalEventHolder;
 import net.fabricmc.discord.io.GlobalEventHolder.MemberJoinHandler;
 import net.fabricmc.discord.io.GlobalEventHolder.MemberLeaveHandler;
@@ -135,8 +136,8 @@ public final class UserHandler implements MemberJoinHandler, MemberLeaveHandler,
 				|| hasPermission(targetDiscordUserId, null, IMMUNITY_PERMISSION) && !hasPermission(actingUserId, null, BYPASS_IMMUNITY_PERMISSION);
 	}
 
-	public int getUserId(String user, @Nullable Server server, boolean unique) {
-		long ret = parseUserId(user, server, unique, true);
+	public int getUserId(String user, Discord discord, @Nullable Server server, boolean unique) {
+		long ret = parseUserId(user, discord, server, unique, true);
 
 		if (ret == -1 || !isDiscordUserId(ret)) {
 			return (int) ret;
@@ -145,8 +146,8 @@ public final class UserHandler implements MemberJoinHandler, MemberLeaveHandler,
 		}
 	}
 
-	public long getDiscordUserId(String user, @Nullable Server server, boolean unique) {
-		long ret = parseUserId(user, server, unique, true);
+	public long getDiscordUserId(String user, Discord discord, @Nullable Server server, boolean unique) {
+		long ret = parseUserId(user, discord, server, unique, true);
 
 		if (ret == -1 || isDiscordUserId(ret)) {
 			return ret;
@@ -157,8 +158,8 @@ public final class UserHandler implements MemberJoinHandler, MemberLeaveHandler,
 		}
 	}
 
-	public @Nullable User getDiscordUser(String user, Server server, boolean unique) {
-		long id = getDiscordUserId(user, server, unique);
+	public @Nullable User getDiscordUser(String user, Discord discord, Server server, boolean unique) {
+		long id = getDiscordUserId(user, discord, server, unique);
 
 		return id >= 0 ? server.getUser(id) : null;
 	}
@@ -179,8 +180,8 @@ public final class UserHandler implements MemberJoinHandler, MemberLeaveHandler,
 
 	public record UserEntry(int id, List<User> discordUsers) { }*/
 
-	public LongList getDiscordUserIds(String user, @Nullable Server server) {
-		long ret = parseUserId(user, server, true, true);
+	public LongList getDiscordUserIds(String user, Discord discord, @Nullable Server server) {
+		long ret = parseUserId(user, discord, server, true, true);
 
 		if (ret < 0) {
 			return LongLists.emptyList();
@@ -191,7 +192,7 @@ public final class UserHandler implements MemberJoinHandler, MemberLeaveHandler,
 		}
 	}
 
-	private long parseUserId(String user, @Nullable Server server, boolean unique, boolean searchOffline) {
+	private long parseUserId(String user, @Nullable Discord discord, @Nullable Server server, boolean unique, boolean searchOffline) {
 		// find by id if applicable
 
 		try {
@@ -216,6 +217,11 @@ public final class UserHandler implements MemberJoinHandler, MemberLeaveHandler,
 			if (server != null) {
 				Member res = server.getMember(username, discriminator);
 				if (res != null) return res.getId();
+			} else if (discord != null) {
+				for (Server s : discord.getServers()) {
+					Member res = s.getMember(username, discriminator);
+					if (res != null) return res.getId();
+				}
 			}
 
 			if (!searchOffline) return -1;
@@ -237,6 +243,24 @@ public final class UserHandler implements MemberJoinHandler, MemberLeaveHandler,
 			if (!users.isEmpty()) {
 				return unique && users.size() > 1 ? -1 : users.iterator().next().getId();
 			}
+		} else if (discord != null) {
+			long res = -1;
+
+			for (Server s : discord.getServers()) {
+				Collection<? extends Member> users = s.getMembersFiltered(n -> n.equals(user), true, true, true);
+				if (users.isEmpty()) users = s.getMembersFiltered(n -> n.equalsIgnoreCase(user), true, true, true);
+
+				if (!users.isEmpty()) {
+					if (unique && (res != -1 || users.size() > 1)) {
+						return -1;
+					}
+
+					res = users.iterator().next().getId();
+					if (!unique) return res;
+				}
+			}
+
+			return res;
 		}
 
 		if (!searchOffline) return -1;

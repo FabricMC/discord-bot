@@ -80,7 +80,7 @@ final class TagCommand extends Command {
 			builder.page(currentPage);
 		}
 
-		builder.buildAndSend(context.channel());
+		builder.buildAndSend(context);
 
 		return true;
 	}

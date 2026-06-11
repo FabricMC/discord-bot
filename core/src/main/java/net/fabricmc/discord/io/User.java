@@ -18,9 +18,8 @@ package net.fabricmc.discord.io;
 
 import java.util.Collection;
 
-public interface User {
+public interface User extends Entity {
 	Discord getDiscord();
-	long getId();
 	String getName();
 	String getDiscriminator();
 	String getGlobalNickname(); // aka global name, server-independent nickname

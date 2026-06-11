@@ -22,9 +22,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
 
-public interface Server {
+public interface Server extends Entity {
 	Discord getDiscord();
-	long getId();
 
 	Channel getChannel(long id);
 

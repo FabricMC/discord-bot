@@ -144,7 +144,7 @@ public final class ImportChannelCommand extends Command {
 			startPos = endPos + delimiterSize;
 		}
 
-		context.channel().send("Imported %d messages".formatted(msgCount));
+		context.send("Imported %d messages".formatted(msgCount));
 
 		return true;
 	}

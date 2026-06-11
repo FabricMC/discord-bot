@@ -16,13 +16,16 @@
 
 package net.fabricmc.discord.ioimpl.jda;
 
+import java.util.Collection;
 import java.util.Objects;
 
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Activity;
 
 import net.fabricmc.discord.io.Discord;
+import net.fabricmc.discord.io.DiscordImplUtil;
 import net.fabricmc.discord.io.GlobalEventHolder;
+import net.fabricmc.discord.io.Server;
 
 public class DiscordImpl implements Discord {
 	private final JDA wrapped;
@@ -48,6 +51,11 @@ public class DiscordImpl implements Discord {
 	}
 
 	@Override
+	public Collection<? extends Server> getServers() {
+		return DiscordImplUtil.wrap(wrapped.getGuilds(), s -> ServerImpl.wrap(s, this));
+	}
+
+	@Override
 	public UserImpl getUser(long id, boolean fetch) {
 		return UserImpl.wrap(fetch ? wrapped.retrieveUserById(id).complete() : wrapped.getUserById(id), this);
 	}
@@ -67,6 +75,11 @@ public class DiscordImpl implements Discord {
 	@Override
 	public void setActivity(String activity) {
 		wrapped.getPresence().setActivity(Activity.customStatus(activity));
+	}
+
+	@Override
+	public String toString() {
+		return wrapped.toString();
 	}
 
 	JDA unwrap() {

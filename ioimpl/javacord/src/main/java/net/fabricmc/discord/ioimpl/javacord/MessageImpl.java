@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
+import org.javacord.api.entity.DiscordEntity;
 import org.javacord.api.entity.message.MessageBuilder;
 import org.javacord.api.entity.message.MessageType;
 import org.javacord.api.entity.message.mention.AllowedMentionsBuilder;
@@ -36,20 +37,27 @@ import net.fabricmc.discord.io.User;
 import net.fabricmc.discord.io.Wrapper;
 
 public class MessageImpl implements Message {
-	private static final Wrapper<org.javacord.api.entity.message.Message, MessageImpl> WRAPPER = new Wrapper<>();
+	private static final Wrapper<org.javacord.api.entity.message.Message, MessageImpl> WRAPPER = new Wrapper<>(DiscordEntity::getId);
 
 	private final org.javacord.api.entity.message.Message wrapped;
+	private final DiscordImpl discord;
 	private final ChannelImpl channel;
 	private final UserImpl author;
 
-	MessageImpl(org.javacord.api.entity.message.Message wrapped, ChannelImpl channel, UserImpl author) {
+	MessageImpl(org.javacord.api.entity.message.Message wrapped, DiscordImpl discord, ChannelImpl channel, UserImpl author) {
 		Objects.requireNonNull(wrapped, "null wrapped");
-		Objects.requireNonNull(channel, "null channel");
+		Objects.requireNonNull(channel, "null discord");
 		//Objects.requireNonNull(author, "null author"); null for webhook atm?
 
 		this.wrapped = wrapped;
+		this.discord = discord;
 		this.channel = channel;
 		this.author = author;
+	}
+
+	@Override
+	public DiscordImpl getDiscord() {
+		return discord;
 	}
 
 	@Override
@@ -99,10 +107,8 @@ public class MessageImpl implements Message {
 	}
 
 	@Override
-	public Message getReferencedMessage() {
-		org.javacord.api.entity.message.Message res = wrapped.getReferencedMessage().orElse(null);
-
-		return res != null ? wrap(res, ChannelImpl.wrap(res.getChannel(), this.channel)) : null;
+	public MessageReferenceImpl getReference() {
+		return MessageReferenceImpl.wrap(wrapped.getMessageReference().orElse(null), discord);
 	}
 
 	@Override
@@ -118,12 +124,12 @@ public class MessageImpl implements Message {
 
 	@Override
 	public List<UserImpl> getMentionedUsers() {
-		return DiscordImplUtil.wrap(wrapped.getMentionedUsers(), r -> UserImpl.wrap(r, channel.getDiscord()));
+		return DiscordImplUtil.wrap(wrapped.getMentionedUsers(), r -> UserImpl.wrap(r, discord));
 	}
 
 	@Override
 	public List<RoleImpl> getMentionedRoles() {
-		return DiscordImplUtil.wrap(wrapped.getMentionedRoles(), r -> RoleImpl.wrap(r, channel.getDiscord(), null));
+		return DiscordImplUtil.wrap(wrapped.getMentionedRoles(), r -> RoleImpl.wrap(r, discord, null));
 	}
 
 	@Override
@@ -240,19 +246,24 @@ public class MessageImpl implements Message {
 
 	@Override
 	public Message edit(String content) {
-		return MessageImpl.wrap(wrapped.edit(content).join(), channel);
+		return MessageImpl.wrap(wrapped.edit(content).join(), discord, channel);
 	}
 
 	@Override
 	public MessageImpl edit(MessageEmbed embed) {
-		return MessageImpl.wrap(wrapped.edit(MessageEmbedImpl.toBuilder(embed)).join(), channel);
+		return MessageImpl.wrap(wrapped.edit(MessageEmbedImpl.toBuilder(embed)).join(), discord, channel);
 	}
 
-	static MessageImpl wrap(org.javacord.api.entity.message.Message message, ChannelImpl channel) {
+	@Override
+	public String toString() {
+		return wrapped.toString();
+	}
+
+	static MessageImpl wrap(org.javacord.api.entity.message.Message message, DiscordImpl discord, ChannelImpl channel) {
 		if (message == null) return null;
 
 		// TODO: handle webhook user
-		return WRAPPER.wrap(message, m -> new MessageImpl(m, channel, UserImpl.wrap(m.getAuthor().asUser().orElse(null), channel.getDiscord())));
+		return WRAPPER.wrap(message, m -> new MessageImpl(m, discord, channel, UserImpl.wrap(m.getAuthor().asUser().orElse(null), discord)));
 	}
 
 	org.javacord.api.entity.message.Message unwrap() {
