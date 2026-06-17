@@ -69,6 +69,7 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 	private final Long2ObjectMap<ChannelMessageCache> channelCaches = new Long2ObjectOpenHashMap<>();
 	// message id -> message
 	private final Long2ObjectMap<CachedMessage> globalIndex = new Long2ObjectOpenHashMap<>();
+	private volatile boolean initialized;
 	private volatile float initProgressPct;
 
 	public MessageIndex(DiscordBot bot) {
@@ -339,10 +340,16 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 				LOGGER.info("Message index initialized for {} channels in {} ms",
 						channels.size(),
 						String.format("%.2f", (endTime - startTime) * 1e-6));
+
+				initialized = true;
 			} catch (Throwable t) {
 				LOGGER.warn("Error initializing message index", t);
 			}
 		});
+	}
+
+	public boolean isInitialized() {
+		return initialized;
 	}
 
 	public float getInitProgressPct() {
@@ -350,6 +357,8 @@ MessageCreateHandler, MessageDeleteHandler, MessageEditHandler {
 	}
 
 	private void reset(Server server) {
+		initialized = false;
+
 		synchronized (globalIndex) {
 			globalIndex.clear();
 		}

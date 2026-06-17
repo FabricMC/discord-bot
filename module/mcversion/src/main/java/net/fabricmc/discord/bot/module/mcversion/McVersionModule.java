@@ -17,11 +17,7 @@
 package net.fabricmc.discord.bot.module.mcversion;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.net.URISyntaxException;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.Set;
@@ -29,7 +25,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-import com.google.gson.stream.JsonReader;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -187,6 +182,7 @@ public final class McVersionModule implements Module {
 
 	private void update() {
 		if (announceChannel == null && updateChannel == null) return;
+		if (!bot.getMessageIndex().isInitialized()) return; // can't reliably check for duplicates while message cache is initializing
 
 		try {
 			metaFetcher.update();
