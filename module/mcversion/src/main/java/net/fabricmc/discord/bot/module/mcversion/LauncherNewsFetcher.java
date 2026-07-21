@@ -26,9 +26,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.Collections;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.function.Predicate;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 import com.google.gson.stream.JsonReader;
@@ -46,6 +48,8 @@ final class LauncherNewsFetcher {
 	private static final String PATH = "/v2/javaPatchNotes.json";
 	private static final Logger LOGGER = LogManager.getLogger("mcversion/launcher");
 	private final McVersionModule mcVersionModule;
+	// sometimes MCLauncherNews may glitch and change the news datetime by a couple milliseconds, so use this as an extra failsafe
+	private final Set<String> announcedVersions = Collections.newSetFromMap(new ConcurrentHashMap<>());
 	private Version latestRelease;
 	private Version latestSnapshot;
 	private long lastUpdateTimeMs = System.currentTimeMillis();
@@ -67,12 +71,18 @@ final class LauncherNewsFetcher {
 		return lastUpdateTimeMs;
 	}
 
+	void init(String announcedRelease, String announcedSnapshot) {
+		announcedVersions.add(announcedRelease);
+		announcedVersions.add(announcedSnapshot);
+	}
+
 	void update() throws IOException, URISyntaxException, InterruptedException, DateTimeParseException {
 		fetchLatest();
 		Version latest = latestRelease.date.isAfter(latestSnapshot.date) ? latestRelease : latestSnapshot;
 
-		if (latest.date.isAfter(lastAnnounceTime) && announce(latest)) {
+		if (latest.date.isAfter(lastAnnounceTime) && !announcedVersions.contains(latest.name) && announce(latest)) {
 			lastAnnounceTime = latest.date;
+			announcedVersions.add(latest.name);
 		}
 	}
 
