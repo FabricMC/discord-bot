@@ -162,7 +162,11 @@ public final class McVersionModule implements Module {
 		this.announceChannel = getChannel(server, "announce", bot.getConfigEntry(ANNOUNCE_CHANNEL));
 		this.updateChannel = getChannel(server, "update", bot.getConfigEntry(UPDATE_CHANNEL));
 
-		newsFetcher.init(bot.getConfigEntry(ANNOUNCED_SNAPSHOT_VERSION));
+		String announcedRelease = bot.getConfigEntry(ANNOUNCED_RELEASE_VERSION);
+		String announcedSnapshot = bot.getConfigEntry(ANNOUNCED_SNAPSHOT_VERSION);
+
+		newsFetcher.init(announcedSnapshot);
+		launcherNewsFetcher.init(announcedRelease, announcedSnapshot);
 
 		if (announceChannel != null || updateChannel != null) {
 			future = bot.getScheduledExecutor().scheduleWithFixedDelay(this::update, 0, UPDATE_DELAY, TimeUnit.SECONDS);
